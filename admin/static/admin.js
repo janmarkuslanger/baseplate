@@ -1,0 +1,171 @@
+// baseplate admin: Alpine components for the content editor.
+(function () {
+  'use strict';
+
+  const csrf = () => document.body.dataset.csrf || '';
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  // _key gives list/block items a stable identity for x-for; it is
+  // stripped before saving.
+  function addKeys(v) {
+    if (Array.isArray(v)) {
+      v.forEach((it) => {
+        if (it && typeof it === 'object' && !Array.isArray(it)) {
+          if (!it._key) it._key = uid();
+          Object.values(it).forEach(addKeys);
+        }
+      });
+    } else if (v && typeof v === 'object') {
+      Object.values(v).forEach(addKeys);
+    }
+    return v;
+  }
+  const stripKeys = (k, v) => (k === '_key' ? undefined : v);
+  // clone deep-copies an item and gives it (and its nested items) fresh keys.
+  const clone = (v) => addKeys([JSON.parse(JSON.stringify(v, stripKeys))])[0];
+
+  window.withKey = clone;
+
+  window.slugify = function (s, keepTrailing) {
+    s = String(s).toLowerCase()
+      .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '');
+    return keepTrailing ? s : s.replace(/-+$/, '');
+  };
+
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('editor', () => ({
+      data: {},
+      errors: {},
+      blocks: {},
+      labels: {},
+      tab: '',
+      dirty: false,
+      submitting: false,
+      dragList: null,
+      dragIndex: -1,
+
+      init() {
+        const ds = this.$el.dataset;
+        this.data = addKeys(JSON.parse(ds.initial || '{}'));
+        this.errors = JSON.parse(ds.errors || 'null') || {};
+        this.blocks = JSON.parse(ds.blocks || '{}');
+        this.labels = JSON.parse(ds.labels || '{}');
+        this.$nextTick(() => {
+          const firstErr = this.$root.querySelector('.tabs__tab.has-error');
+          if (firstErr) firstErr.click();
+          this.$watch('data', () => { this.dirty = true; });
+        });
+        window.addEventListener('beforeunload', (e) => {
+          if (this.dirty && !this.submitting) e.preventDefault();
+        });
+        document.addEventListener('keydown', (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            this.$root.querySelector('.actions .btn--primary').click();
+          }
+        });
+      },
+
+      err(path) { return this.errors[path] || ''; },
+      tabHasError(fields) {
+        const names = fields.map((f) => f.Name);
+        return Object.keys(this.errors).some((k) => names.includes(k.split('.')[0]));
+      },
+      serialize() {
+        this.submitting = true;
+        this.$refs.data.value = JSON.stringify(this.data, stripKeys);
+      },
+
+      newBlock(name) { return clone(this.blocks[name]); },
+      blockLabel(name) { return this.labels[name] || name; },
+      move(list, i, d) {
+        const j = i + d;
+        if (j < 0 || j >= list.length) return;
+        const [it] = list.splice(i, 1);
+        list.splice(j, 0, it);
+      },
+      duplicate(list, i) { list.splice(i + 1, 0, clone(list[i])); },
+
+      dragStart(e, list, i) {
+        this.dragList = list;
+        this.dragIndex = i;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(i));
+        const card = e.target.closest('.card');
+        if (card) e.dataTransfer.setDragImage(card, 20, 20);
+      },
+      dragOver(e) { if (this.dragList) e.currentTarget.classList.add('is-drop-target'); },
+      dragLeave(e) { e.currentTarget.classList.remove('is-drop-target'); },
+      drop(e, list, i) {
+        e.currentTarget.classList.remove('is-drop-target');
+        if (list !== this.dragList || this.dragIndex === i) return;
+        const [it] = list.splice(this.dragIndex, 1);
+        list.splice(i, 0, it);
+        this.dragEnd();
+      },
+      dragEnd() { this.dragList = null; this.dragIndex = -1; },
+    }));
+
+    Alpine.data('richtext', () => ({
+      value: '',
+      init() {
+        const ed = this.$refs.editor;
+        ed.innerHTML = this.value || '';
+        this.$watch('value', (v) => { if (v !== ed.innerHTML) ed.innerHTML = v || ''; });
+        ed.addEventListener('focus', () => document.execCommand('defaultParagraphSeparator', false, 'p'));
+        ed.addEventListener('paste', (e) => {
+          // Paste as plain text; formatting comes from the toolbar.
+          e.preventDefault();
+          document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+        });
+      },
+      sync() {
+        const html = this.$refs.editor.innerHTML;
+        this.value = html === '<br>' ? '' : html;
+      },
+      cmd(c) { this.$refs.editor.focus(); document.execCommand(c, false, null); this.sync(); },
+      block(tag) { this.$refs.editor.focus(); document.execCommand('formatBlock', false, tag); this.sync(); },
+      link() {
+        const url = window.prompt('Link-Adresse (https://…, /pfad oder mailto:…)');
+        if (!url) return;
+        this.$refs.editor.focus();
+        document.execCommand('createLink', false, url);
+        this.sync();
+      },
+    }));
+
+    Alpine.data('imageField', () => ({
+      value: '',
+      busy: false,
+      error: '',
+      library: false,
+      files: [],
+      async upload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.busy = true;
+        this.error = '';
+        const body = new FormData();
+        body.append('file', file);
+        try {
+          const res = await fetch('/admin/media', { method: 'POST', body, headers: { 'X-CSRF-Token': csrf(), Accept: 'application/json' } });
+          const out = await res.json();
+          if (!res.ok) throw new Error(out.error || 'Upload fehlgeschlagen');
+          this.value = out.url;
+        } catch (err) {
+          this.error = err.message;
+        } finally {
+          this.busy = false;
+          e.target.value = '';
+        }
+      },
+      async openLibrary() {
+        this.library = true;
+        const res = await fetch('/admin/media.json');
+        this.files = await res.json();
+      },
+    }));
+  });
+})();

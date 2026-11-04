@@ -1,0 +1,6 @@
+/data/
+/dist/
+/dist.tmp/
+/dist.old/
+examples/site/data/
+examples/site/dist/

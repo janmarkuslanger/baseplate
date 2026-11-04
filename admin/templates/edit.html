@@ -1,0 +1,73 @@
+{{define "content"}}
+{{$p := .Page}}{{$t := $p.Type}}
+<form id="editor" method="post" action="/admin/c/{{$t.Name}}/save"
+      x-data="editor"
+      data-initial="{{json $p.Data}}"
+      data-errors="{{json $p.Errors}}"
+      data-blocks="{{json $p.Blocks}}"
+      data-labels="{{json $p.Labels}}"
+      x-on:submit="serialize()">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="id" value="{{if not $p.IsNew}}{{$p.Entry.ID}}{{end}}">
+  <input type="hidden" name="data" x-ref="data">
+
+  <header class="page-head page-head--sticky">
+    <div>
+      {{if not $t.Singleton}}<a class="back" href="/admin/c/{{$t.Name}}">← {{$t.LabelPlural}}</a>{{end}}
+      <h1 x-text="(data[{{json $t.Title}}] || '') || {{json .Title}}">{{.Title}}</h1>
+      {{if not $t.Singleton}}
+      <p class="muted">
+        {{if $p.IsNew}}Neu{{else if eq $p.Entry.Status "published"}}<span class="pill pill--ok">Veröffentlicht</span>{{else}}<span class="pill">Entwurf</span>{{end}}
+        {{if not $p.IsNew}}· zuletzt geändert {{ago $p.Entry.UpdatedAt}}{{end}}
+        <span class="dirty" x-show="dirty" x-cloak>· ungespeicherte Änderungen</span>
+      </p>
+      {{end}}
+    </div>
+    <div class="actions">
+      {{if $t.Singleton}}
+        <button class="btn btn--primary" name="status" value="published">Speichern</button>
+      {{else}}
+        <button class="btn" name="status" value="draft">{{if eq $p.Entry.Status "published"}}Zurück auf Entwurf{{else}}Entwurf speichern{{end}}</button>
+        <button class="btn btn--primary" name="status" value="published">{{if eq $p.Entry.Status "published"}}Aktualisieren{{else}}Veröffentlichen{{end}}</button>
+      {{end}}
+    </div>
+  </header>
+
+  {{if $p.Errors}}<div class="alert alert--error">Bitte prüfe die markierten Felder.{{with index $p.Errors "_"}} {{.}}{{end}}</div>{{end}}
+
+  {{$tabs := $t.Tabs}}
+  {{if gt (len $tabs) 1}}
+  <nav class="tabs">
+    {{range $tabs}}<button type="button" class="tabs__tab" x-bind:class="{'is-active': tab === {{json .}}, 'has-error': tabHasError({{json (tabFields $t .)}})}" x-on:click="tab = {{json .}}">{{tabLabel .}}</button>{{end}}
+  </nav>
+  {{end}}
+
+  <div class="editor-grid">
+    <div class="editor-main">
+    {{range $tabs}}{{$tab := .}}
+      <section class="card card--panel" x-show="tab === {{json $tab}}">
+        {{if eq $tab "SEO"}}
+        <div class="serp">
+          <div class="serp__label">Vorschau in Suchergebnissen</div>
+          <div class="serp__url">{{with $p.Settings.baseURL}}{{.}}{{else}}https://example.com{{end}}<span x-text="data.slug && data.slug !== 'index' ? ' › ' + data.slug : ''"></span></div>
+          <div class="serp__title" x-text="(data.seo && data.seo.metaTitle) || data.title || 'Seitentitel'"></div>
+          <div class="serp__desc" x-text="(data.seo && data.seo.metaDescription) || 'Ohne Meta-Beschreibung wählt die Suchmaschine selbst einen Textausschnitt.'"></div>
+        </div>
+        {{end}}
+        {{range tabFields $t $tab}}
+          {{if eq .Kind "group"}}{{$g := top .}}{{range .Fields}}{{template "field" (child $g .)}}{{end}}
+          {{else}}{{template "field" (top .)}}{{end}}
+        {{end}}
+      </section>
+    {{end}}
+    </div>
+  </div>
+</form>
+
+{{if and (not $p.IsNew) (not $t.Singleton)}}
+<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm('Diesen Eintrag wirklich löschen?')) $event.preventDefault()">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <button class="btn btn--danger btn--sm">{{$t.Label}} löschen</button>
+</form>
+{{end}}
+{{end}}

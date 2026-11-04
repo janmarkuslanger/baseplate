@@ -1,0 +1,20 @@
+{{define "block/form"}}{{with formByID .Block.form}}{{$f := .}}
+<form class="bp-form" method="post" action="{{str $.Page.Site.serverURL}}/api/forms/{{$f.ID}}">
+  {{range $f.Fields}}
+  <div class="bp-form__field bp-form__field--{{.Type}}">
+    {{if eq .Type "checkbox"}}
+    <label><input type="checkbox" name="{{.Name}}" value="1"{{if .Required}} required{{end}}> {{.Label}}</label>
+    {{else}}
+    <label for="bp-{{$f.ID}}-{{.Name}}">{{.Label}}{{if .Required}} *{{end}}</label>
+    {{if eq .Type "textarea"}}
+    <textarea id="bp-{{$f.ID}}-{{.Name}}" name="{{.Name}}" rows="5" maxlength="5000"{{if .Required}} required{{end}}></textarea>
+    {{else}}
+    <input id="bp-{{$f.ID}}-{{.Name}}" type="{{.Type}}" name="{{.Name}}" maxlength="5000"{{if .Required}} required{{end}}{{if eq .Type "email"}} autocomplete="email"{{end}}>
+    {{end}}
+    {{end}}
+  </div>
+  {{end}}
+  <div style="position:absolute;left:-10000px" aria-hidden="true"><label>Nicht ausfüllen <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label></div>
+  <button type="submit" class="bp-button">{{with $f.Data.submitLabel}}{{.}}{{else}}Absenden{{end}}</button>
+</form>
+{{end}}{{end}}

@@ -1,0 +1,52 @@
+{{define "content"}}
+{{$p := .Page}}
+{{if $p.Detail}}{{$d := $p.Detail}}
+<header class="page-head">
+  <div>
+    <a class="back" href="/admin/p/forms/submissions">← Anfragen</a>
+    <h1>{{$d.FormTitle}}</h1>
+    <p class="muted">{{date $d.CreatedAt}} · {{if $d.Mailed}}<span class="pill pill--ok">per E-Mail versendet</span>{{else}}<span class="pill">nicht versendet</span>{{end}}</p>
+  </div>
+  <form method="post" action="/admin/p/forms/submissions" x-data x-on:submit="if (!confirm('Anfrage löschen?')) $event.preventDefault()">
+    <input type="hidden" name="csrf" value="{{$p.CSRF}}"><input type="hidden" name="delete" value="{{$d.ID}}">
+    <button class="btn btn--danger btn--sm">Löschen</button>
+  </form>
+</header>
+<section class="card card--panel">
+  <dl class="kv">
+  {{range $d.Values}}<dt>{{.Label}}</dt><dd>{{.Value}}</dd>{{end}}
+  </dl>
+</section>
+{{else}}
+<header class="page-head">
+  <div><h1>Anfragen</h1><p class="muted">Über Formulare eingegangene Nachrichten.</p></div>
+  {{if $p.Forms}}
+  <form method="get" action="/admin/p/forms/submissions">
+    <select class="input input--short" name="form" onchange="this.form.submit()">
+      <option value="">Alle Formulare</option>
+      {{range $p.Forms}}<option value="{{.Value}}" {{if eq .Value $p.FormFilter}}selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </form>
+  {{end}}
+</header>
+<div class="card card--table">
+  {{if $p.Rows}}
+  <table class="table">
+    <thead><tr><th>Eingang</th><th>Formular</th><th>Vorschau</th><th>E-Mail</th></tr></thead>
+    <tbody>
+    {{range $p.Rows}}
+    <tr class="table__row" onclick="location.href='/admin/p/forms/submissions?id={{.ID}}'">
+      <td><a class="table__title" href="/admin/p/forms/submissions?id={{.ID}}">{{date .CreatedAt}}</a></td>
+      <td>{{.FormTitle}}</td>
+      <td class="muted">{{.Preview}}</td>
+      <td>{{if .Mailed}}<span class="pill pill--ok">versendet</span>{{else}}<span class="pill">offen</span>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div class="empty"><p><strong>Noch keine Anfragen.</strong></p><p class="muted">Sobald jemand ein Formular absendet, erscheint es hier.</p></div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
