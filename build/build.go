@@ -61,7 +61,9 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		return Result{}, errors.New("Basis-URL fehlt – bitte in den Einstellungen eintragen")
 	}
 
-	tmp := b.DistDir + ".tmp"
+	// Clean first: with "dist/" the .tmp/.old paths would land inside dist.
+	dist := filepath.Clean(b.DistDir)
+	tmp := dist + ".tmp"
 	os.RemoveAll(tmp)
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		return Result{}, err
@@ -105,13 +107,13 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		}
 	}
 
-	old := b.DistDir + ".old"
+	old := dist + ".old"
 	os.RemoveAll(old)
-	if err := os.Rename(b.DistDir, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := os.Rename(dist, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Result{}, err
 	}
-	if err := os.Rename(tmp, b.DistDir); err != nil {
-		os.Rename(old, b.DistDir)
+	if err := os.Rename(tmp, dist); err != nil {
+		os.Rename(old, dist)
 		return Result{}, err
 	}
 	os.RemoveAll(old)

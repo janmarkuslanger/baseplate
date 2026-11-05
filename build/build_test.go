@@ -213,3 +213,16 @@ func TestRelationsResolved(t *testing.T) {
 		t.Errorf("parent page (inverse, drafts excluded): %q", got)
 	}
 }
+
+func TestBuildDistDirTrailingSlash(t *testing.T) {
+	b, st := setup(t)
+	b.DistDir += "/"
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	for i := 0; i < 2; i++ { // second build swaps an existing dist
+		if _, err := b.Build(context.Background()); err != nil {
+			t.Fatalf("build %d: %v", i, err)
+		}
+	}
+	read(t, b, "index.html")
+}
