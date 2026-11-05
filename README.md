@@ -29,6 +29,7 @@ import (
 	"io/fs"
 
 	"github.com/janmarkuslanger/baseplate"
+	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/plugins/forms"
 )
 
@@ -37,7 +38,7 @@ var themeFS embed.FS
 
 func main() {
 	theme, _ := fs.Sub(themeFS, "theme")
-	baseplate.New(baseplate.Config{Theme: theme}).Use(forms.New()).Main()
+	baseplate.New(baseplate.Config{Theme: theme}).Use(fields.CoreBlocks{}, forms.New()).Main()
 }
 ```
 

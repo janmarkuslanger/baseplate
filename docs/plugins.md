@@ -26,12 +26,22 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `ContentType`, `Extend` | content types, extra fields on existing types |
 | `Kind` | field kinds (`Storage`, `Normalize`, `AdminTemplate`) |
 | `Block`, `Templates`, `Funcs` | content elements, frontend templates, template funcs |
+| `AllowBlocks` | restrict a blocks field (also of the core or other plugins) to named blocks |
 | `Generator` | extra build output |
 | `AdminPage`, `AdminTemplates` | admin screens |
 | `PublicRoute` | endpoints on the CMS server |
 | `Migration`, `DataMigration` | own tables, content changes after schema changes |
 | `Use` | sub-plugins |
 | `Services` | `Store`, `Mailer`, `Logger`, `ClientIP` |
+
+## Blocks
+
+| Rule | |
+|---|---|
+| which blocks exist | only registered ones; the generic core blocks (heading, richtext, image, cta, article) are opt-in: `app.Use(fields.CoreBlocks{})`, optionally `CoreBlocks{Only: []string{"heading"}}` |
+| which blocks a field offers | `Field.Blocks`; empty = all registered blocks |
+| change it for a field you don't own | `r.AllowBlocks("page", "body", "hero", "faq")`; dotted paths for fields in groups (`"hero.blocks"`) |
+| unknown names | startup error (`Schema.Check`) |
 
 ## Hooks
 

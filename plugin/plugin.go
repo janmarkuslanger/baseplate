@@ -171,6 +171,13 @@ func (r *Registry) ContentType(t content.Type) error            { return r.Schem
 func (r *Registry) Extend(typ string, f ...content.Field) error { return r.Schema.Extend(typ, f...) }
 func (r *Registry) Block(b content.Block) error                 { return r.Schema.AddBlock(b) }
 
+// AllowBlocks restricts a blocks field of any type (also one defined by
+// another plugin or the core) to the named blocks; path uses dots for
+// fields inside groups. Empty Field.Blocks means: all registered blocks.
+func (r *Registry) AllowBlocks(typ, path string, blocks ...string) error {
+	return r.Schema.AllowBlocks(typ, path, blocks...)
+}
+
 func (r *Registry) Generator(g Generator)         { r.generators = append(r.generators, g) }
 func (r *Registry) AdminPage(p AdminPage)         { r.adminPages = append(r.adminPages, p) }
 func (r *Registry) PublicRoute(rt Route)          { r.routes = append(r.routes, rt) }

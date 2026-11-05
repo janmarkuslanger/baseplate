@@ -11,7 +11,7 @@ import (
 func registry(t *testing.T) *plugin.Registry {
 	t.Helper()
 	r := plugin.NewRegistry(plugin.Services{})
-	if err := r.Use(Core{}); err != nil {
+	if err := r.Use(Core{}, CoreBlocks{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.Schema.Check(); err != nil {
@@ -150,5 +150,62 @@ func TestHTMLToMarkdown(t *testing.T) {
 	want := "## Titel\n\nEin **fetter** und [Link](https://x.de).\n\n- eins\n- zwei\n\n1. a\n2. b"
 	if got := HTMLToMarkdown(in); got != want {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestCoreBlocksOptIn(t *testing.T) {
+	r := plugin.NewRegistry(plugin.Services{})
+	if err := r.Use(Core{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Schema.AllBlocks()) != 0 {
+		t.Error("without CoreBlocks no blocks may exist")
+	}
+	r = plugin.NewRegistry(plugin.Services{})
+	if err := r.Use(Core{}, CoreBlocks{Only: []string{"heading", "richtext"}}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.Schema.AllBlocks()); n != 2 {
+		t.Errorf("Only: %d blocks", n)
+	}
+	if err := plugin.NewRegistry(plugin.Services{}).Use(Core{}, CoreBlocks{Only: []string{"nope"}}); err == nil {
+		t.Error("unknown block in Only must fail")
+	}
+}
+
+func TestAllowBlocks(t *testing.T) {
+	r := registry(t)
+	r.ContentType(content.Type{Name: "landing", Fields: []content.Field{
+		{Name: "hero", Kind: Group, Fields: []content.Field{{Name: "blocks", Kind: Blocks}}},
+		{Name: "title", Kind: Text},
+	}})
+	if err := r.AllowBlocks(PageType, "body", "heading", "cta"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.AllowBlocks("landing", "hero.blocks", "image"); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := r.Schema.Type(PageType)
+	if _, err := r.Schema.Validate(page.Fields, map[string]any{"title": "x", "slug": "x",
+		"body": []any{map[string]any{"_type": "richtext", "html": "<p>x</p>"}}}); err == nil {
+		t.Error("a block outside the allowed list must be rejected")
+	}
+	var body content.Field
+	for _, f := range page.Fields {
+		if f.Name == "body" {
+			body = f
+		}
+	}
+	if got := r.Schema.Blocks(body); len(got) != 2 {
+		t.Errorf("editor menu offers %d blocks, want 2", len(got))
+	}
+	for _, bad := range [][]string{{"landing", "title"}, {"landing", "nope"}, {"nope", "body"}} {
+		if err := r.AllowBlocks(bad[0], bad[1], "heading"); err == nil {
+			t.Errorf("AllowBlocks(%v) must fail", bad)
+		}
+	}
+	r.AllowBlocks(PageType, "body", "missing")
+	if err := r.Schema.Check(); err == nil {
+		t.Error("Check must report unknown allowed blocks")
 	}
 }

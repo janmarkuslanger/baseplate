@@ -30,7 +30,7 @@ func setup(t *testing.T) (*Builder, storage.Store) {
 	t.Cleanup(func() { st.Close() })
 	st.Migrate(ctx, storage.CoreMigrations)
 	reg := plugin.NewRegistry(plugin.Services{Store: st})
-	if err := reg.Use(fields.Core{}); err != nil {
+	if err := reg.Use(fields.Core{}, fields.CoreBlocks{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.UseSchema(ctx, reg.Schema); err != nil {

@@ -47,7 +47,7 @@ func setup(t *testing.T) (*plugin.Registry, *Plugin, *fakeMailer, int64) {
 	m := &fakeMailer{}
 	reg := plugin.NewRegistry(plugin.Services{Store: st, Mailer: m, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	p := New()
-	if err := reg.Use(fields.Core{}, p); err != nil {
+	if err := reg.Use(fields.Core{}, fields.CoreBlocks{}, p); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.Schema.Check(); err != nil {
