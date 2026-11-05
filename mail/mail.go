@@ -126,10 +126,13 @@ func build(from string, m Message) []byte {
 
 var headerSafe = strings.NewReplacer("\r", "", "\n", "")
 
-// LogMailer logs messages instead of sending them.
+// LogMailer logs messages instead of sending them: recipient and subject
+// at info level, the body at debug level.
 type LogMailer struct{ Logger *slog.Logger }
 
 func (l LogMailer) Send(_ context.Context, m Message) error {
-	l.Logger.Info("mail (not sent, no SMTP configured)", "to", m.To, "subject", m.Subject, "text", m.Text)
+	// The body may contain visitor data; it is only logged at debug level.
+	l.Logger.Info("mail not sent (no SMTP configured)", "to", m.To, "subject", m.Subject)
+	l.Logger.Debug("mail body", "to", m.To, "text", m.Text)
 	return nil
 }

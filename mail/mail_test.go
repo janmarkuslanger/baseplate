@@ -3,6 +3,7 @@ package mail
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"net"
 	"strings"
 	"testing"
@@ -95,5 +96,14 @@ func TestBuildLineEndings(t *testing.T) {
 	body := msg[strings.Index(msg, "\r\n\r\n")+4:]
 	if body != "eins\r\nzwei\r\nzwei\r\ndrei" {
 		t.Errorf("body = %q", body)
+	}
+}
+
+func TestLogMailerHidesBody(t *testing.T) {
+	var buf strings.Builder
+	l := LogMailer{Logger: slog.New(slog.NewTextHandler(&buf, nil))} // default level: info
+	l.Send(context.Background(), Message{To: []string{"x@y.de"}, Subject: "Anfrage", Text: "Ada Lovelace, 0171 123"})
+	if !strings.Contains(buf.String(), "Anfrage") || strings.Contains(buf.String(), "Lovelace") {
+		t.Errorf("log: %s", buf.String())
 	}
 }
