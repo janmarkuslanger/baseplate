@@ -228,6 +228,8 @@ func (a *Admin) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
+	// Unauthenticated: bound the body before the form is parsed.
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	ses, err := a.Auth.Login(r.Context(), clientIP(r), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
 		msg := err.Error()

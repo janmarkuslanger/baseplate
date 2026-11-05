@@ -156,3 +156,12 @@ func TestAdminFlow(t *testing.T) {
 		t.Errorf("preview of dist not served")
 	}
 }
+
+func TestLoginBodyLimit(t *testing.T) {
+	_, c := newTestApp(t)
+	big := strings.Repeat("x", 1<<20)
+	res, _ := c.do("POST", "/admin/login", url.Values{"email": {"admin@example.com"}, "password": {"sehr-geheim-123"}, "pad": {big}})
+	if res.StatusCode == http.StatusSeeOther {
+		t.Fatal("oversized login body must not be accepted")
+	}
+}
