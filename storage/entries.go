@@ -40,6 +40,9 @@ func (s *SQLStore) UseSchema(ctx context.Context, sc *content.Schema) error {
 	return nil
 }
 
+// col quotes a column name for the store's dialect.
+func (s *SQLStore) col(name string) string { return dialects[s.dialect].quote(name) }
+
 func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -75,7 +78,7 @@ func (s *SQLStore) CreateEntry(ctx context.Context, e *Entry) error {
 		cols := []string{"slug", "status", "locale", "created_at", "updated_at"}
 		args := []any{e.Slug, e.Status, e.Locale, now.Unix(), now.Unix()}
 		for _, c := range t.Columns {
-			cols = append(cols, c.Name)
+			cols = append(cols, s.col(c.Name))
 			args = append(args, scalarArg(c, e.Data[c.Field.Name]))
 		}
 		res, err := q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, t.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
@@ -99,7 +102,7 @@ func (s *SQLStore) UpdateEntry(ctx context.Context, e *Entry) error {
 		sets := []string{"slug = ?", "status = ?", "locale = ?", "updated_at = ?"}
 		args := []any{e.Slug, e.Status, e.Locale, e.UpdatedAt.Unix()}
 		for _, c := range t.Columns {
-			sets = append(sets, c.Name+" = ?")
+			sets = append(sets, s.col(c.Name)+" = ?")
 			args = append(args, scalarArg(c, e.Data[c.Field.Name]))
 		}
 		res, err := q.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET %s WHERE id = ?`, t.Name, strings.Join(sets, ", ")), append(args, e.ID)...)
@@ -304,7 +307,7 @@ func (s *SQLStore) writeComponent(ctx context.Context, q querier, ownerTable str
 	cols := make([]string, len(ct.Columns))
 	args := make([]any, len(ct.Columns))
 	for i, c := range ct.Columns {
-		cols[i], args[i] = c.Name, scalarArg(c, data[c.Field.Name])
+		cols[i], args[i] = s.col(c.Name), scalarArg(c, data[c.Field.Name])
 	}
 	switch {
 	case id != 0 && len(cols) > 0:
@@ -426,7 +429,7 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		args = append(args, like)
 		for _, c := range t.Columns {
 			if c.Storage == content.StoreText || c.Storage == content.StoreLongText {
-				ors = append(ors, c.Name+" LIKE ?")
+				ors = append(ors, s.col(c.Name)+" LIKE ?")
 				args = append(args, like)
 			}
 		}
@@ -453,7 +456,7 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, args ...any) ([]Entry, error) {
 	cols := []string{"id", "slug", "status", "locale", "created_at", "updated_at"}
 	for _, c := range t.Columns {
-		cols = append(cols, c.Name)
+		cols = append(cols, s.col(c.Name))
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+t.Name+tail, args...)
 	if err != nil {
@@ -609,7 +612,7 @@ func (s *SQLStore) loadComponents(ctx context.Context, ct *table, comps map[int6
 	}
 	cols := []string{"id"}
 	for _, c := range ct.Columns {
-		cols = append(cols, c.Name)
+		cols = append(cols, s.col(c.Name))
 	}
 	return s.inChunks(ids, func(chunk []any) error {
 		rows, err := s.db.QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+ct.Name+` WHERE id IN (`+placeholders(len(chunk))+`)`, chunk...)
