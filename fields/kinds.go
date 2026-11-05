@@ -35,6 +35,23 @@ const (
 // BlockTypeKey holds the block name inside each item of a blocks field.
 const BlockTypeKey = "_type"
 
+// ItemKey holds the stable, globally unique ID of a stored group, list item
+// or block ("<table>:<id>", e.g. "cb_heading:12"). Items without a valid
+// key are new.
+const ItemKey = "_key"
+
+var itemKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[0-9]+$`)
+
+// keepKey copies a valid item key from raw to out.
+func keepKey(out map[string]any, raw any) map[string]any {
+	if m, ok := raw.(map[string]any); ok {
+		if k, ok := m[ItemKey].(string); ok && itemKeyRe.MatchString(k) {
+			out[ItemKey] = k
+		}
+	}
+	return out
+}
+
 var slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func emptyString(v any) bool { s, _ := v.(string); return s == "" }
@@ -194,7 +211,8 @@ func Kinds() []content.Kind {
 				if _, ok := raw.(map[string]any); !ok {
 					return nil, errors.New("Objekt erwartet")
 				}
-				return s.ValidateNested(f.Fields, raw)
+				v, err := s.ValidateNested(f.Fields, raw)
+				return keepKey(v, raw), err
 			},
 		},
 		{
@@ -210,6 +228,7 @@ func Kinds() []content.Kind {
 				errs := content.Errors{}
 				for i, it := range items {
 					v, err := s.ValidateNested(f.Fields, it)
+					keepKey(v, it)
 					collect(errs, i, err)
 					out = append(out, v)
 				}
@@ -245,6 +264,7 @@ func Kinds() []content.Kind {
 					v, err := s.ValidateNested(b.Fields, m)
 					collect(errs, i, err)
 					v[BlockTypeKey] = name
+					keepKey(v, m)
 					out = append(out, v)
 				}
 				if len(errs) > 0 {

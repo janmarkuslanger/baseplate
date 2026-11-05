@@ -109,11 +109,28 @@ func (s *SQLStore) UpdateEntry(ctx context.Context, e *Entry) error {
 		if err := mustAffect(res); err != nil {
 			return err
 		}
-		// Components are rewritten on every save; their IDs are internal.
-		if err := s.deleteChildren(ctx, q, t.Name, e.ID); err != nil {
+		// Components keep their IDs: items carrying the key of a component
+		// of this entry are updated (wherever they moved), others are new,
+		// and components no longer present are deleted.
+		tree := map[compRef]bool{}
+		if err := s.collectTree(ctx, q, t.Name, e.ID, tree); err != nil {
 			return err
 		}
-		return s.writeChildren(ctx, q, t, e.ID, e.Data)
+		if err := s.unlink(ctx, q, t.Name, e.ID, tree); err != nil {
+			return err
+		}
+		r := &reuse{tree: tree, used: map[compRef]bool{}}
+		if err := s.writeChildrenReuse(ctx, q, t, e.ID, e.Data, r); err != nil {
+			return err
+		}
+		for c := range tree {
+			if !r.used[c] {
+				if _, err := q.ExecContext(ctx, `DELETE FROM `+c.table+` WHERE id = ?`, c.id); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 }
 
@@ -138,20 +155,116 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 	})
 }
 
+// itemKeyOf is the item key of a component row: "<table>:<id>".
+func itemKeyOf(table string, id int64) string { return table + ":" + strconv.FormatInt(id, 10) }
+
+type compRef struct {
+	table string
+	id    int64
+}
+
+// reuse tracks existing components of an entry during an update.
+type reuse struct {
+	tree map[compRef]bool
+	used map[compRef]bool
+}
+
+// take returns the ID of an existing component the item refers to, or 0.
+func (r *reuse) take(table string, data map[string]any) int64 {
+	if r == nil {
+		return 0
+	}
+	k, _ := data[itemKey].(string)
+	tbl, num, ok := strings.Cut(k, ":")
+	if !ok || tbl != table {
+		return 0
+	}
+	id, err := strconv.ParseInt(num, 10, 64)
+	c := compRef{table, id}
+	if err != nil || !r.tree[c] || r.used[c] {
+		return 0
+	}
+	r.used[c] = true
+	return id
+}
+
+// collectTree adds every component below an owner row to tree.
+func (s *SQLStore) collectTree(ctx context.Context, q querier, ownerTable string, ownerID int64, tree map[compRef]bool) error {
+	links, err := s.childLinks(ctx, q, ownerTable, ownerID)
+	if err != nil {
+		return err
+	}
+	for _, l := range links {
+		if _, ok := s.layout.tables[l.table]; !ok {
+			continue
+		}
+		tree[compRef{l.table, l.compID}] = true
+		if err := s.collectTree(ctx, q, l.table, l.compID, tree); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// unlink removes all component links and owned relations of the root row
+// and its components, keeping the component rows for reuse.
+func (s *SQLStore) unlink(ctx context.Context, q querier, rootTable string, rootID int64, tree map[compRef]bool) error {
+	owners := append([]compRef{{rootTable, rootID}}, keys(tree)...)
+	for _, o := range owners {
+		if _, err := q.ExecContext(ctx, `DELETE FROM components WHERE owner_table = ? AND owner_id = ?`, o.table, o.id); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, `DELETE FROM relations WHERE owner_table = ? AND owner_id = ?`, o.table, o.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func keys(m map[compRef]bool) []compRef {
+	out := make([]compRef, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func (s *SQLStore) childLinks(ctx context.Context, q querier, ownerTable string, ownerID int64) ([]link, error) {
+	rows, err := q.QueryContext(ctx, `SELECT component_table, component_id FROM components WHERE owner_table = ? AND owner_id = ?`, ownerTable, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	var links []link
+	for rows.Next() {
+		var l link
+		if err := rows.Scan(&l.table, &l.compID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		links = append(links, l)
+	}
+	rows.Close()
+	return links, rows.Err()
+}
+
 // writeChildren stores the components and relations of one owner row.
 func (s *SQLStore) writeChildren(ctx context.Context, q querier, t *table, ownerID int64, data map[string]any) error {
+	return s.writeChildrenReuse(ctx, q, t, ownerID, data, nil)
+}
+
+func (s *SQLStore) writeChildrenReuse(ctx context.Context, q querier, t *table, ownerID int64, data map[string]any, r *reuse) error {
 	for _, f := range t.Fields {
 		v := data[f.Name]
 		switch s.layout.fieldStorage(f) {
 		case content.StoreGroup:
 			if m, ok := v.(map[string]any); ok {
-				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, t.children[f.Name], 0, m); err != nil {
+				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, t.children[f.Name], 0, m, r); err != nil {
 					return err
 				}
 			}
 		case content.StoreList:
 			for i, it := range asItems(v) {
-				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, t.children[f.Name], i, it); err != nil {
+				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, t.children[f.Name], i, it, r); err != nil {
 					return err
 				}
 			}
@@ -161,7 +274,7 @@ func (s *SQLStore) writeChildren(ctx context.Context, q querier, t *table, owner
 				if _, ok := s.layout.tables[blockTable(name)]; !ok {
 					return fmt.Errorf("storage: unknown block %q in %s.%s", name, t.Name, f.Name)
 				}
-				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, blockTable(name), i, it); err != nil {
+				if err := s.writeComponent(ctx, q, t.Name, ownerID, f.Name, blockTable(name), i, it, r); err != nil {
 					return err
 				}
 			}
@@ -185,35 +298,48 @@ func (s *SQLStore) writeChildren(ctx context.Context, q querier, t *table, owner
 	return nil
 }
 
-func (s *SQLStore) writeComponent(ctx context.Context, q querier, ownerTable string, ownerID int64, field, tableName string, pos int, data map[string]any) error {
+func (s *SQLStore) writeComponent(ctx context.Context, q querier, ownerTable string, ownerID int64, field, tableName string, pos int, data map[string]any, r *reuse) error {
 	ct := s.layout.tables[tableName]
-	var res sql.Result
-	var err error
+	id := r.take(ct.Name, data)
+	cols := make([]string, len(ct.Columns))
+	args := make([]any, len(ct.Columns))
+	for i, c := range ct.Columns {
+		cols[i], args[i] = c.Name, scalarArg(c, data[c.Field.Name])
+	}
 	switch {
-	case len(ct.Columns) == 0 && s.dialect == MySQL:
-		res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` () VALUES ()`)
-	case len(ct.Columns) == 0:
-		res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` DEFAULT VALUES`)
-	default:
-		cols := make([]string, len(ct.Columns))
-		args := make([]any, len(ct.Columns))
-		for i, c := range ct.Columns {
-			cols[i], args[i] = c.Name, scalarArg(c, data[c.Field.Name])
+	case id != 0 && len(cols) > 0:
+		sets := make([]string, len(cols))
+		for i, c := range cols {
+			sets[i] = c + " = ?"
 		}
-		res, err = q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, ct.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
-	}
-	if err != nil {
-		return err
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return err
+		if _, err := q.ExecContext(ctx, `UPDATE `+ct.Name+` SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, id)...); err != nil {
+			return err
+		}
+	case id != 0:
+		// nothing to update
+	default:
+		var res sql.Result
+		var err error
+		switch {
+		case len(cols) == 0 && s.dialect == MySQL:
+			res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` () VALUES ()`)
+		case len(cols) == 0:
+			res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` DEFAULT VALUES`)
+		default:
+			res, err = q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, ct.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
+		}
+		if err != nil {
+			return err
+		}
+		if id, err = res.LastInsertId(); err != nil {
+			return err
+		}
 	}
 	if _, err := q.ExecContext(ctx, `INSERT INTO components (owner_table, owner_id, field, component_table, component_id, position) VALUES (?, ?, ?, ?, ?, ?)`,
 		ownerTable, ownerID, field, ct.Name, id, pos); err != nil {
 		return err
 	}
-	return s.writeChildren(ctx, q, ct, id, data)
+	return s.writeChildrenReuse(ctx, q, ct, id, data, r)
 }
 
 type link struct {
@@ -435,12 +561,13 @@ func (s *SQLStore) hydrate(ctx context.Context, t *table, owners map[int64]map[s
 		}
 		switch s.layout.fieldStorage(f) {
 		case content.StoreGroup:
+			comp[itemKey] = itemKeyOf(l.table, l.compID)
 			owner[f.Name] = comp
 		case content.StoreBlocks:
 			comp[blockTypeKey] = strings.TrimPrefix(l.table, "cb_")
 			fallthrough
 		case content.StoreList:
-			comp[itemKey] = "c" + strconv.FormatInt(l.compID, 10)
+			comp[itemKey] = itemKeyOf(l.table, l.compID)
 			owner[f.Name] = append(owner[f.Name].([]any), comp)
 		}
 	}

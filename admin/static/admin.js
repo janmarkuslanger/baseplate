@@ -3,10 +3,11 @@
   'use strict';
 
   const csrf = () => document.body.dataset.csrf || '';
-  const uid = () => Math.random().toString(36).slice(2, 10);
+  // New items get "n…" keys; stored items keep the server's "<table>:<id>".
+  const uid = () => 'n' + Math.random().toString(36).slice(2, 10);
 
-  // _key gives list/block items a stable identity for x-for; it is
-  // stripped before saving.
+  // _key identifies items: x-for uses it, and the server reuses stored
+  // components by it, so blocks keep their IDs across saves and moves.
   function addKeys(v) {
     if (Array.isArray(v)) {
       v.forEach((it) => {
@@ -88,7 +89,7 @@
       },
       serialize() {
         this.submitting = true;
-        this.$refs.data.value = JSON.stringify(this.data, stripKeys);
+        this.$refs.data.value = JSON.stringify(this.data);
       },
 
       newBlock(name) { return clone(this.blocks[name]); },

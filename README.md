@@ -71,6 +71,8 @@ A theme is an `fs.FS` containing:
 - `templates/*.html` defines one template per routable content type (`{{define "page"}}…{{end}}`). It can override any default, such as `baseplate/head` or `block/<name>`.
 - `assets/` is copied to `dist/assets/`.
 
+Every group, list item and block carries a stable, unique `_key` (e.g. `cb_heading:12`) that survives edits and moves, e.g. for anchors: `<section id="{{.Block._key}}">`.
+
 Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`. Useful calls:
 
 ```html

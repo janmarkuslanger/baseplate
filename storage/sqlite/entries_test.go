@@ -86,7 +86,7 @@ func TestEntryRoundTrip(t *testing.T) {
 	if len(body) != 2 || body[0].(map[string]any)["_type"] != "heading" || art["title"] != "A" || inner["title"] != "B" {
 		t.Errorf("blocks: %#v", body)
 	}
-	if !strings.HasPrefix(art["_key"].(string), "c") {
+	if !strings.HasPrefix(art["_key"].(string), "cb_article:") {
 		t.Error("block items need a stable key")
 	}
 
@@ -226,5 +226,64 @@ func TestSchemaSync(t *testing.T) {
 	// Changing a field's kind is refused.
 	if err := s.UseSchema(ctx, mk(fields.Text)); err == nil || !strings.Contains(err.Error(), "rating") {
 		t.Fatalf("want type conflict error, got %v", err)
+	}
+}
+
+func TestStableComponentIDs(t *testing.T) {
+	ctx := context.Background()
+	s, _ := schemaStore(t)
+	page := &storage.Entry{Type: "page", Slug: "x", Data: map[string]any{"title": "X",
+		"seo": map[string]any{"metaTitle": "M"},
+		"body": []any{
+			map[string]any{"_type": "heading", "text": "H"},
+			map[string]any{"_type": "article", "title": "A", "children": []any{
+				map[string]any{"_type": "richtext", "html": "<p>innen</p>"},
+			}},
+		}}}
+	if err := s.CreateEntry(ctx, page); err != nil {
+		t.Fatal(err)
+	}
+	other := &storage.Entry{Type: "page", Slug: "y", Data: map[string]any{"title": "Y", "body": []any{map[string]any{"_type": "heading", "text": "fremd"}}}}
+	s.CreateEntry(ctx, other)
+	o, _ := s.GetEntry(ctx, "page", other.ID)
+	foreignKey := o.Data["body"].([]any)[0].(map[string]any)["_key"]
+
+	got, _ := s.GetEntry(ctx, "page", page.ID)
+	body := got.Data["body"].([]any)
+	heading, article := body[0].(map[string]any), body[1].(map[string]any)
+	inner := article["children"].([]any)[0].(map[string]any)
+	seoKey := got.Data["seo"].(map[string]any)["_key"]
+
+	// Edit text, move the inner richtext to the top level, drop the heading,
+	// and try to steal a block of another entry.
+	heading["text"] = "gelöscht"
+	inner["html"] = "<p>jetzt oben</p>"
+	article["children"] = []any{}
+	got.Data["body"] = []any{inner, article, map[string]any{"_type": "heading", "text": "geklaut", "_key": foreignKey}}
+	if err := s.UpdateEntry(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+
+	after, _ := s.GetEntry(ctx, "page", page.ID)
+	nb := after.Data["body"].([]any)
+	key := func(v any) any { return v.(map[string]any)["_key"] }
+	if key(nb[0]) != inner["_key"] || nb[0].(map[string]any)["html"] != "<p>jetzt oben</p>" {
+		t.Errorf("moved block lost its ID or content: %v", nb[0])
+	}
+	if key(nb[1]) != article["_key"] {
+		t.Error("article lost its ID")
+	}
+	if key(nb[2]) == foreignKey {
+		t.Error("block of another entry must not be reused")
+	}
+	if after.Data["seo"].(map[string]any)["_key"] != seoKey {
+		t.Error("group lost its ID")
+	}
+	if n := count(t, s, `SELECT COUNT(*) FROM cb_heading`); n != 2 { // other's + new one; deleted one is gone
+		t.Errorf("heading rows = %d, want 2", n)
+	}
+	o2, _ := s.GetEntry(ctx, "page", other.ID)
+	if o2.Data["body"].([]any)[0].(map[string]any)["text"] != "fremd" {
+		t.Error("other entry was modified")
 	}
 }
