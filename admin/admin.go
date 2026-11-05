@@ -23,6 +23,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/auth"
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/media"
@@ -596,87 +597,40 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx := r.Context()
-
-	e := &storage.Entry{Type: t.Name}
-	if id, _ := strconv.ParseInt(r.FormValue("id"), 10, 64); id > 0 {
-		got, err := a.store().GetEntry(ctx, t.Name, id)
-		if err != nil || got.Type != t.Name {
-			http.NotFound(w, r)
-			return
-		}
-		e = got
-	} else if t.Singleton {
-		if got, err := a.store().GetEntryBySlug(ctx, t.Name, t.Name); err == nil {
-			e = got
-		}
-	}
-	wasPublished := e.Status == storage.StatusPublished
-
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(r.FormValue("data")), &raw); err != nil {
 		http.Error(w, a.t("error.badData"), http.StatusBadRequest)
 		return
 	}
-	clean, err := a.Reg.Schema.Validate(t.Fields, raw)
-	errs, _ := err.(content.Errors)
-	if err != nil && errs == nil {
-		a.fail(w, err)
-		return
+	in := entries.Save{Type: t.Name, Data: raw, Publish: r.FormValue("status") == storage.StatusPublished}
+	in.ID, _ = strconv.ParseInt(r.FormValue("id"), 10, 64)
+	if cur := auth.FromContext(r.Context()); cur != nil {
+		in.UserID = cur.User.ID
 	}
-	if errs == nil {
-		errs = content.Errors{}
-	}
-
+	res, err := a.Reg.Entries.Save(r.Context(), in)
+	var errs content.Errors
 	switch {
-	case t.Singleton:
-		e.Slug, e.Status = t.Name, storage.StatusPublished
-	default:
-		e.Slug, _ = clean["slug"].(string)
-		e.Status = storage.StatusDraft
-		if r.FormValue("status") == storage.StatusPublished {
-			e.Status = storage.StatusPublished
+	case errors.Is(err, entries.ErrNotFound):
+		http.NotFound(w, r)
+		return
+	case errors.As(err, &errs):
+		// Re-render with what the editor typed.
+		e := &storage.Entry{Type: t.Name, ID: in.ID, Status: storage.StatusDraft, Data: raw}
+		if in.ID > 0 {
+			if got, err := a.store().GetEntry(r.Context(), t.Name, in.ID); err == nil {
+				e.Status, e.UpdatedAt = got.Status, got.UpdatedAt
+			}
 		}
-	}
-	if t.Routable && e.Slug != "" {
-		if msg := a.slugConflict(r, t, e, clean); msg != "" {
-			errs["slug"] = i18n.M(msg)
-		}
-	}
-	if len(errs) > 0 {
-		e.Data = raw
 		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, errs)
 		return
-	}
-
-	e.Data = clean
-	ev := &plugin.EntryEvent{Entry: e, Type: t}
-	if cur := auth.FromContext(ctx); cur != nil {
-		ev.UserID = cur.User.ID
-	}
-	if err := plugin.EntryBeforeSave.Run(ctx, a.Reg, ev); err != nil {
-		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err})
-		return
-	}
-	if e.ID == 0 {
-		err = a.store().CreateEntry(ctx, e)
-	} else {
-		err = a.store().UpdateEntry(ctx, e)
-	}
-	if errors.Is(err, storage.ErrInvalidRelation) {
-		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err})
-		return
-	}
-	if err != nil {
+	case err != nil:
 		a.fail(w, err)
 		return
 	}
-	if err := plugin.EntryAfterSave.Run(ctx, a.Reg, ev); err != nil {
-		a.Logger.Error("afterSave hook", "err", err)
-	}
-	if wasPublished || e.Status == storage.StatusPublished {
+	if res.Changed {
 		a.contentChanged()
 	}
+	e := res.Entry
 	fl := "saved"
 	if e.Status == storage.StatusPublished && !t.Singleton {
 		fl = "published"
@@ -688,39 +642,22 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-// slugConflict reports a sibling with the same slug (same type and parent).
-func (a *Admin) slugConflict(r *http.Request, t *content.Type, e *storage.Entry, data map[string]any) string {
-	all, _, err := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name})
-	if err != nil {
-		return ""
-	}
-	parent := parentID(data["parent"])
-	for _, o := range all {
-		if o.ID != e.ID && o.Slug == e.Slug && parentID(o.Data["parent"]) == parent {
-			return "validation.slugTaken"
-		}
-	}
-	return ""
-}
-
-func parentID(v any) int64 { id, _ := content.RefID(v); return id }
-
 func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.contentType(w, r)
 	if !ok {
 		return
 	}
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	e, err := a.store().GetEntry(r.Context(), t.Name, id)
-	if err != nil || e.Type != t.Name {
+	changed, err := a.Reg.Entries.Delete(r.Context(), t.Name, id)
+	if errors.Is(err, entries.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := a.store().DeleteEntry(r.Context(), t.Name, id); err != nil {
+	if err != nil {
 		a.fail(w, err)
 		return
 	}
-	if e.Status == storage.StatusPublished {
+	if changed {
 		a.contentChanged()
 	}
 	http.Redirect(w, r, "/admin/c/"+t.Name+"?flash=deleted", http.StatusSeeOther)

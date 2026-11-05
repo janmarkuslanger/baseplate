@@ -32,7 +32,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `PublicRoute` | endpoints on the CMS server |
 | `Migration`, `DataMigration` | own tables, content changes after schema changes |
 | `Use` | sub-plugins |
-| `Services` | `Store`, `Mailer`, `Logger`, `ClientIP` |
+| `Services` | `Entries` (save/delete content with the admin's rules and hooks), `Store`, `Mailer`, `Logger`, `ClientIP` |
 
 ## Blocks
 
@@ -83,7 +83,7 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 
 | Hook | Kind | Payload | Error |
 |---|---|---|---|
-| `plugin.EntryBeforeSave` | action | `*plugin.EntryEvent` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
+| `plugin.EntryBeforeSave` (= `entries.BeforeSave`) | action | `*plugin.EntryEvent` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
 | `plugin.EntryAfterSave` | action | `*plugin.EntryEvent` | logged |
 | `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages) | logged |
 

@@ -24,6 +24,7 @@
 |---|---|---|
 | App | `baseplate` | config, CLI, wiring |
 | Schema | `content`, `fields` | content types, fields, blocks, validation |
+| Entries | `entries` | write use cases: validation, rules, hooks, persist |
 | Plugins | `plugin`, `plugins/*` | extension API, built-in plugins |
 | Storage | `storage`, `storage/sqlite` | persistence behind an interface |
 | Admin | `admin`, `auth`, `media` | editor UI, login, uploads |
