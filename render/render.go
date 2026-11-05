@@ -164,16 +164,34 @@ func (r *Renderer) Markdown(p *Page) string {
 	if p.Meta.Description != "" {
 		b.WriteString("> " + p.Meta.Description + "\n\n")
 	}
-	for _, f := range p.Type.Fields {
-		if f.Kind == fields.Blocks {
-			r.markdownBlocks(&b, p.Data[f.Name])
-		}
-	}
+	r.markdownFields(&b, p.Type.Fields, p.Data)
 	return strings.TrimSpace(b.String()) + "\n"
 }
 
-// markdownBlocks writes each block's Markdown, then recurses into the
-// block's own blocks fields (containers such as articles).
+// markdownFields finds blocks in fields, also inside groups and lists.
+func (r *Renderer) markdownFields(b *strings.Builder, fs []content.Field, data map[string]any) {
+	for _, f := range fs {
+		k, _ := r.schema.Kind(f.Kind)
+		switch k.Storage {
+		case content.StoreBlocks:
+			r.markdownBlocks(b, data[f.Name])
+		case content.StoreGroup:
+			if m, ok := data[f.Name].(map[string]any); ok {
+				r.markdownFields(b, f.Fields, m)
+			}
+		case content.StoreList:
+			list, _ := data[f.Name].([]any)
+			for _, it := range list {
+				if m, ok := it.(map[string]any); ok {
+					r.markdownFields(b, f.Fields, m)
+				}
+			}
+		}
+	}
+}
+
+// markdownBlocks writes each block's Markdown, then the blocks nested in
+// its fields.
 func (r *Renderer) markdownBlocks(b *strings.Builder, items any) {
 	list, _ := items.([]any)
 	for _, it := range list {
@@ -188,10 +206,6 @@ func (r *Renderer) markdownBlocks(b *strings.Builder, items any) {
 				b.WriteString(md + "\n\n")
 			}
 		}
-		for _, f := range blk.Fields {
-			if f.Kind == fields.Blocks {
-				r.markdownBlocks(b, m[f.Name])
-			}
-		}
+		r.markdownFields(b, blk.Fields, m)
 	}
 }

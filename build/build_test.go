@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -225,4 +226,26 @@ func TestBuildDistDirTrailingSlash(t *testing.T) {
 		}
 	}
 	read(t, b, "index.html")
+}
+
+func TestMarkdownBlocksInGroupsAndLists(t *testing.T) {
+	b, st := setup(t)
+	b.Reg.ContentType(content.Type{Name: "landing", Routable: true, Fields: fields.RoutableFields(
+		content.Field{Name: "hero", Kind: fields.Group, Fields: []content.Field{{Name: "blocks", Kind: fields.Blocks}}},
+		content.Field{Name: "sections", Kind: fields.List, Fields: []content.Field{{Name: "blocks", Kind: fields.Blocks}}},
+	)})
+	b.Reg.Store.UseSchema(context.Background(), b.Reg.Schema)
+	b.Theme = fstest.MapFS{"templates/landing.html": {Data: []byte(`{{define "landing"}}x{{end}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, "landing", "start", storage.StatusPublished, map[string]any{"title": "L", "slug": "start",
+		"hero":     map[string]any{"blocks": []any{map[string]any{"_type": "heading", "text": "Im Hero"}}},
+		"sections": []any{map[string]any{"blocks": []any{map[string]any{"_type": "heading", "text": "In Liste"}}}},
+	})
+	if _, err := b.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	md := read(t, b, "landing/start.md")
+	if !strings.Contains(md, "## Im Hero") || !strings.Contains(md, "## In Liste") {
+		t.Errorf("markdown: %q", md)
+	}
 }
