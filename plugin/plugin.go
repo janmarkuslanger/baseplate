@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/hook"
 	"github.com/janmarkuslanger/baseplate/mail"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -29,6 +30,9 @@ type Services struct {
 	Store  storage.Store
 	Mailer mail.Mailer
 	Logger *slog.Logger
+	// Entries saves and deletes content with the same rules and hooks as the
+	// admin. Use it instead of Store.CreateEntry/UpdateEntry.
+	Entries *entries.Service
 	// ClientIP returns the visitor's IP, honouring Config.TrustedProxyHeader.
 	// Use it for rate limits instead of r.RemoteAddr.
 	ClientIP func(r *http.Request) string
@@ -58,13 +62,8 @@ func ProxyIP(header string) func(r *http.Request) string {
 	}
 }
 
-// EntryEvent is the payload of the entry hooks.
-type EntryEvent struct {
-	Entry *storage.Entry
-	Type  *content.Type
-	// UserID is the admin user who saves (0 outside the admin).
-	UserID int64
-}
+// EntryEvent is the payload of the entry hooks (see package entries).
+type EntryEvent = entries.Event
 
 // BuildEvent is the payload of BuildAfter.
 type BuildEvent struct {
@@ -73,12 +72,10 @@ type BuildEvent struct {
 }
 
 var (
-	// EntryBeforeSave runs after validation, before the entry is stored.
-	// Plugins may change Entry.Data. An error aborts the save and is shown
-	// to the editor.
-	EntryBeforeSave = hook.NewAction[*EntryEvent]("entry.beforeSave", "after validation, before an entry is stored; error aborts the save")
-	// EntryAfterSave runs after an entry was stored. Errors are logged.
-	EntryAfterSave = hook.NewAction[*EntryEvent]("entry.afterSave", "after an entry was stored; errors are logged")
+	// EntryBeforeSave and EntryAfterSave are the hooks of entries.Service
+	// (aliases of entries.BeforeSave / entries.AfterSave).
+	EntryBeforeSave = entries.BeforeSave
+	EntryAfterSave  = entries.AfterSave
 	// BuildAfter runs after a successful build. Errors are logged.
 	BuildAfter = hook.NewAction[*BuildEvent]("build.after", "after a successful static build; errors are logged")
 )
@@ -143,11 +140,18 @@ func NewRegistry(svc Services) *Registry {
 	if svc.ClientIP == nil {
 		svc.ClientIP = RemoteIP
 	}
-	return &Registry{
+	r := &Registry{
 		Services: svc,
 		Schema:   content.NewSchema(),
 		funcs:    TemplateFuncs{},
 	}
+	if r.Entries == nil {
+		r.Entries = &entries.Service{Store: svc.Store, Schema: r.Schema, Hooks: r}
+		if svc.Logger != nil {
+			r.Entries.Logger = svc.Logger
+		}
+	}
+	return r
 }
 
 // Use registers plugins in order.
