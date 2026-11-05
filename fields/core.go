@@ -2,17 +2,17 @@ package fields
 
 import (
 	"context"
-	"errors"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
 // Built-in content type names.
 const (
 	PageType     = "page"
-	SettingsType = "settings"
+	SettingsType = settings.Type
 )
 
 // Tabs used by the standard field groups.
@@ -76,29 +76,25 @@ func (Core) Register(r *plugin.Registry) error {
 		return err
 	}
 	return r.ContentType(content.Type{
-		Name: SettingsType, Label: "type.settings", LabelPlural: "type.settings.plural", Singleton: true, TitleField: "siteName",
+		Name: SettingsType, Label: "type.settings", LabelPlural: "type.settings.plural", Singleton: true, TitleField: settings.SiteName,
 		Fields: []content.Field{
-			{Name: "siteName", Label: "settings.siteName", Kind: Text, Required: true},
-			{Name: "baseURL", Label: "settings.baseURL", Kind: URL, Required: true, Help: "settings.baseURL.help"},
-			{Name: "language", Label: "settings.language", Kind: Text, Help: "settings.language.help"},
-			{Name: "serverURL", Label: "settings.serverURL", Kind: URL, Help: "settings.serverURL.help"},
-			{Name: "defaultOgImage", Label: "settings.defaultOgImage", Kind: Image},
-			{Name: "llmsTxt", Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
-			{Name: "llmsContent", Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
+			{Name: settings.SiteName, Label: "settings.siteName", Kind: Text, Required: true},
+			{Name: settings.BaseURL, Label: "settings.baseURL", Kind: URL, Required: true, Help: "settings.baseURL.help"},
+			{Name: settings.Language, Label: "settings.language", Kind: Text, Help: "settings.language.help"},
+			{Name: settings.ServerURL, Label: "settings.serverURL", Kind: URL, Help: "settings.serverURL.help"},
+			{Name: settings.DefaultOGImage, Label: "settings.defaultOgImage", Kind: Image},
+			{Name: settings.LLMSTxt, Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
+			{Name: settings.LLMSContent, Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
 		},
 	})
 }
 
 func str(v any) string { s, _ := v.(string); return s }
 
-// LoadSettings returns the site settings, or an empty map if none were saved yet.
+// LoadSettings returns the settings data.
+//
+// Deprecated: use settings.Load for typed access.
 func LoadSettings(ctx context.Context, st storage.Store) (map[string]any, error) {
-	e, err := st.GetEntryBySlug(ctx, SettingsType, SettingsType)
-	if errors.Is(err, storage.ErrNotFound) {
-		return map[string]any{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return e.Data, nil
+	s, err := settings.Load(ctx, st)
+	return s.Data, err
 }

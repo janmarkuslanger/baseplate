@@ -22,6 +22,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/render"
+	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -52,11 +53,11 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	settings, err := fields.LoadSettings(ctx, b.Reg.Store)
+	cfg, err := settings.Load(ctx, b.Reg.Store)
 	if err != nil {
 		return Result{}, err
 	}
-	base := strings.TrimRight(str(settings["baseURL"]), "/")
+	base := cfg.BaseURL
 	if base == "" {
 		return Result{}, errors.New("Basis-URL fehlt – bitte in den Einstellungen eintragen")
 	}
@@ -70,7 +71,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	}
 	defer os.RemoveAll(tmp)
 
-	s := &site{ctx: ctx, b: b, r: r, out: tmp, settings: settings}
+	s := &site{ctx: ctx, b: b, r: r, out: tmp, cfg: cfg, settings: cfg.Data}
 	pages, err := s.collect(base)
 	if err != nil {
 		return Result{}, err
@@ -81,7 +82,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		}
 	}
 	steps := []func([]*render.Page) error{s.sitemap, s.robots}
-	if settings["llmsTxt"] == true {
+	if cfg.LLMSTxt {
 		steps = append(steps, s.llms)
 	}
 	for _, step := range steps {
@@ -130,6 +131,7 @@ type site struct {
 	b        *Builder
 	r        *render.Renderer
 	out      string
+	cfg      settings.Settings
 	settings map[string]any
 }
 
@@ -195,7 +197,7 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		seen[u] = fmt.Sprintf("%q", str(p.Data["title"]))
 		p.URL, p.AbsURL = u, base+u
 		p.MarkdownURL = markdownURL(u)
-		p.Meta = meta(p, s.settings, base)
+		p.Meta = meta(p, s.cfg, base)
 		if p.Type.Name == fields.PageType {
 			parent, _ := content.RefID(p.Data["parent"])
 			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
@@ -253,7 +255,7 @@ func markdownURL(u string) string {
 	return strings.TrimSuffix(u, "/") + ".md"
 }
 
-func meta(p *render.Page, settings map[string]any, base string) render.Meta {
+func meta(p *render.Page, cfg settings.Settings, base string) render.Meta {
 	seo, _ := p.Data["seo"].(map[string]any)
 	title := str(p.Data["title"])
 	m := render.Meta{
@@ -261,7 +263,7 @@ func meta(p *render.Page, settings map[string]any, base string) render.Meta {
 		Description: str(seo["metaDescription"]),
 		Canonical:   firstNonEmpty(str(seo["canonical"]), p.AbsURL),
 	}
-	if site := str(settings["siteName"]); site != "" && str(seo["metaTitle"]) == "" && title != site {
+	if site := cfg.SiteName; site != "" && str(seo["metaTitle"]) == "" && title != site {
 		m.Title = title + " | " + site
 	}
 	robots := []string{"index", "follow"}
@@ -274,7 +276,7 @@ func meta(p *render.Page, settings map[string]any, base string) render.Meta {
 	m.Robots = strings.Join(robots, ", ")
 	m.OGTitle = firstNonEmpty(str(seo["ogTitle"]), m.Title)
 	m.OGDescription = firstNonEmpty(str(seo["ogDescription"]), m.Description)
-	m.OGImage = absolute(base, firstNonEmpty(str(seo["ogImage"]), str(settings["defaultOgImage"])))
+	m.OGImage = absolute(base, firstNonEmpty(str(seo["ogImage"]), cfg.DefaultOGImage))
 	return m
 }
 
@@ -321,15 +323,15 @@ func (s *site) sitemap(pages []*render.Page) error {
 }
 
 func (s *site) robots(_ []*render.Page) error {
-	base := strings.TrimRight(str(s.settings["baseURL"]), "/")
+	base := s.cfg.BaseURL
 	return s.WriteFile("robots.txt", []byte("User-agent: *\nAllow: /\n\nSitemap: "+base+"/sitemap.xml\n"))
 }
 
 // llms writes /llms.txt following https://llmstxt.org.
 func (s *site) llms(pages []*render.Page) error {
 	var b strings.Builder
-	b.WriteString("# " + firstNonEmpty(str(s.settings["siteName"]), "Website") + "\n\n")
-	if extra := strings.TrimSpace(str(s.settings["llmsContent"])); extra != "" {
+	b.WriteString("# " + firstNonEmpty(s.cfg.SiteName, "Website") + "\n\n")
+	if extra := s.cfg.LLMSContent; extra != "" {
 		b.WriteString(extra + "\n\n")
 	}
 	b.WriteString("## Seiten\n\n")
@@ -337,7 +339,7 @@ func (s *site) llms(pages []*render.Page) error {
 		if !indexable(p) {
 			continue
 		}
-		line := "- [" + str(p.Data["title"]) + "](" + absolute(strings.TrimRight(str(s.settings["baseURL"]), "/"), p.MarkdownURL) + ")"
+		line := "- [" + str(p.Data["title"]) + "](" + absolute(s.cfg.BaseURL, p.MarkdownURL) + ")"
 		if sum := p.Meta.Description; sum != "" {
 			line += ": " + strings.ReplaceAll(sum, "\n", " ")
 		}

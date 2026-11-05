@@ -24,6 +24,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/i18n"
 	bpmail "github.com/janmarkuslanger/baseplate/mail"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -353,10 +354,8 @@ func (p *Plugin) pt(lang, key string, args ...any) string { return p.texts.T(lan
 
 // siteLang is the website language from the settings (default i18n.Default).
 func (p *Plugin) siteLang(ctx context.Context) string {
-	if s, err := fields.LoadSettings(ctx, p.reg.Store); err == nil {
-		if l, _ := s["language"].(string); l != "" {
-			return l
-		}
+	if s, err := settings.Load(ctx, p.reg.Store); err == nil && s.Language != "" {
+		return s.Language
 	}
 	return i18n.Default
 }
