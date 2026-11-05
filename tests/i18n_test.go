@@ -14,12 +14,12 @@ import (
 
 // keyUses finds translation keys in templates and Go code.
 var keyUses = []*regexp.Regexp{
-	regexp.MustCompile(`\{\{-?\s*(?:json \()?t "([a-zA-Z][\w.]*)"`),          // {{t "key"}}, {{json (t "key")}}
-	regexp.MustCompile(`\(t "([a-zA-Z][\w.]*)"`),                             // (t "key" …) inside other calls
+	regexp.MustCompile(`\{\{-?\s*(?:json \()?t "([a-zA-Z][\w.]*)"`),               // {{t "key"}}, {{json (t "key")}}
+	regexp.MustCompile(`\(t "([a-zA-Z][\w.]*)"`),                                  // (t "key" …) inside other calls
 	regexp.MustCompile(`\b(?:i18n\.M|a\.t|p\.pt\(lang,)\s*\(?"([a-zA-Z][\w.]*)"`), // Go
-	regexp.MustCompile(`(?:Label|LabelPlural|Help|Tab): "([a-z]+\.[\w.]+)"`),  // schema labels that are keys
-	regexp.MustCompile(`tr\('(js\.[\w.]+)'`),                                  // admin.js
-	regexp.MustCompile(`formsT [^"]*"([\w.]+)"`),                              // frontend templates
+	regexp.MustCompile(`(?:Label|LabelPlural|Help|Tab): "([a-z]+\.[\w.]+)"`),      // schema labels that are keys
+	regexp.MustCompile(`tr\('(js\.[\w.]+)'`),                                      // admin.js
+	regexp.MustCompile(`formsT [^"]*"([\w.]+)"`),                                  // frontend templates
 	regexp.MustCompile(`errorKeys[^}]*?"([\w.]+)"`),
 }
 
