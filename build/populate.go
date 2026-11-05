@@ -2,7 +2,6 @@ package build
 
 import (
 	"github.com/janmarkuslanger/baseplate/content"
-	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -67,14 +66,14 @@ func (r *resolver) populate(fs []content.Field, data map[string]any) map[string]
 				refs := []*render.Ref{}
 				list, _ := v.([]any)
 				for _, it := range list {
-					if id, ok := it.(int64); ok {
+					if id, ok := content.RefID(it); ok {
 						if ref := r.ref(f.Ref, id); ref != nil {
 							refs = append(refs, ref)
 						}
 					}
 				}
 				out[f.Name] = refs
-			} else if id, ok := v.(int64); ok {
+			} else if id, ok := content.RefID(v); ok {
 				if ref := r.ref(f.Ref, id); ref != nil {
 					out[f.Name] = ref
 				} else {
@@ -92,7 +91,7 @@ func (r *resolver) populate(fs []content.Field, data map[string]any) map[string]
 				m, _ := it.(map[string]any)
 				sub := f.Fields
 				if k.Storage == content.StoreBlocks {
-					name, _ := m[fields.BlockTypeKey].(string)
+					name, _ := m[content.BlockTypeKey].(string)
 					b, _ := r.s.b.Reg.Schema.Block(name)
 					sub = b.Fields
 				}
@@ -126,14 +125,13 @@ func (r *resolver) inverse(p *render.Page) {
 }
 
 func points(e storage.Entry, f content.Field, id int64) bool {
-	switch v := e.Data[f.Name].(type) {
-	case int64:
-		return v == id
-	case []any:
-		for _, it := range v {
-			if it == id {
-				return true
-			}
+	if n, ok := content.RefID(e.Data[f.Name]); ok {
+		return n == id
+	}
+	list, _ := e.Data[f.Name].([]any)
+	for _, it := range list {
+		if n, _ := content.RefID(it); n == id {
+			return true
 		}
 	}
 	return false
