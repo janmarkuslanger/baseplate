@@ -132,6 +132,9 @@ func TestAdminFlow(t *testing.T) {
 	}
 	if res, body := c.do("GET", res.Header.Get("Location"), nil); res.StatusCode != 200 || !strings.Contains(body, "Veröffentlicht") {
 		t.Fatalf("edit page after save: %d", res.StatusCode)
+	} else if m := regexp.MustCompile(`name="status" value="(\w+)"`).FindStringSubmatch(body); m == nil || m[1] != "published" {
+		// Enter submits the first submit button; it must keep the status.
+		t.Errorf("default submit button of a published entry: %v", m)
 	}
 	res, body = c.save("page", "published", map[string]any{"title": "Doppelt", "slug": "index"})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "bereits vergeben") {

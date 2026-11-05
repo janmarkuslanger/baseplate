@@ -10,6 +10,9 @@
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <input type="hidden" name="id" value="{{if not $p.IsNew}}{{$p.Entry.ID}}{{end}}">
   <input type="hidden" name="data" x-ref="data">
+  {{/* First submit button = default for Enter (and the Ctrl/Cmd+S target):
+       saves without changing the status. */}}
+  <button type="submit" name="status" value="{{if or $t.Singleton (eq $p.Entry.Status "published")}}published{{else}}draft{{end}}" class="default-submit" tabindex="-1" aria-hidden="true" data-save>Speichern</button>
 
   <header class="page-head page-head--sticky">
     <div>

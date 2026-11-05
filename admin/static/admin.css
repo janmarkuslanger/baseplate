@@ -252,3 +252,6 @@ textarea.input { resize: vertical; min-height: 80px; }
 .rel__empty { padding: 8px 10px; }
 .used-in { margin: 0; padding-left: 18px; }
 .used-in li + li { margin-top: 4px; }
+
+/* invisible default submit button (keeps the status on Enter / Ctrl+S) */
+.default-submit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; padding: 0; }
