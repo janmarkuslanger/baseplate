@@ -353,3 +353,38 @@ func TestRenamedFrom(t *testing.T) {
 		t.Error("naming helpers")
 	}
 }
+
+func TestKeywordColumnNames(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	mk := func(extra ...content.Field) *content.Schema {
+		reg := plugin.NewRegistry(plugin.Services{Store: s})
+		reg.Use(fields.Core{})
+		reg.ContentType(content.Type{Name: "listing", Fields: append([]content.Field{
+			{Name: "limit", Kind: fields.Number}, {Name: "order", Kind: fields.Text},
+			{Name: "group", Kind: fields.List, Fields: []content.Field{{Name: "select", Kind: fields.Text}}},
+		}, extra...)})
+		return reg.Schema
+	}
+	if err := s.UseSchema(ctx, mk()); err != nil {
+		t.Fatal(err)
+	}
+	e := &storage.Entry{Type: "listing", Data: map[string]any{"limit": 3.0, "order": "desc", "group": []any{map[string]any{"select": "x"}}}}
+	if err := s.CreateEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UseSchema(ctx, mk(content.Field{Name: "where", Kind: fields.Text})); err != nil { // ADD COLUMN
+		t.Fatal(err)
+	}
+	e.Data["where"] = "hier"
+	if err := s.UpdateEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	list, _, err := s.ListEntries(ctx, storage.ListQuery{Type: "listing", Search: "desc"})
+	if err != nil || len(list) != 1 || list[0].Data["limit"] != 3.0 || list[0].Data["where"] != "hier" {
+		t.Fatalf("roundtrip: %v %v", list, err)
+	}
+	if list[0].Data["group"].([]any)[0].(map[string]any)["select"] != "x" {
+		t.Error("component with keyword column")
+	}
+}

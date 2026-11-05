@@ -19,12 +19,16 @@ type dialectSQL struct {
 	columns func(ctx context.Context, q querier, table string) (map[string]string, error)
 	// tables lists all table names.
 	tables func(ctx context.Context, q querier) ([]string, error)
+	// quote quotes an identifier; column names come from field names and
+	// may be SQL keywords ("limit", "order", …).
+	quote func(name string) string
 }
 
 var dialects = map[Dialect]dialectSQL{
 	SQLite: {
 		idPK:     "INTEGER PRIMARY KEY AUTOINCREMENT",
 		slugType: "TEXT",
+		quote:    func(n string) string { return `"` + n + `"` },
 		types: map[content.Storage]string{
 			content.StoreText: "TEXT", content.StoreLongText: "TEXT",
 			content.StoreNumber: "REAL", content.StoreBool: "INTEGER",
@@ -43,6 +47,7 @@ var dialects = map[Dialect]dialectSQL{
 	MySQL: {
 		idPK:     "BIGINT AUTO_INCREMENT PRIMARY KEY",
 		slugType: "VARCHAR(255)",
+		quote:    func(n string) string { return "`" + n + "`" },
 		types: map[content.Storage]string{
 			content.StoreText: "TEXT", content.StoreLongText: "LONGTEXT",
 			content.StoreNumber: "DOUBLE", content.StoreBool: "TINYINT(1)",
@@ -113,7 +118,7 @@ func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 			want := d.types[c.Storage]
 			have, ok := existing[c.Name]
 			if !ok {
-				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s NULL`, t.Name, c.Name, want)); err != nil {
+				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s NULL`, t.Name, d.quote(c.Name), want)); err != nil {
 					return fmt.Errorf("add %s.%s: %w", t.Name, c.Name, err)
 				}
 				continue
@@ -138,7 +143,7 @@ func createTableSQL(d dialectSQL, t *table) string {
 		)
 	}
 	for _, c := range t.Columns {
-		cols = append(cols, c.Name+" "+d.types[c.Storage]+" NULL")
+		cols = append(cols, d.quote(c.Name)+" "+d.types[c.Storage]+" NULL")
 	}
 	return fmt.Sprintf("CREATE TABLE %s (\n\t%s\n)", t.Name, strings.Join(cols, ",\n\t"))
 }
@@ -193,7 +198,7 @@ func (s *SQLStore) renames(ctx context.Context, l *layout) error {
 				if _, ok := cols[newCol]; ok {
 					return fmt.Errorf("storage: cannot rename %s.%s to %s: both columns exist", t.Name, oldCol, newCol)
 				}
-				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, t.Name, oldCol, newCol)); err != nil {
+				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, t.Name, d.quote(oldCol), d.quote(newCol))); err != nil {
 					return fmt.Errorf("rename %s.%s: %w", t.Name, oldCol, err)
 				}
 			}

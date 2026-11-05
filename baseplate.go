@@ -57,6 +57,9 @@ type Config struct {
 	// SecureCookies sets the Secure flag on the admin session cookie; enable
 	// it behind an HTTPS proxy (BASEPLATE_SECURE_COOKIES=1).
 	SecureCookies bool
+	// BuildOnPublish rebuilds the static site in the background after
+	// published content changes (BASEPLATE_BUILD_ON_PUBLISH=1).
+	BuildOnPublish bool
 	// AdminLocale is the admin language, e.g. "de" or "en"
 	// (BASEPLATE_ADMIN_LOCALE, default "de").
 	AdminLocale string
@@ -90,6 +93,9 @@ func (c *Config) LoadEnv() {
 	str("BASEPLATE_ADMIN_LOCALE", &c.AdminLocale)
 	if v, err := strconv.Atoi(os.Getenv("BASEPLATE_SMTP_PORT")); err == nil {
 		c.SMTP.Port = v
+	}
+	if v := os.Getenv("BASEPLATE_BUILD_ON_PUBLISH"); v != "" {
+		c.BuildOnPublish = v == "1" || v == "true"
 	}
 	if v := os.Getenv("BASEPLATE_SECURE_COOKIES"); v != "" {
 		c.SecureCookies = v == "1" || v == "true"
@@ -238,7 +244,7 @@ func (a *App) Setup(ctx context.Context) error {
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies}
-	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale}
+	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale, BuildOnPublish: c.BuildOnPublish}
 	return a.admin.Init()
 }
 
