@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/hook"
 	"github.com/janmarkuslanger/baseplate/mail"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -57,19 +58,30 @@ func ProxyIP(header string) func(r *http.Request) string {
 	}
 }
 
-// Event names for hooks.
-type Event string
+// EntryEvent is the payload of the entry hooks.
+type EntryEvent struct {
+	Entry *storage.Entry
+	Type  *content.Type
+	// UserID is the admin user who saves (0 outside the admin).
+	UserID int64
+}
 
-const (
+// BuildEvent is the payload of BuildAfter.
+type BuildEvent struct {
+	DistDir string
+	Pages   int
+}
+
+var (
 	// EntryBeforeSave runs after validation, before the entry is stored.
-	// Returning an error aborts the save.
-	EntryBeforeSave Event = "entry.beforeSave"
-	EntryAfterSave  Event = "entry.afterSave"
-	// BuildAfter runs after a successful SSG build; the entry is nil.
-	BuildAfter Event = "build.after"
+	// Plugins may change Entry.Data. An error aborts the save and is shown
+	// to the editor.
+	EntryBeforeSave = hook.NewAction[*EntryEvent]("entry.beforeSave", "after validation, before an entry is stored; error aborts the save")
+	// EntryAfterSave runs after an entry was stored. Errors are logged.
+	EntryAfterSave = hook.NewAction[*EntryEvent]("entry.afterSave", "after an entry was stored; errors are logged")
+	// BuildAfter runs after a successful build. Errors are logged.
+	BuildAfter = hook.NewAction[*BuildEvent]("build.after", "after a successful static build; errors are logged")
 )
-
-type Hook func(ctx context.Context, e *storage.Entry) error
 
 // AdminUI lets plugin admin pages render inside the admin layout.
 type AdminUI interface {
@@ -124,7 +136,7 @@ type Registry struct {
 	funcs          TemplateFuncs
 	migrations     []storage.Migration
 	dataMigrations []DataMigration
-	hooks          map[Event][]Hook
+	hooks          hook.Set
 }
 
 func NewRegistry(svc Services) *Registry {
@@ -135,7 +147,6 @@ func NewRegistry(svc Services) *Registry {
 		Services: svc,
 		Schema:   content.NewSchema(),
 		funcs:    TemplateFuncs{},
-		hooks:    map[Event][]Hook{},
 	}
 }
 
@@ -163,7 +174,6 @@ func (r *Registry) Block(b content.Block) error                 { return r.Schem
 func (r *Registry) Generator(g Generator)         { r.generators = append(r.generators, g) }
 func (r *Registry) AdminPage(p AdminPage)         { r.adminPages = append(r.adminPages, p) }
 func (r *Registry) PublicRoute(rt Route)          { r.routes = append(r.routes, rt) }
-func (r *Registry) On(e Event, h Hook)            { r.hooks[e] = append(r.hooks[e], h) }
 func (r *Registry) Migration(m storage.Migration) { r.migrations = append(r.migrations, m) }
 
 // DataMigration changes stored content after a schema change, e.g. copying
@@ -205,12 +215,5 @@ func (r *Registry) TemplateFuncs() TemplateFuncs    { return r.funcs }
 func (r *Registry) Migrations() []storage.Migration { return r.migrations }
 func (r *Registry) DataMigrations() []DataMigration { return r.dataMigrations }
 
-// Run calls all hooks for e in registration order and stops at the first error.
-func (r *Registry) Run(ctx context.Context, e Event, entry *storage.Entry) error {
-	for _, h := range r.hooks[e] {
-		if err := h(ctx, entry); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// Hooks returns the app's hook registrations (see package hook).
+func (r *Registry) Hooks() *hook.Set { return &r.hooks }

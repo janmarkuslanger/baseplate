@@ -18,6 +18,7 @@ import (
 	"testing/fstest"
 
 	"github.com/janmarkuslanger/baseplate"
+	"github.com/janmarkuslanger/baseplate/plugin"
 )
 
 var testTheme = fstest.MapFS{
@@ -32,11 +33,12 @@ type client struct {
 }
 
 // newTestApp starts a server with an admin user; it returns the dist dir.
-func newTestApp(t *testing.T) (string, *client) {
+func newTestApp(t *testing.T, plugins ...plugin.Plugin) (string, *client) {
 	t.Helper()
 	dir := t.TempDir()
 	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Theme: testTheme,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	app.Use(plugins...)
 	var out bytes.Buffer
 	if err := app.Run(context.Background(), []string{"user", "add", "admin@example.com"}, strings.NewReader("sehr-geheim-123\n"), &out); err != nil {
 		t.Fatal(err)

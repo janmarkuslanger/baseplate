@@ -118,8 +118,8 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	}
 	os.RemoveAll(old)
 
-	if err := b.Reg.Run(ctx, plugin.BuildAfter, nil); err != nil {
-		return Result{}, err
+	if err := plugin.BuildAfter.Run(ctx, b.Reg, &plugin.BuildEvent{DistDir: dist, Pages: len(pages)}); err != nil && b.Reg.Logger != nil {
+		b.Reg.Logger.Error("build hook", "err", err)
 	}
 	return Result{Pages: len(pages), Duration: time.Since(start), Finished: time.Now()}, nil
 }

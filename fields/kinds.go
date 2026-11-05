@@ -74,7 +74,8 @@ func stringKind(name string, st content.Storage, check func(f content.Field, s s
 		Name:    name,
 		Storage: st,
 		Empty:   emptyString,
-		Normalize: func(_ *content.Schema, f content.Field, raw any) (any, error) {
+		Normalize: func(a content.NormalizeArgs) (any, error) {
+			f, raw := a.Field, a.Raw
 			s, err := asString(raw)
 			if err != nil {
 				return nil, err
@@ -139,7 +140,8 @@ func Kinds() []content.Kind {
 		{
 			Name:    Number,
 			Storage: content.StoreNumber,
-			Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				raw := a.Raw
 				switch v := raw.(type) {
 				case nil:
 					return nil, nil
@@ -161,7 +163,8 @@ func Kinds() []content.Kind {
 		{
 			Name:    Bool,
 			Storage: content.StoreBool,
-			Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				raw := a.Raw
 				switch v := raw.(type) {
 				case nil:
 					return false, nil
@@ -178,7 +181,8 @@ func Kinds() []content.Kind {
 			Name:    Relation,
 			Storage: content.StoreRelation,
 			Empty:   func(v any) bool { l, ok := v.([]any); return v == nil || (ok && len(l) == 0) },
-			Normalize: func(_ *content.Schema, f content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				f, raw := a.Field, a.Raw
 				if !f.Many {
 					return refID(raw)
 				}
@@ -204,7 +208,8 @@ func Kinds() []content.Kind {
 		{
 			Name:    Group,
 			Storage: content.StoreGroup,
-			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				s, f, raw := a.Schema, a.Field, a.Raw
 				if raw == nil {
 					raw = map[string]any{}
 				}
@@ -219,7 +224,8 @@ func Kinds() []content.Kind {
 			Name:    List,
 			Storage: content.StoreList,
 			Empty:   emptySlice,
-			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				s, f, raw := a.Schema, a.Field, a.Raw
 				items, err := asList(raw)
 				if err != nil {
 					return nil, err
@@ -242,7 +248,8 @@ func Kinds() []content.Kind {
 			Name:    Blocks,
 			Storage: content.StoreBlocks,
 			Empty:   emptySlice,
-			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
+			Normalize: func(a content.NormalizeArgs) (any, error) {
+				s, f, raw := a.Schema, a.Field, a.Raw
 				items, err := asList(raw)
 				if err != nil {
 					return nil, err
