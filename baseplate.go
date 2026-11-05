@@ -211,6 +211,9 @@ func (a *App) Setup(ctx context.Context) error {
 	if err := st.Migrate(ctx, append(append([]storage.Migration{}, storage.CoreMigrations...), reg.Migrations()...)); err != nil {
 		return err
 	}
+	if err := st.UseSchema(ctx, reg.Schema); err != nil {
+		return err
+	}
 	mediaStore := media.Store{Dir: filepath.Join(c.DataDir, "media")}
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}

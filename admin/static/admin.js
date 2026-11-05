@@ -101,9 +101,14 @@
       },
       duplicate(list, i) { list.splice(i + 1, 0, clone(list[i])); },
 
-      blockTemplate(name) {
+      // mountBlock inserts a block's editor once and initializes it. Only
+      // the new children are initialized, so the host's own directives do
+      // not run again; nothing here is reactive, so typing never re-mounts.
+      mountBlock(el, name) {
         const tpl = document.getElementById('bp-block-' + name);
-        return tpl ? tpl.innerHTML : '';
+        if (!tpl) return;
+        el.innerHTML = tpl.innerHTML;
+        [...el.children].forEach((child) => Alpine.initTree(child));
       },
 
       // Drag & drop works within a list and across nesting levels.
@@ -162,6 +167,41 @@
         this.$refs.editor.focus();
         document.execCommand('createLink', false, url);
         this.sync();
+      },
+    }));
+
+    // relationField edits one target ID (or a list of IDs when many).
+    Alpine.data('relationField', (options, many) => ({
+      value: many ? [] : null,
+      options,
+      many,
+      q: '',
+      open: false,
+      label(id) {
+        const o = this.options.find((o) => Number(o.Value) === Number(id));
+        return o ? o.Label : '#' + id + ' (gelöscht?)';
+      },
+      matches() {
+        const q = this.q.toLowerCase();
+        const taken = this.many ? (this.value || []).map(Number) : [];
+        return this.options
+          .filter((o) => !taken.includes(Number(o.Value)) && o.Label.toLowerCase().includes(q))
+          .slice(0, 50);
+      },
+      pick(o) {
+        const id = Number(o.Value);
+        if (this.many) this.value = [...(this.value || []), id];
+        else this.value = id;
+        this.q = '';
+        this.open = this.many;
+      },
+      remove(i) { this.value = this.value.filter((_, j) => j !== i); },
+      move(i, d) {
+        const j = i + d;
+        if (j < 0 || j >= this.value.length) return;
+        const v = [...this.value];
+        [v[i], v[j]] = [v[j], v[i]];
+        this.value = v;
       },
     }));
 

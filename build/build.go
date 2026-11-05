@@ -174,7 +174,9 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		}
 		for i := range list {
 			e := &list[i]
-			byID[e.ID] = e
+			if t.Name == fields.PageType {
+				byID[e.ID] = e // parent chains only link pages; IDs are per type
+			}
 			pages = append(pages, &render.Page{Site: s.settings, Entry: *e, Data: e.Data, Type: t})
 		}
 	}
@@ -193,9 +195,18 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		p.MarkdownURL = markdownURL(u)
 		p.Meta = meta(p, s.settings, base)
 		if p.Type.Name == fields.PageType {
-			parent, _ := p.Data["parent"].(float64)
-			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: int64(parent), Title: str(p.Data["title"]), URL: u})
+			parent, _ := p.Data["parent"].(int64)
+			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
 		}
+	}
+	// Resolve relations once all URLs are known.
+	res := &resolver{s: s, urls: map[refKey]string{}, cache: map[refKey]*render.Ref{}, lists: map[string][]storage.Entry{}}
+	for _, p := range pages {
+		res.urls[refKey{p.Type.Name, p.Entry.ID}] = p.URL
+	}
+	for _, p := range pages {
+		p.Data = res.populate(p.Type.Fields, p.Entry.Data)
+		res.inverse(p)
 	}
 	sort.Slice(nav, func(i, j int) bool { return nav[i].URL < nav[j].URL })
 	sort.Slice(pages, func(i, j int) bool { return pages[i].URL < pages[j].URL })
@@ -220,12 +231,12 @@ func entryURL(e *storage.Entry, t *content.Type, byID map[int64]*storage.Entry) 
 		if !(cur == e && cur.Slug == "index") {
 			parts = append([]string{cur.Slug}, parts...)
 		}
-		pid, _ := cur.Data["parent"].(float64)
+		pid, _ := cur.Data["parent"].(int64)
 		if pid == 0 {
 			break
 		}
 		// An unpublished parent leaves the child at its own level.
-		cur = byID[int64(pid)]
+		cur = byID[pid]
 	}
 	if len(parts) == 0 {
 		return "/", nil

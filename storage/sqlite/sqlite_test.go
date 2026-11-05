@@ -37,62 +37,6 @@ func TestMigrationMissingDialect(t *testing.T) {
 	}
 }
 
-func TestEntryCRUD(t *testing.T) {
-	ctx := context.Background()
-	s := openTest(t)
-
-	e := &storage.Entry{Type: "page", Slug: "home", Data: map[string]any{"title": "Home"}}
-	if err := s.CreateEntry(ctx, e); err != nil {
-		t.Fatal(err)
-	}
-	if e.ID == 0 || e.Status != storage.StatusDraft {
-		t.Fatalf("unexpected entry after create: %+v", e)
-	}
-
-	got, err := s.GetEntryBySlug(ctx, "page", "home")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Data["title"] != "Home" {
-		t.Fatalf("data not round-tripped: %v", got.Data)
-	}
-
-	got.Status = storage.StatusPublished
-	got.Data["title"] = "Start"
-	if err := s.UpdateEntry(ctx, got); err != nil {
-		t.Fatal(err)
-	}
-	s.CreateEntry(ctx, &storage.Entry{Type: "page", Slug: "about", Data: map[string]any{"title": "About us"}})
-	s.CreateEntry(ctx, &storage.Entry{Type: "form", Slug: "contact"})
-
-	list, total, err := s.ListEntries(ctx, storage.ListQuery{Type: "page"})
-	if err != nil || total != 2 || len(list) != 2 {
-		t.Fatalf("list pages: total=%d len=%d err=%v", total, len(list), err)
-	}
-	list, total, _ = s.ListEntries(ctx, storage.ListQuery{Type: "page", Status: storage.StatusPublished})
-	if total != 1 || list[0].Data["title"] != "Start" {
-		t.Fatalf("status filter: %+v", list)
-	}
-	_, total, _ = s.ListEntries(ctx, storage.ListQuery{Search: "About"})
-	if total != 1 {
-		t.Fatalf("search: total=%d", total)
-	}
-	list, total, _ = s.ListEntries(ctx, storage.ListQuery{Type: "page", Limit: 1})
-	if total != 2 || len(list) != 1 {
-		t.Fatalf("limit: total=%d len=%d", total, len(list))
-	}
-
-	if err := s.DeleteEntry(ctx, got.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.GetEntry(ctx, got.ID); !errors.Is(err, storage.ErrNotFound) {
-		t.Fatalf("want ErrNotFound, got %v", err)
-	}
-	if err := s.DeleteEntry(ctx, got.ID); !errors.Is(err, storage.ErrNotFound) {
-		t.Fatalf("delete twice: want ErrNotFound, got %v", err)
-	}
-}
-
 func TestUsersAndSessions(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t)

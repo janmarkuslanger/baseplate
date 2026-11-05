@@ -50,12 +50,22 @@ plugins/* ─▶ plugin, content, fields
 
 ## Data
 
-| Store | Content |
+| Table | Content |
 |---|---|
-| `entries` | all content, fields as JSON |
+| `ct_<type>` | one row per entry, one column per scalar field |
+| `cb_<block>` | one row per block instance |
+| `<owner>__<field>` | group and list items |
+| `components` | ordered links owner row → component row |
+| `relations` | ordered links owner row → target entry (one, many, inverse) |
 | `users`, `sessions` | admin access |
 | plugin tables | via plugin migrations |
 | `DataDir/media` | uploads |
+
+- tables follow the code schema; created/extended on start, never dropped
+- kind change of an existing field → startup error
+- save = one transaction (row, components, relations)
+- delete removes components and all relations from/to the entry
+- build resolves relations one level deep (+ inverse fields)
 
 ## Extension points
 

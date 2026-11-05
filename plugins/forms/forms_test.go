@@ -56,6 +56,9 @@ func setup(t *testing.T) (*plugin.Registry, *Plugin, *fakeMailer, int64) {
 	if err := st.Migrate(ctx, append(storage.CoreMigrations, reg.Migrations()...)); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.UseSchema(ctx, reg.Schema); err != nil {
+		t.Fatal(err)
+	}
 	ft, _ := reg.Schema.Type(TypeName)
 	data, err := reg.Schema.Validate(ft.Fields, map[string]any{
 		"title": "Kontakt", "recipient": "team@acme.test",
@@ -162,7 +165,7 @@ func TestRateLimit(t *testing.T) {
 
 func TestSuccessRedirect(t *testing.T) {
 	reg, _, _, id := setup(t)
-	e, _ := reg.Store.GetEntry(context.Background(), id)
+	e, _ := reg.Store.GetEntry(context.Background(), TypeName, id)
 	e.Data["successURL"] = "/danke/"
 	reg.Store.UpdateEntry(context.Background(), e)
 	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})

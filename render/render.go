@@ -36,6 +36,19 @@ type Page struct {
 	Nav         []Link
 }
 
+// Ref is a resolved relation in template data: {{with .Data.parent}}{{.Data.title}}{{end}}.
+// Data is the target's own data; its relations are not resolved again.
+// URL is set for published routable targets.
+type Ref struct {
+	ID   int64
+	Type string
+	URL  string
+	Data map[string]any
+}
+
+// RefID lets plugins read the target ID without importing render.
+func (r *Ref) RefID() int64 { return r.ID }
+
 // Meta holds the computed SEO values for <head>.
 type Meta struct {
 	Title, Description, Canonical, Robots string

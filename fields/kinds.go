@@ -16,20 +16,20 @@ import (
 
 // Kind names.
 const (
-	Text      = "text"
-	Textarea  = "textarea"
-	RichText  = "richtext"
-	Slug      = "slug"
-	Number    = "number"
-	Bool      = "bool"
-	Select    = "select"
-	Image     = "image"
-	Email     = "email"
-	URL       = "url"
-	Reference = "reference"
-	Group     = "group"
-	List      = "list"
-	Blocks    = "blocks"
+	Text     = "text"
+	Textarea = "textarea"
+	RichText = "richtext"
+	Slug     = "slug"
+	Number   = "number"
+	Bool     = "bool"
+	Select   = "select"
+	Image    = "image"
+	Email    = "email"
+	URL      = "url"
+	Relation = "relation"
+	Group    = "group"
+	List     = "list"
+	Blocks   = "blocks"
 )
 
 // BlockTypeKey holds the block name inside each item of a blocks field.
@@ -52,10 +52,11 @@ func asString(raw any) (string, error) {
 	return "", errors.New("Text erwartet")
 }
 
-func stringKind(name string, check func(f content.Field, s string) (string, error)) content.Kind {
+func stringKind(name string, st content.Storage, check func(f content.Field, s string) (string, error)) content.Kind {
 	return content.Kind{
-		Name:  name,
-		Empty: emptyString,
+		Name:    name,
+		Storage: st,
+		Empty:   emptyString,
 		Normalize: func(_ *content.Schema, f content.Field, raw any) (any, error) {
 			s, err := asString(raw)
 			if err != nil {
@@ -79,19 +80,19 @@ func stringKind(name string, check func(f content.Field, s string) (string, erro
 // Kinds returns all built-in kinds.
 func Kinds() []content.Kind {
 	return []content.Kind{
-		stringKind(Text, nil),
-		stringKind(Textarea, nil),
-		stringKind(RichText, func(_ content.Field, s string) (string, error) {
+		stringKind(Text, content.StoreText, nil),
+		stringKind(Textarea, content.StoreLongText, nil),
+		stringKind(RichText, content.StoreLongText, func(_ content.Field, s string) (string, error) {
 			return SanitizeHTML(s), nil
 		}),
-		stringKind(Slug, func(_ content.Field, s string) (string, error) {
+		stringKind(Slug, content.StoreText, func(_ content.Field, s string) (string, error) {
 			s = strings.ToLower(s)
 			if !slugRe.MatchString(s) {
 				return "", errors.New("nur Kleinbuchstaben, Ziffern und Bindestriche")
 			}
 			return s, nil
 		}),
-		stringKind(Select, func(f content.Field, s string) (string, error) {
+		stringKind(Select, content.StoreText, func(f content.Field, s string) (string, error) {
 			for _, o := range f.Options {
 				if o.Value == s {
 					return s, nil
@@ -99,27 +100,28 @@ func Kinds() []content.Kind {
 			}
 			return "", errors.New("ungültige Auswahl")
 		}),
-		stringKind(Image, func(_ content.Field, s string) (string, error) {
+		stringKind(Image, content.StoreText, func(_ content.Field, s string) (string, error) {
 			if strings.HasPrefix(s, "/media/") || strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") {
 				return s, nil
 			}
 			return "", errors.New("ungültiger Bildpfad")
 		}),
-		stringKind(Email, func(_ content.Field, s string) (string, error) {
+		stringKind(Email, content.StoreText, func(_ content.Field, s string) (string, error) {
 			a, err := mail.ParseAddress(s)
 			if err != nil || a.Address != s {
 				return "", errors.New("ungültige E-Mail-Adresse")
 			}
 			return s, nil
 		}),
-		stringKind(URL, func(_ content.Field, s string) (string, error) {
+		stringKind(URL, content.StoreText, func(_ content.Field, s string) (string, error) {
 			if !safeURL(s) {
 				return "", errors.New("URL muss mit https://, http://, / oder mailto: beginnen")
 			}
 			return s, nil
 		}),
 		{
-			Name: Number,
+			Name:    Number,
+			Storage: content.StoreNumber,
 			Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
 				switch v := raw.(type) {
 				case nil:
@@ -140,7 +142,8 @@ func Kinds() []content.Kind {
 			},
 		},
 		{
-			Name: Bool,
+			Name:    Bool,
+			Storage: content.StoreBool,
 			Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
 				switch v := raw.(type) {
 				case nil:
@@ -155,31 +158,35 @@ func Kinds() []content.Kind {
 			Empty: func(v any) bool { b, _ := v.(bool); return !b },
 		},
 		{
-			Name: Reference,
-			Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
-				switch v := raw.(type) {
-				case nil:
-					return nil, nil
-				case float64:
-					if v <= 0 {
-						return nil, nil
-					}
-					return int64(v), nil
-				case string:
-					if v == "" {
-						return nil, nil
-					}
-					n, err := strconv.ParseInt(v, 10, 64)
-					if err != nil {
-						return nil, errors.New("ungültige Referenz")
-					}
-					return n, nil
+			Name:    Relation,
+			Storage: content.StoreRelation,
+			Empty:   func(v any) bool { l, ok := v.([]any); return v == nil || (ok && len(l) == 0) },
+			Normalize: func(_ *content.Schema, f content.Field, raw any) (any, error) {
+				if !f.Many {
+					return refID(raw)
 				}
-				return nil, errors.New("ungültige Referenz")
+				items, err := asList(raw)
+				if err != nil {
+					return nil, err
+				}
+				seen := map[int64]bool{}
+				out := []any{}
+				for _, it := range items {
+					id, err := refID(it)
+					if err != nil {
+						return nil, err
+					}
+					if id, ok := id.(int64); ok && !seen[id] {
+						seen[id] = true
+						out = append(out, id)
+					}
+				}
+				return out, nil
 			},
 		},
 		{
-			Name: Group,
+			Name:    Group,
+			Storage: content.StoreGroup,
 			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
 				if raw == nil {
 					raw = map[string]any{}
@@ -191,8 +198,9 @@ func Kinds() []content.Kind {
 			},
 		},
 		{
-			Name:  List,
-			Empty: emptySlice,
+			Name:    List,
+			Storage: content.StoreList,
+			Empty:   emptySlice,
 			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
 				items, err := asList(raw)
 				if err != nil {
@@ -212,8 +220,9 @@ func Kinds() []content.Kind {
 			},
 		},
 		{
-			Name:  Blocks,
-			Empty: emptySlice,
+			Name:    Blocks,
+			Storage: content.StoreBlocks,
+			Empty:   emptySlice,
 			Normalize: func(s *content.Schema, f content.Field, raw any) (any, error) {
 				items, err := asList(raw)
 				if err != nil {
@@ -245,6 +254,34 @@ func Kinds() []content.Kind {
 			},
 		},
 	}
+}
+
+// refID reads a relation target ID; zero and empty mean "none".
+func refID(raw any) (any, error) {
+	switch v := raw.(type) {
+	case nil:
+		return nil, nil
+	case int64:
+		if v <= 0 {
+			return nil, nil
+		}
+		return v, nil
+	case float64:
+		if v <= 0 {
+			return nil, nil
+		}
+		return int64(v), nil
+	case string:
+		if v == "" {
+			return nil, nil
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n <= 0 {
+			return nil, errors.New("ungültige Verknüpfung")
+		}
+		return n, nil
+	}
+	return nil, errors.New("ungültige Verknüpfung")
 }
 
 func asList(raw any) ([]any, error) {

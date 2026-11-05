@@ -63,11 +63,32 @@
         </div>
       </div>
     </div>
-  {{else if eq .F.Kind "reference"}}
-    <select class="input" x-model.number="{{.M}}">
-      <option value="">– keine –</option>
-      {{range refOptions .F.Ref}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
-    </select>
+  {{else if eq .F.Kind "relation"}}
+    <div class="rel" x-data="relationField({{json (refOptions .F.Ref)}}, {{.F.Many}})" x-modelable="value" x-model="{{.M}}" x-on:click.outside="open = false">
+      <template x-if="many">
+        <ul class="rel__list">
+          <template x-for="(id, i) in value" :key="id">
+            <li class="rel__chip">
+              <span x-text="label(id)"></span>
+              <button type="button" class="icon-btn" title="nach oben" x-on:click="move(i, -1)">↑</button>
+              <button type="button" class="icon-btn" title="nach unten" x-on:click="move(i, 1)">↓</button>
+              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="remove(i)">✕</button>
+            </li>
+          </template>
+        </ul>
+      </template>
+      <div class="rel__picker">
+        <input class="input" type="search" x-model="q" x-on:focus="open = true" x-on:keydown.escape="open = false"
+               x-bind:placeholder="many ? 'Hinzufügen – suchen…' : (value ? label(value) : 'Auswählen – suchen…')">
+        <button type="button" class="btn btn--ghost btn--sm" x-show="!many && value" x-on:click="value = null">Entfernen</button>
+        <div class="rel__menu" x-show="open" x-cloak>
+          <template x-for="o in matches()" :key="o.Value">
+            <button type="button" class="rel__option" x-on:click="pick(o)" x-text="o.Label"></button>
+          </template>
+          <p class="muted rel__empty" x-show="matches().length === 0">Keine Treffer</p>
+        </div>
+      </div>
+    </div>
   {{else if eq .F.Kind "group"}}
     <fieldset class="group">
       {{if .F.Label}}<legend class="group__legend">{{.F.Label}}</legend>{{end}}
@@ -93,7 +114,8 @@
     </div>
   {{else if eq .F.Kind "blocks"}}
     {{/* Block editors are rendered once per block type (see "block-templates")
-         and inserted per item, so nesting depth is unbounded. Each card opens
+         and inserted per item, so nesting depth is unbounded. x-init inserts
+         them once; x-html would re-insert (and re-init) on reactive changes. Each card opens
          a scope with "item" (the block), "list" (the list holding it; captured
          at init because "item" is shadowed inside) and "path" (error path). */}}
     <div class="blocks-field">
@@ -114,7 +136,7 @@
             </span>
           </div>
           <p class="field__error" x-show="err(path)" x-text="err(path)"></p>
-          <div class="card__body" x-show="open" x-html="blockTemplate(item._type)"></div>
+          <div class="card__body" x-show="open" x-init="mountBlock($el, item._type)"></div>
         </div>
       </template>
       <div class="blocks-field__drop"

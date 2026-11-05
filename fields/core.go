@@ -116,7 +116,7 @@ func (Core) Register(r *plugin.Registry) error {
 	if err := r.ContentType(content.Type{
 		Name: PageType, Label: "Seite", LabelPlural: "Seiten", Routable: true,
 		Fields: RoutableFields(
-			content.Field{Name: "parent", Label: "Übergeordnete Seite", Kind: Reference, Ref: PageType},
+			content.Field{Name: "parent", Label: "Übergeordnete Seite", Kind: Relation, Ref: PageType, Inverse: "children"},
 			content.Field{Name: "body", Label: "Inhalt", Kind: Blocks},
 		),
 	}); err != nil {

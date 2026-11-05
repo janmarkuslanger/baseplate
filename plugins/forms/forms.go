@@ -99,7 +99,7 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 	}
 	if err := r.Block(content.Block{
 		Name: BlockName, Label: "Formular",
-		Fields: []content.Field{{Name: "form", Label: "Formular", Kind: fields.Reference, Ref: TypeName, Required: true}},
+		Fields: []content.Field{{Name: "form", Label: "Formular", Kind: fields.Relation, Ref: TypeName, Required: true}},
 	}); err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ type fieldDef struct {
 }
 
 func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
-	e, err := p.reg.Store.GetEntry(ctx, id)
+	e, err := p.reg.Store.GetEntry(ctx, TypeName, id)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +169,8 @@ func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
 func (p *Plugin) formByID(id any) (*formDef, error) {
 	var n int64
 	switch v := id.(type) {
+	case interface{ RefID() int64 }: // resolved relation in build data
+		n = v.RefID()
 	case float64:
 		n = int64(v)
 	case int64:

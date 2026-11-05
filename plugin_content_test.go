@@ -112,7 +112,7 @@ func TestPluginContentInAdmin(t *testing.T) {
 
 	// A submission makes the submissions page query the store per row;
 	// this used to deadlock on SQLite's single connection.
-	c.PostForm(srv.URL+"/api/forms/3", url.Values{"name": {"Ada"}})
+	c.PostForm(srv.URL+"/api/forms/1", url.Values{"name": {"Ada"}})
 	if !strings.Contains(get("/admin/p/forms/submissions"), "Ada") {
 		t.Error("submission not listed")
 	}

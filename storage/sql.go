@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,17 +15,6 @@ var CoreMigrations = []Migration{
 		Name: "0001_core",
 		SQL: map[Dialect]string{
 			SQLite: `
-CREATE TABLE entries (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	type TEXT NOT NULL,
-	slug TEXT NOT NULL DEFAULT '',
-	status TEXT NOT NULL DEFAULT 'draft',
-	locale TEXT NOT NULL DEFAULT '',
-	data TEXT NOT NULL DEFAULT '{}',
-	created_at INTEGER NOT NULL,
-	updated_at INTEGER NOT NULL
-);
-CREATE INDEX entries_type_slug ON entries(type, slug);
 CREATE TABLE users (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	email TEXT NOT NULL UNIQUE,
@@ -41,17 +29,6 @@ CREATE TABLE sessions (
 	expires_at INTEGER NOT NULL
 );`,
 			MySQL: `
-CREATE TABLE entries (
-	id BIGINT AUTO_INCREMENT PRIMARY KEY,
-	type VARCHAR(100) NOT NULL,
-	slug VARCHAR(255) NOT NULL DEFAULT '',
-	status VARCHAR(20) NOT NULL DEFAULT 'draft',
-	locale VARCHAR(20) NOT NULL DEFAULT '',
-	data JSON NOT NULL,
-	created_at BIGINT NOT NULL,
-	updated_at BIGINT NOT NULL,
-	INDEX entries_type_slug (type, slug)
-);
 CREATE TABLE users (
 	id BIGINT AUTO_INCREMENT PRIMARY KEY,
 	email VARCHAR(255) NOT NULL UNIQUE,
@@ -67,6 +44,53 @@ CREATE TABLE sessions (
 );`,
 		},
 	},
+	{
+		Name: "0002_links",
+		SQL: map[Dialect]string{
+			SQLite: `
+CREATE TABLE components (
+	owner_table TEXT NOT NULL,
+	owner_id INTEGER NOT NULL,
+	field TEXT NOT NULL,
+	component_table TEXT NOT NULL,
+	component_id INTEGER NOT NULL,
+	position INTEGER NOT NULL
+);
+CREATE INDEX components_owner ON components(owner_table, owner_id);
+CREATE INDEX components_child ON components(component_table, component_id);
+CREATE TABLE relations (
+	owner_table TEXT NOT NULL,
+	owner_id INTEGER NOT NULL,
+	field TEXT NOT NULL,
+	target_type TEXT NOT NULL,
+	target_id INTEGER NOT NULL,
+	position INTEGER NOT NULL
+);
+CREATE INDEX relations_owner ON relations(owner_table, owner_id);
+CREATE INDEX relations_target ON relations(target_type, target_id)`,
+			MySQL: `
+CREATE TABLE components (
+	owner_table VARCHAR(64) NOT NULL,
+	owner_id BIGINT NOT NULL,
+	field VARCHAR(64) NOT NULL,
+	component_table VARCHAR(64) NOT NULL,
+	component_id BIGINT NOT NULL,
+	position INT NOT NULL,
+	INDEX components_owner (owner_table, owner_id),
+	INDEX components_child (component_table, component_id)
+);
+CREATE TABLE relations (
+	owner_table VARCHAR(64) NOT NULL,
+	owner_id BIGINT NOT NULL,
+	field VARCHAR(64) NOT NULL,
+	target_type VARCHAR(64) NOT NULL,
+	target_id BIGINT NOT NULL,
+	position INT NOT NULL,
+	INDEX relations_owner (owner_table, owner_id),
+	INDEX relations_target (target_type, target_id)
+)`,
+		},
+	},
 }
 
 // SQLStore implements Store on top of database/sql. Adapters (sqlite, mysql)
@@ -75,6 +99,7 @@ type SQLStore struct {
 	db      *sql.DB
 	dialect Dialect
 	now     func() time.Time
+	layout  *layout
 }
 
 func NewSQLStore(db *sql.DB, d Dialect) *SQLStore {
@@ -132,126 +157,6 @@ func splitStatements(script string) []string {
 		}
 	}
 	return out
-}
-
-// --- entries ---
-
-const entryCols = `id, type, slug, status, locale, data, created_at, updated_at`
-
-func (s *SQLStore) CreateEntry(ctx context.Context, e *Entry) error {
-	data, err := json.Marshal(nonNil(e.Data))
-	if err != nil {
-		return err
-	}
-	now := s.now()
-	e.CreatedAt, e.UpdatedAt = now, now
-	if e.Status == "" {
-		e.Status = StatusDraft
-	}
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO entries (type, slug, status, locale, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.Type, e.Slug, e.Status, e.Locale, string(data), now.Unix(), now.Unix())
-	if err != nil {
-		return err
-	}
-	e.ID, err = res.LastInsertId()
-	return err
-}
-
-func (s *SQLStore) UpdateEntry(ctx context.Context, e *Entry) error {
-	data, err := json.Marshal(nonNil(e.Data))
-	if err != nil {
-		return err
-	}
-	e.UpdatedAt = s.now()
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE entries SET slug = ?, status = ?, locale = ?, data = ?, updated_at = ? WHERE id = ?`,
-		e.Slug, e.Status, e.Locale, string(data), e.UpdatedAt.Unix(), e.ID)
-	if err != nil {
-		return err
-	}
-	return mustAffect(res)
-}
-
-func (s *SQLStore) GetEntry(ctx context.Context, id int64) (*Entry, error) {
-	return scanEntry(s.db.QueryRowContext(ctx, `SELECT `+entryCols+` FROM entries WHERE id = ?`, id))
-}
-
-func (s *SQLStore) GetEntryBySlug(ctx context.Context, typ, slug string) (*Entry, error) {
-	return scanEntry(s.db.QueryRowContext(ctx, `SELECT `+entryCols+` FROM entries WHERE type = ? AND slug = ? ORDER BY id LIMIT 1`, typ, slug))
-}
-
-func (s *SQLStore) ListEntries(ctx context.Context, q ListQuery) ([]Entry, int, error) {
-	var where []string
-	var args []any
-	if q.Type != "" {
-		where = append(where, "type = ?")
-		args = append(args, q.Type)
-	}
-	if q.Status != "" {
-		where = append(where, "status = ?")
-		args = append(args, q.Status)
-	}
-	if q.Search != "" {
-		where = append(where, "(slug LIKE ? OR data LIKE ?)")
-		like := "%" + q.Search + "%"
-		args = append(args, like, like)
-	}
-	cond := ""
-	if len(where) > 0 {
-		cond = " WHERE " + strings.Join(where, " AND ")
-	}
-	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries`+cond, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	query := `SELECT ` + entryCols + ` FROM entries` + cond + ` ORDER BY updated_at DESC, id DESC`
-	if q.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d OFFSET %d", q.Limit, q.Offset)
-	}
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	var out []Entry
-	for rows.Next() {
-		e, err := scanEntry(rows)
-		if err != nil {
-			return nil, 0, err
-		}
-		out = append(out, *e)
-	}
-	return out, total, rows.Err()
-}
-
-func (s *SQLStore) DeleteEntry(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM entries WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	return mustAffect(res)
-}
-
-type scanner interface{ Scan(...any) error }
-
-func scanEntry(r scanner) (*Entry, error) {
-	var e Entry
-	var data string
-	var created, updated int64
-	err := r.Scan(&e.ID, &e.Type, &e.Slug, &e.Status, &e.Locale, &data, &created, &updated)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal([]byte(data), &e.Data); err != nil {
-		return nil, fmt.Errorf("entry %d: decode data: %w", e.ID, err)
-	}
-	e.Data = nonNil(e.Data)
-	e.CreatedAt, e.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
-	return &e, nil
 }
 
 // --- users ---
@@ -339,9 +244,4 @@ func mustAffect(res sql.Result) error {
 	return nil
 }
 
-func nonNil(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
-	}
-	return m
-}
+type scanner interface{ Scan(...any) error }

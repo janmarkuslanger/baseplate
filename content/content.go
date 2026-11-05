@@ -22,8 +22,13 @@ type Field struct {
 	Max int
 	// Options for the "select" kind.
 	Options []Option
-	// Ref names the target content type for the "reference" kind.
+	// Ref names the target content type of a relation.
 	Ref string
+	// Many makes a relation hold a list of targets instead of one.
+	Many bool
+	// Inverse names a read-only field on the target type that lists the
+	// entries pointing at it (e.g. "articles" on a category).
+	Inverse string
 	// Blocks restricts the "blocks" kind to these block names (empty = all).
 	Blocks []string
 	// Fields are the sub-fields of the "group" and "list" kinds.
@@ -100,9 +105,29 @@ func (t Type) Tabs() []string {
 	return tabs
 }
 
+// Storage tells the storage layer how values of a kind are persisted.
+type Storage int
+
+const (
+	StoreText     Storage = iota // short string column
+	StoreLongText                // long string column
+	StoreNumber                  // floating point column
+	StoreBool                    // boolean column
+	StoreGroup                   // one component (own table)
+	StoreList                    // ordered components of one table
+	StoreBlocks                  // ordered components of block tables
+	StoreRelation                // links to entries of another type
+)
+
+// Container reports whether values live in component tables.
+func (s Storage) Container() bool {
+	return s == StoreGroup || s == StoreList || s == StoreBlocks
+}
+
 // Kind implements a field type.
 type Kind struct {
-	Name string
+	Name    string
+	Storage Storage
 	// Normalize validates a raw (JSON-decoded) value and returns the value to
 	// store. A nil raw value means the field was empty or absent.
 	Normalize func(s *Schema, f Field, raw any) (any, error)
@@ -180,6 +205,22 @@ func (s *Schema) AddBlock(b Block) error {
 	return nil
 }
 
+// Kind returns a registered kind.
+func (s *Schema) Kind(name string) (Kind, bool) {
+	k, ok := s.kinds[name]
+	return k, ok
+}
+
+// AllBlocks returns every registered block, sorted by name.
+func (s *Schema) AllBlocks() []Block {
+	out := make([]Block, 0, len(s.blocks))
+	for _, b := range s.blocks {
+		out = append(out, b)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 func (s *Schema) Type(name string) (*Type, bool) {
 	t, ok := s.types[name]
 	return t, ok
@@ -224,8 +265,14 @@ func (s *Schema) Check() error {
 	var walk func(owner string, fs []Field) error
 	walk = func(owner string, fs []Field) error {
 		for _, f := range fs {
-			if _, ok := s.kinds[f.Kind]; !ok {
+			k, ok := s.kinds[f.Kind]
+			if !ok {
 				return fmt.Errorf("content: %s.%s uses unknown kind %q", owner, f.Name, f.Kind)
+			}
+			if k.Storage == StoreRelation {
+				if _, ok := s.types[f.Ref]; !ok {
+					return fmt.Errorf("content: %s.%s relates to unknown type %q", owner, f.Name, f.Ref)
+				}
 			}
 			if err := walk(owner+"."+f.Name, f.Fields); err != nil {
 				return err

@@ -63,10 +63,19 @@
     </div>
   </div>
 </form>
+
+{{with $p.UsedIn}}
+<section class="card card--panel">
+  <h2>Verwendet in</h2>
+  <ul class="used-in">
+    {{range .}}<li><a href="{{.URL}}">{{.Title}}</a> <span class="muted">· {{.Type}} · {{.Field}}{{if .Nested}} (in einem Element){{end}}</span></li>{{end}}
+  </ul>
+</section>
+{{end}}
 {{template "block-templates"}}
 
 {{if and (not $p.IsNew) (not $t.Singleton)}}
-<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm('Diesen Eintrag wirklich löschen?')) $event.preventDefault()">
+<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm({{if $p.UsedIn}}{{json (printf "Dieser Eintrag wird an %d Stelle(n) verwendet. Die Verknüpfungen werden entfernt. Wirklich löschen?" (len $p.UsedIn))}}{{else}}'Diesen Eintrag wirklich löschen?'{{end}})) $event.preventDefault()">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <button class="btn btn--danger btn--sm">{{$t.Label}} löschen</button>
 </form>

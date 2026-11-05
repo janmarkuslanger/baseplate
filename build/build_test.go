@@ -32,6 +32,9 @@ func setup(t *testing.T) (*Builder, storage.Store) {
 	if err := reg.Use(fields.Core{}); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.UseSchema(ctx, reg.Schema); err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	return &Builder{Reg: reg, Theme: theme, DistDir: filepath.Join(dir, "dist"), MediaDir: filepath.Join(dir, "media")}, st
 }
@@ -75,7 +78,7 @@ func TestBuild(t *testing.T) {
 	about := add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{
 		"title": "Über uns", "seo": map[string]any{"metaDescription": "Team und Geschichte"},
 	})
-	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": float64(about)})
+	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": about})
 	add(t, st, fields.PageType, "geheim", storage.StatusPublished, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
 	add(t, st, fields.PageType, "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf"})
 
@@ -190,5 +193,23 @@ func TestNestedArticles(t *testing.T) {
 	md := read(t, b, "index.md")
 	if !strings.Contains(md, "## Außen\n\nText außen\n\n## Innen\n\n## Tief") {
 		t.Errorf("nested markdown: %q", md)
+	}
+}
+
+func TestRelationsResolved(t *testing.T) {
+	b, st := setup(t)
+	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.parent}}parent={{.Data.title}}@{{.URL}}{{end}}][{{range .Data.children}}child={{.Data.title}}@{{.URL}};{{end}}]{{end}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	about := add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{"title": "Über uns"})
+	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": about})
+	add(t, st, fields.PageType, "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf", "parent": about})
+	if _, err := b.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, b, "ueber-uns/team/index.html"); got != "[parent=Über uns@/ueber-uns/][]" {
+		t.Errorf("child page: %q", got)
+	}
+	if got := read(t, b, "ueber-uns/index.html"); got != "[][child=Team@/ueber-uns/team/;]" {
+		t.Errorf("parent page (inverse, drafts excluded): %q", got)
 	}
 }

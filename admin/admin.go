@@ -362,6 +362,42 @@ type editPage struct {
 	Labels   map[string]string
 	Settings map[string]any
 	IsNew    bool
+	UsedIn   []usedIn
+}
+
+// usedIn is an entry whose relation points at the edited entry.
+type usedIn struct {
+	Type, Title, Field, URL string
+	Nested                  bool
+}
+
+func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []usedIn {
+	if e.ID == 0 {
+		return nil
+	}
+	refs, err := a.store().Referrers(r.Context(), t.Name, e.ID)
+	if err != nil {
+		a.Logger.Error("referrers", "err", err)
+		return nil
+	}
+	out := make([]usedIn, 0, len(refs))
+	for _, ref := range refs {
+		rt, ok := a.Reg.Schema.Type(ref.Type)
+		if !ok {
+			continue
+		}
+		u := usedIn{Type: rt.Label, Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
+		for _, f := range rt.Fields {
+			if f.Name == ref.Field && f.Label != "" {
+				u.Field = f.Label
+			}
+		}
+		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
+			u.Title = fmt.Sprint(orDash(src.Data[rt.Title()]))
+		}
+		out = append(out, u)
+	}
+	return out
 }
 
 func (a *Admin) edit(w http.ResponseWriter, r *http.Request) {
@@ -381,7 +417,7 @@ func (a *Admin) edit(w http.ResponseWriter, r *http.Request) {
 		}
 	case r.PathValue("id") != "":
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		got, err := a.store().GetEntry(r.Context(), id)
+		got, err := a.store().GetEntry(r.Context(), t.Name, id)
 		if errors.Is(err, storage.ErrNotFound) || (err == nil && got.Type != t.Name) {
 			http.NotFound(w, r)
 			return
@@ -411,7 +447,7 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 	}
 	a.render(w, r, status, a.pages["edit"], view{Title: title, Active: "c/" + t.Name, Flash: flash(r), Page: editPage{
 		Type: t, Entry: e, Data: skeleton(t.Fields, data), Errors: errs, Blocks: blocks, Labels: labels,
-		Settings: settings, IsNew: e.ID == 0,
+		Settings: settings, IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
 	}})
 }
 
@@ -452,7 +488,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 
 	e := &storage.Entry{Type: t.Name}
 	if id, _ := strconv.ParseInt(r.FormValue("id"), 10, 64); id > 0 {
-		got, err := a.store().GetEntry(ctx, id)
+		got, err := a.store().GetEntry(ctx, t.Name, id)
 		if err != nil || got.Type != t.Name {
 			http.NotFound(w, r)
 			return
@@ -510,6 +546,10 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	} else {
 		err = a.store().UpdateEntry(ctx, e)
 	}
+	if errors.Is(err, storage.ErrInvalidRelation) {
+		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err.Error()})
+		return
+	}
 	if err != nil {
 		a.fail(w, err)
 		return
@@ -543,8 +583,7 @@ func (a *Admin) slugConflict(r *http.Request, t *content.Type, e *storage.Entry,
 	return ""
 }
 
-// parentID reads a reference value, which is int64 after validation and
-// float64 after a JSON round trip through the store.
+// parentID reads a relation value (int64; float64 when it comes from JSON).
 func parentID(v any) int64 {
 	switch n := v.(type) {
 	case int64:
@@ -561,19 +600,19 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	e, err := a.store().GetEntry(r.Context(), id)
+	e, err := a.store().GetEntry(r.Context(), t.Name, id)
 	if err != nil || e.Type != t.Name {
 		http.NotFound(w, r)
 		return
 	}
-	if err := a.store().DeleteEntry(r.Context(), id); err != nil {
+	if err := a.store().DeleteEntry(r.Context(), t.Name, id); err != nil {
 		a.fail(w, err)
 		return
 	}
 	http.Redirect(w, r, "/admin/c/"+t.Name+"?flash=deleted", http.StatusSeeOther)
 }
 
-// refOptions lists entries of a type for reference selects.
+// refOptions lists entries of a type for relation pickers.
 func (a *Admin) refOptions(typ string) []content.Option {
 	t, ok := a.Reg.Schema.Type(typ)
 	if !ok {
