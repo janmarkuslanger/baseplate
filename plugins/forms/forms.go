@@ -208,15 +208,8 @@ func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
 
 // formByID is available in frontend templates: {{with formByID .Block.form}}.
 func (p *Plugin) formByID(id any) (*formDef, error) {
-	var n int64
-	switch v := id.(type) {
-	case interface{ RefID() int64 }: // resolved relation in build data
-		n = v.RefID()
-	case float64:
-		n = int64(v)
-	case int64:
-		n = v
-	default:
+	n, ok := content.RefID(id)
+	if !ok {
 		return nil, nil
 	}
 	d, err := p.load(context.Background(), n)

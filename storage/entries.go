@@ -12,13 +12,6 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 )
 
-// blockTypeKey and itemKey mirror fields.BlockTypeKey and the editor's item
-// key; storage must not import package fields.
-const (
-	blockTypeKey = "_type"
-	itemKey      = "_key"
-)
-
 // querier is satisfied by *sql.DB and *sql.Tx. With SQLite's single
 // connection, every query inside a transaction must use the transaction,
 // and a query must never run while another result set is still open.
@@ -177,7 +170,7 @@ func (r *reuse) take(table string, data map[string]any) int64 {
 	if r == nil {
 		return 0
 	}
-	k, _ := data[itemKey].(string)
+	k, _ := data[content.ItemKey].(string)
 	tbl, num, ok := strings.Cut(k, ":")
 	if !ok || tbl != table {
 		return 0
@@ -273,7 +266,7 @@ func (s *SQLStore) writeChildrenReuse(ctx context.Context, q querier, t *table, 
 			}
 		case content.StoreBlocks:
 			for i, it := range asItems(v) {
-				name, _ := it[blockTypeKey].(string)
+				name, _ := it[content.BlockTypeKey].(string)
 				if _, ok := s.layout.tables[blockTable(name)]; !ok {
 					return fmt.Errorf("storage: unknown block %q in %s.%s", name, t.Name, f.Name)
 				}
@@ -564,13 +557,13 @@ func (s *SQLStore) hydrate(ctx context.Context, t *table, owners map[int64]map[s
 		}
 		switch s.layout.fieldStorage(f) {
 		case content.StoreGroup:
-			comp[itemKey] = itemKeyOf(l.table, l.compID)
+			comp[content.ItemKey] = itemKeyOf(l.table, l.compID)
 			owner[f.Name] = comp
 		case content.StoreBlocks:
-			comp[blockTypeKey] = strings.TrimPrefix(l.table, "cb_")
+			comp[content.BlockTypeKey] = blockName(l.table)
 			fallthrough
 		case content.StoreList:
-			comp[itemKey] = itemKeyOf(l.table, l.compID)
+			comp[content.ItemKey] = itemKeyOf(l.table, l.compID)
 			owner[f.Name] = append(owner[f.Name].([]any), comp)
 		}
 	}

@@ -57,6 +57,9 @@ func EntryTable(typ string) string { return "ct_" + typ }
 // BlockTable is the table of a block, e.g. "cb_heading".
 func BlockTable(name string) string { return "cb_" + name }
 
+// blockName is the inverse of BlockTable.
+func blockName(table string) string { return strings.TrimPrefix(table, "cb_") }
+
 // ComponentTable is the table holding a group or list field of the given
 // owner table, e.g. ComponentTable(EntryTable("page"), "seo") = "ct_page__seo".
 func ComponentTable(ownerTable, field string) string { return ownerTable + "__" + Column(field) }

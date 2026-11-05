@@ -197,7 +197,7 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		p.MarkdownURL = markdownURL(u)
 		p.Meta = meta(p, s.settings, base)
 		if p.Type.Name == fields.PageType {
-			parent, _ := p.Data["parent"].(int64)
+			parent, _ := content.RefID(p.Data["parent"])
 			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
 		}
 	}
@@ -233,7 +233,7 @@ func entryURL(e *storage.Entry, t *content.Type, byID map[int64]*storage.Entry) 
 		if !(cur == e && cur.Slug == "index") {
 			parts = append([]string{cur.Slug}, parts...)
 		}
-		pid, _ := cur.Data["parent"].(int64)
+		pid, _ := content.RefID(cur.Data["parent"])
 		if pid == 0 {
 			break
 		}

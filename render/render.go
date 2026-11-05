@@ -144,7 +144,7 @@ func (r *Renderer) blocks(items any, page *Page) (template.HTML, error) {
 	var buf bytes.Buffer
 	for _, it := range list {
 		m, _ := it.(map[string]any)
-		name, _ := m[fields.BlockTypeKey].(string)
+		name, _ := m[content.BlockTypeKey].(string)
 		b, ok := r.schema.Block(name)
 		if !ok {
 			continue // block from a removed plugin
@@ -196,7 +196,7 @@ func (r *Renderer) markdownBlocks(b *strings.Builder, items any) {
 	list, _ := items.([]any)
 	for _, it := range list {
 		m, _ := it.(map[string]any)
-		name, _ := m[fields.BlockTypeKey].(string)
+		name, _ := m[content.BlockTypeKey].(string)
 		blk, ok := r.schema.Block(name)
 		if !ok {
 			continue

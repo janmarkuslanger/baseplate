@@ -537,7 +537,7 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 	labels := map[string]string{}
 	for _, b := range a.Reg.Schema.Blocks(content.Field{}) {
 		item := skeleton(b.Fields, map[string]any{})
-		item[fields.BlockTypeKey] = b.Name
+		item[content.BlockTypeKey] = b.Name
 		blocks[b.Name] = item
 		labels[b.Name] = a.t(b.Label)
 	}
@@ -703,16 +703,7 @@ func (a *Admin) slugConflict(r *http.Request, t *content.Type, e *storage.Entry,
 	return ""
 }
 
-// parentID reads a relation value (int64; float64 when it comes from JSON).
-func parentID(v any) int64 {
-	switch n := v.(type) {
-	case int64:
-		return n
-	case float64:
-		return int64(n)
-	}
-	return 0
-}
+func parentID(v any) int64 { id, _ := content.RefID(v); return id }
 
 func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	t, ok := a.contentType(w, r)

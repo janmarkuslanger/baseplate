@@ -31,13 +31,11 @@ const (
 	Blocks   = "blocks"
 )
 
-// BlockTypeKey holds the block name inside each item of a blocks field.
-const BlockTypeKey = "_type"
+// BlockTypeKey and ItemKey are aliases of the content conventions, kept for
+// plugins that import them from here.
+const BlockTypeKey = content.BlockTypeKey
 
-// ItemKey holds the stable, globally unique ID of a stored group, list item
-// or block ("<table>:<id>", e.g. "cb_heading:12"). Items without a valid
-// key are new.
-const ItemKey = "_key"
+const ItemKey = content.ItemKey
 
 var itemKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[0-9]+$`)
 
@@ -282,30 +280,18 @@ func Kinds() []content.Kind {
 	}
 }
 
-// refID reads a relation target ID; zero and empty mean "none".
+// refID normalizes a relation target: empty, zero or negative mean "none";
+// anything else that is not an ID is invalid.
 func refID(raw any) (any, error) {
-	switch v := raw.(type) {
-	case nil:
+	if raw == nil || raw == "" {
 		return nil, nil
-	case int64:
-		if v <= 0 {
-			return nil, nil
-		}
-		return v, nil
-	case float64:
-		if v <= 0 {
-			return nil, nil
-		}
-		return int64(v), nil
-	case string:
-		if v == "" {
-			return nil, nil
-		}
-		n, err := strconv.ParseInt(v, 10, 64)
-		if err != nil || n <= 0 {
-			return nil, i18n.M("validation.relation")
-		}
-		return n, nil
+	}
+	if id, ok := content.RefID(raw); ok {
+		return id, nil
+	}
+	switch raw.(type) {
+	case int64, int, float64:
+		return nil, nil
 	}
 	return nil, i18n.M("validation.relation")
 }
