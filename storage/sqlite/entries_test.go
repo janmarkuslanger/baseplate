@@ -30,7 +30,7 @@ func schemaStore(t *testing.T) (*storage.SQLStore, *content.Schema) {
 	t.Helper()
 	s := openTest(t)
 	reg := plugin.NewRegistry(plugin.Services{Store: s})
-	if err := reg.Use(fields.Core{}, testTypes{}); err != nil {
+	if err := reg.Use(fields.Core{}, fields.CoreBlocks{}, testTypes{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.UseSchema(context.Background(), reg.Schema); err != nil {
@@ -173,7 +173,7 @@ func TestNestedReferrer(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t)
 	reg := plugin.NewRegistry(plugin.Services{Store: s})
-	reg.Use(fields.Core{})
+	reg.Use(fields.Core{}, fields.CoreBlocks{})
 	reg.ContentType(content.Type{Name: "form", Fields: []content.Field{{Name: "title", Kind: fields.Text}}})
 	reg.Block(content.Block{Name: "form", Fields: []content.Field{{Name: "form", Kind: fields.Relation, Ref: "form"}}})
 	if err := s.UseSchema(ctx, reg.Schema); err != nil {
@@ -207,7 +207,7 @@ func TestSchemaSync(t *testing.T) {
 	s := openTest(t)
 	mk := func(kind string, extra ...content.Field) *content.Schema {
 		reg := plugin.NewRegistry(plugin.Services{Store: s})
-		reg.Use(fields.Core{})
+		reg.Use(fields.Core{}, fields.CoreBlocks{})
 		reg.ContentType(content.Type{Name: "news", Fields: append([]content.Field{{Name: "rating", Kind: kind}}, extra...)})
 		return reg.Schema
 	}
@@ -304,7 +304,7 @@ func TestRenamedFrom(t *testing.T) {
 		cats, catsFrom := name("cats", "categories")
 		body, bodyFrom := name("body", "content")
 		reg := plugin.NewRegistry(plugin.Services{Store: s})
-		reg.Use(fields.Core{})
+		reg.Use(fields.Core{}, fields.CoreBlocks{})
 		reg.ContentType(content.Type{Name: "category", Fields: []content.Field{{Name: "title", Kind: fields.Text}}})
 		reg.ContentType(content.Type{Name: "news", Fields: []content.Field{
 			{Name: teaser, RenamedFrom: teaserFrom, Kind: fields.Text},

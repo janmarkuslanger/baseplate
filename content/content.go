@@ -210,6 +210,38 @@ func (s *Schema) Extend(typeName string, fields ...Field) error {
 	return nil
 }
 
+// AllowBlocks restricts a blocks field to the named blocks. path names the
+// field, with dots for fields inside groups (e.g. "body" or "hero.blocks").
+// Names are checked by Check, so blocks may be registered later.
+func (s *Schema) AllowBlocks(typeName, path string, blocks ...string) error {
+	t, ok := s.types[typeName]
+	if !ok {
+		return fmt.Errorf("content: AllowBlocks: unknown type %q", typeName)
+	}
+	fs := t.Fields
+	parts := strings.Split(path, ".")
+	for i, name := range parts {
+		var f *Field
+		for j := range fs {
+			if fs[j].Name == name {
+				f = &fs[j]
+			}
+		}
+		if f == nil {
+			return fmt.Errorf("content: AllowBlocks: %s has no field %q", typeName, path)
+		}
+		if i == len(parts)-1 {
+			if k, ok := s.kinds[f.Kind]; ok && k.Storage != StoreBlocks {
+				return fmt.Errorf("content: AllowBlocks: %s.%s is not a blocks field", typeName, path)
+			}
+			f.Blocks = append([]string(nil), blocks...)
+			return nil
+		}
+		fs = f.Fields
+	}
+	return nil
+}
+
 func (s *Schema) AddBlock(b Block) error {
 	if b.Name == "" {
 		return fmt.Errorf("content: block needs a name")
@@ -301,6 +333,11 @@ func (s *Schema) Check() error {
 			if k.Storage == StoreRelation {
 				if _, ok := s.types[f.Ref]; !ok {
 					return fmt.Errorf("content: %s.%s relates to unknown type %q", owner, f.Name, f.Ref)
+				}
+			}
+			for _, b := range f.Blocks {
+				if _, ok := s.blocks[b]; !ok {
+					return fmt.Errorf("content: %s.%s allows unknown block %q", owner, f.Name, b)
 				}
 			}
 			if err := walk(owner+"."+f.Name, f.Fields); err != nil {

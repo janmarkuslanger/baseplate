@@ -53,8 +53,9 @@ func RoutableFields(fs ...content.Field) []content.Field {
 	return append(out, SEOField())
 }
 
-// Core registers the built-in kinds, blocks and types. The app registers it
-// before any other plugin.
+// Core registers the built-in kinds and types (page, settings). The app
+// registers it before any other plugin. The built-in blocks are separate
+// (CoreBlocks), so a site only offers the blocks it registers.
 type Core struct{}
 
 func (Core) Name() string { return "core" }
@@ -62,54 +63,6 @@ func (Core) Name() string { return "core" }
 func (Core) Register(r *plugin.Registry) error {
 	for _, k := range Kinds() {
 		if err := r.Kind(k); err != nil {
-			return err
-		}
-	}
-	blocks := []content.Block{
-		{Name: "heading", Label: "block.heading", Fields: []content.Field{
-			{Name: "text", Label: "block.heading.text", Kind: Text, Required: true},
-			{Name: "level", Label: "block.heading.level", Kind: Select, Options: []content.Option{{Value: "h2", Label: "H2"}, {Value: "h3", Label: "H3"}}},
-		}, Markdown: func(d map[string]any) string {
-			prefix := "## "
-			if d["level"] == "h3" {
-				prefix = "### "
-			}
-			return prefix + str(d["text"])
-		}},
-		{Name: "richtext", Label: "block.richtext", Fields: []content.Field{
-			{Name: "html", Label: "block.richtext.html", Kind: RichText, Required: true},
-		}, Markdown: func(d map[string]any) string { return HTMLToMarkdown(str(d["html"])) }},
-		{Name: "image", Label: "block.image", Fields: []content.Field{
-			{Name: "src", Label: "block.image.src", Kind: Image, Required: true},
-			{Name: "alt", Label: "block.image.alt", Kind: Text, Help: "block.image.alt.help"},
-			{Name: "caption", Label: "block.image.caption", Kind: Text},
-		}, Markdown: func(d map[string]any) string {
-			return "![" + str(d["alt"]) + "](" + str(d["src"]) + ")"
-		}},
-		{Name: "cta", Label: "block.cta", Fields: []content.Field{
-			{Name: "text", Label: "block.cta.text", Kind: Textarea},
-			{Name: "label", Label: "block.cta.label", Kind: Text, Required: true},
-			{Name: "href", Label: "block.cta.href", Kind: URL, Required: true},
-		}, Markdown: func(d map[string]any) string {
-			md := "[" + str(d["label"]) + "](" + str(d["href"]) + ")"
-			if t := str(d["text"]); t != "" {
-				md = t + "\n\n" + md
-			}
-			return md
-		}},
-	}
-	// The article container nests any blocks, including articles (unbounded).
-	blocks = append(blocks, content.Block{Name: "article", Label: "block.article", Fields: []content.Field{
-		{Name: "title", Label: "block.article.title", Kind: Text},
-		{Name: "children", Label: "block.article.children", Kind: Blocks},
-	}, Markdown: func(d map[string]any) string {
-		if t := str(d["title"]); t != "" {
-			return "## " + t
-		}
-		return ""
-	}})
-	for _, b := range blocks {
-		if err := r.Block(b); err != nil {
 			return err
 		}
 	}
