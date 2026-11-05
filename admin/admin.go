@@ -28,6 +28,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/media"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -309,12 +310,12 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 		_, pub, _ := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Status: storage.StatusPublished, Limit: 1})
 		counts = append(counts, typeCount{Type: t, Total: total, Published: pub})
 	}
-	settings, _ := fields.LoadSettings(r.Context(), a.store())
+	cfg, _ := settings.Load(r.Context(), a.store())
 	a.buildMu.Lock()
 	last := a.lastBuild
 	a.buildMu.Unlock()
 	a.render(w, r, http.StatusOK, a.pages["dashboard"], view{Title: a.t("nav.dashboard"), Active: "dashboard", Page: map[string]any{
-		"Counts": counts, "Build": last, "SettingsMissing": settings["baseURL"] == nil,
+		"Counts": counts, "Build": last, "SettingsMissing": cfg.BaseURL == "",
 	}})
 }
 
@@ -542,14 +543,14 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 		blocks[b.Name] = item
 		labels[b.Name] = a.t(b.Label)
 	}
-	settings, _ := fields.LoadSettings(r.Context(), a.store())
+	cfg, _ := settings.Load(r.Context(), a.store())
 	title := a.t(t.Label)
 	if e.ID != 0 && !t.Singleton {
 		title = fmt.Sprint(a.orDash(e.Data[t.Title()]))
 	}
 	a.render(w, r, status, a.pages["edit"], view{Title: title, Active: "c/" + t.Name, Flash: a.flash(r), Page: editPage{
 		Type: t, Entry: e, Data: skeleton(t.Fields, data), Errors: a.translateErrors(errs), Blocks: blocks, Labels: labels,
-		Settings: settings, IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
+		Settings: cfg.Data, IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
 	}})
 }
 
