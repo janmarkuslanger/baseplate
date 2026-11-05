@@ -704,6 +704,11 @@ func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/media?error="+urlQueryEscape(msg), http.StatusSeeOther)
 	}
 	file, hdr, err := r.FormFile("file")
+	if r.MultipartForm != nil {
+		// The server only cleans up the original request; this handler gets
+		// a copy (context wrapper), so remove parsed temp files here.
+		defer r.MultipartForm.RemoveAll()
+	}
 	if err != nil {
 		respondErr("Keine Datei erhalten")
 		return
