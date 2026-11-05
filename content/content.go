@@ -127,13 +127,21 @@ func (s Storage) Container() bool {
 	return s == StoreGroup || s == StoreList || s == StoreBlocks
 }
 
+// NormalizeArgs are the arguments of Kind.Normalize. More fields may be
+// added; existing kinds keep working.
+type NormalizeArgs struct {
+	Schema *Schema
+	Field  Field
+	Raw    any
+}
+
 // Kind implements a field type.
 type Kind struct {
 	Name    string
 	Storage Storage
 	// Normalize validates a raw (JSON-decoded) value and returns the value to
-	// store. A nil raw value means the field was empty or absent.
-	Normalize func(s *Schema, f Field, raw any) (any, error)
+	// store. A nil Raw value means the field was empty or absent.
+	Normalize func(a NormalizeArgs) (any, error)
 	// Empty reports whether a normalized value counts as empty for Required.
 	Empty func(v any) bool
 	// AdminTemplate is the html/template source of the admin input for
@@ -344,7 +352,7 @@ func (s *Schema) validateFields(prefix string, fields []Field, data map[string]a
 	for _, f := range fields {
 		path := prefix + f.Name
 		k := s.kinds[f.Kind]
-		v, err := k.Normalize(s, f, data[f.Name])
+		v, err := k.Normalize(NormalizeArgs{Schema: s, Field: f, Raw: data[f.Name]})
 		if err != nil {
 			if nested, ok := err.(Errors); ok {
 				for p, m := range nested {

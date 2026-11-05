@@ -110,7 +110,7 @@ func (News) Register(r *plugin.Registry) error {
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |
 | `DataMigration` | one-time content changes after schema changes |
-| `On` | hooks: `entry.beforeSave`, `entry.afterSave`, `build.after` |
+| `hook` package | typed hooks: `plugin.EntryBeforeSave.On(r, fn)` … – see [docs/plugins.md](docs/plugins.md) |
 | `Funcs` | frontend template functions |
 
 ### Relations

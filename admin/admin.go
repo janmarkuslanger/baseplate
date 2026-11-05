@@ -566,7 +566,11 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	e.Data = clean
-	if err := a.Reg.Run(ctx, plugin.EntryBeforeSave, e); err != nil {
+	ev := &plugin.EntryEvent{Entry: e, Type: t}
+	if cur := auth.FromContext(ctx); cur != nil {
+		ev.UserID = cur.User.ID
+	}
+	if err := plugin.EntryBeforeSave.Run(ctx, a.Reg, ev); err != nil {
 		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err.Error()})
 		return
 	}
@@ -583,7 +587,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	if err := a.Reg.Run(ctx, plugin.EntryAfterSave, e); err != nil {
+	if err := plugin.EntryAfterSave.Run(ctx, a.Reg, ev); err != nil {
 		a.Logger.Error("afterSave hook", "err", err)
 	}
 	fl := "saved"

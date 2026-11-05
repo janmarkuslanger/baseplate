@@ -131,7 +131,8 @@ func (colorPlugin) Name() string { return "color" }
 func (colorPlugin) Register(r *plugin.Registry) error {
 	if err := r.Kind(content.Kind{
 		Name: "color", Storage: content.StoreText,
-		Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
+		Normalize: func(a content.NormalizeArgs) (any, error) {
+			raw := a.Raw
 			s, _ := raw.(string)
 			if s == "" {
 				return nil, nil
