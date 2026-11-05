@@ -1,13 +1,13 @@
 {{define "content"}}
 <div class="auth__card">
   <div class="brand brand--center"><span class="brand__mark">b</span> baseplate</div>
-  <h1 class="auth__title">Willkommen zurück</h1>
-  <p class="muted">Melde dich an, um Inhalte zu pflegen.</p>
+  <h1 class="auth__title">{{t "login.title"}}</h1>
+  <p class="muted">{{t "login.intro"}}</p>
   {{with .Flash}}<div class="alert alert--error">{{.}}</div>{{end}}
   <form method="post" action="/admin/login" class="stack">
-    <label class="field"><span class="field__label">E-Mail</span><input class="input" type="email" name="email" value="{{.Page}}" autocomplete="username" required autofocus></label>
-    <label class="field"><span class="field__label">Passwort</span><input class="input" type="password" name="password" autocomplete="current-password" required></label>
-    <button class="btn btn--primary btn--block">Anmelden</button>
+    <label class="field"><span class="field__label">{{t "login.email"}}</span><input class="input" type="email" name="email" value="{{.Page}}" autocomplete="username" required autofocus></label>
+    <label class="field"><span class="field__label">{{t "login.password"}}</span><input class="input" type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn btn--primary btn--block">{{t "login.submit"}}</button>
   </form>
 </div>
 {{end}}

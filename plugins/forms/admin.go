@@ -121,7 +121,7 @@ func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	data := rs.data
 	s.FormTitle = titles[s.FormID]
 	if s.FormTitle == "" {
-		s.FormTitle = "(gelöschtes Formular)"
+		s.FormTitle = "forms.deletedForm"
 	}
 	values := map[string]string{}
 	json.Unmarshal([]byte(data), &values)

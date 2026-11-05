@@ -79,6 +79,19 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 
 New hooks are added where they are needed (e.g. admin actions, dashboard widgets, form field types); adding one never breaks existing plugins.
 
+## Translations
+
+| What | How |
+|---|---|
+| texts | keys, e.g. `Label: "booking.title"`; plain texts also work (shown as-is) |
+| catalogs | `i18n.Catalogs.Add(r, i18n.Catalog{Lang: "de", Messages: map[string]string{"booking.title": "Termine"}})` |
+| admin templates | `{{t "booking.title"}}`, with arguments `{{t "booking.count" .N}}` → `"{0} Termine"` |
+| validation errors | return `i18n.M("booking.slotTaken", slot)` from `Normalize` |
+| visitor-facing texts | use the site language (`settings.language`), not the admin language |
+| admin language | `Config.AdminLocale` / `BASEPLATE_ADMIN_LOCALE` (default `de`) |
+
+Core catalogs: `i18n/locales/<lang>.json`. `tests/i18n_test.go` fails if a used key is missing in German.
+
 ## Compatibility rules
 
 | Rule | Why |

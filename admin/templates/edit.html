@@ -12,31 +12,31 @@
   <input type="hidden" name="data" x-ref="data">
   {{/* First submit button = default for Enter (and the Ctrl/Cmd+S target):
        saves without changing the status. */}}
-  <button type="submit" name="status" value="{{if or $t.Singleton (eq $p.Entry.Status "published")}}published{{else}}draft{{end}}" class="default-submit" tabindex="-1" aria-hidden="true" data-save>Speichern</button>
+  <button type="submit" name="status" value="{{if or $t.Singleton (eq $p.Entry.Status "published")}}published{{else}}draft{{end}}" class="default-submit" tabindex="-1" aria-hidden="true" data-save>{{t "edit.save"}}</button>
 
   <header class="page-head page-head--sticky">
     <div>
-      {{if not $t.Singleton}}<a class="back" href="/admin/c/{{$t.Name}}">← {{$t.LabelPlural}}</a>{{end}}
+      {{if not $t.Singleton}}<a class="back" href="/admin/c/{{$t.Name}}">← {{t $t.LabelPlural}}</a>{{end}}
       <h1 x-text="(data[{{json $t.Title}}] || '') || {{json .Title}}">{{.Title}}</h1>
       {{if not $t.Singleton}}
       <p class="muted">
-        {{if $p.IsNew}}Neu{{else if eq $p.Entry.Status "published"}}<span class="pill pill--ok">Veröffentlicht</span>{{else}}<span class="pill">Entwurf</span>{{end}}
-        {{if not $p.IsNew}}· zuletzt geändert {{ago $p.Entry.UpdatedAt}}{{end}}
-        <span class="dirty" x-show="dirty" x-cloak>· ungespeicherte Änderungen</span>
+        {{if $p.IsNew}}{{t "edit.new"}}{{else if eq $p.Entry.Status "published"}}<span class="pill pill--ok">{{t "status.published"}}</span>{{else}}<span class="pill">{{t "status.draft"}}</span>{{end}}
+        {{if not $p.IsNew}}· {{t "edit.updated" (ago $p.Entry.UpdatedAt)}}{{end}}
+        <span class="dirty" x-show="dirty" x-cloak>· {{t "edit.dirty"}}</span>
       </p>
       {{end}}
     </div>
     <div class="actions">
       {{if $t.Singleton}}
-        <button class="btn btn--primary" name="status" value="published">Speichern</button>
+        <button class="btn btn--primary" name="status" value="published">{{t "edit.save"}}</button>
       {{else}}
-        <button class="btn" name="status" value="draft">{{if eq $p.Entry.Status "published"}}Zurück auf Entwurf{{else}}Entwurf speichern{{end}}</button>
-        <button class="btn btn--primary" name="status" value="published">{{if eq $p.Entry.Status "published"}}Aktualisieren{{else}}Veröffentlichen{{end}}</button>
+        <button class="btn" name="status" value="draft">{{if eq $p.Entry.Status "published"}}{{t "edit.unpublish"}}{{else}}{{t "edit.saveDraft"}}{{end}}</button>
+        <button class="btn btn--primary" name="status" value="published">{{if eq $p.Entry.Status "published"}}{{t "edit.update"}}{{else}}{{t "edit.publish"}}{{end}}</button>
       {{end}}
     </div>
   </header>
 
-  {{if $p.Errors}}<div class="alert alert--error">Bitte prüfe die markierten Felder.{{with index $p.Errors "_"}} {{.}}{{end}}</div>{{end}}
+  {{if $p.Errors}}<div class="alert alert--error">{{t "edit.errors"}}{{with index $p.Errors "_"}} {{.}}{{end}}</div>{{end}}
 
   {{$tabs := $t.Tabs}}
   {{if gt (len $tabs) 1}}
@@ -51,10 +51,10 @@
       <section class="card card--panel" x-show="tab === {{json $tab}}">
         {{if eq $tab "SEO"}}
         <div class="serp">
-          <div class="serp__label">Vorschau in Suchergebnissen</div>
+          <div class="serp__label">{{t "edit.serp"}}</div>
           <div class="serp__url">{{with $p.Settings.baseURL}}{{.}}{{else}}https://example.com{{end}}<span x-text="data.slug && data.slug !== 'index' ? ' › ' + data.slug : ''"></span></div>
-          <div class="serp__title" x-text="(data.seo && data.seo.metaTitle) || data.title || 'Seitentitel'"></div>
-          <div class="serp__desc" x-text="(data.seo && data.seo.metaDescription) || 'Ohne Meta-Beschreibung wählt die Suchmaschine selbst einen Textausschnitt.'"></div>
+          <div class="serp__title" x-text="(data.seo && data.seo.metaTitle) || data.title || {{json (t "edit.serp.title")}}"></div>
+          <div class="serp__desc" x-text="(data.seo && data.seo.metaDescription) || {{json (t "edit.serp.desc")}}"></div>
         </div>
         {{end}}
         {{range tabFields $t $tab}}
@@ -69,7 +69,7 @@
 
 {{with $p.UsedIn}}
 <section class="card card--panel">
-  <h2>Verwendet in</h2>
+  <h2>{{t "edit.usedIn"}}</h2>
   <ul class="used-in">
     {{range .}}<li><a href="{{.URL}}">{{.Title}}</a> <span class="muted">· {{.Type}} · {{.Field}}</span></li>{{end}}
   </ul>
@@ -78,9 +78,9 @@
 {{template "block-templates"}}
 
 {{if and (not $p.IsNew) (not $t.Singleton)}}
-<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm({{if $p.UsedIn}}{{json (printf "Dieser Eintrag wird an %d Stelle(n) verwendet. Die Verknüpfungen werden entfernt. Wirklich löschen?" (len $p.UsedIn))}}{{else}}'Diesen Eintrag wirklich löschen?'{{end}})) $event.preventDefault()">
+<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm({{if $p.UsedIn}}{{json (t "edit.delete.usedIn" (len $p.UsedIn))}}{{else}}{{json (t "edit.delete.confirm")}}{{end}})) $event.preventDefault()">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <button class="btn btn--danger btn--sm">{{$t.Label}} löschen</button>
+  <button class="btn btn--danger btn--sm">{{t "edit.delete" (t $t.Label)}}</button>
 </form>
 {{end}}
 {{end}}

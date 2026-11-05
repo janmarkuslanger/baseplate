@@ -23,6 +23,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/media"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -40,7 +41,10 @@ type Admin struct {
 	Media   media.Store
 	Builder *build.Builder
 	Logger  *slog.Logger
+	// Lang is the admin language (default i18n.Default).
+	Lang string
 
+	i18n    *i18n.Bundle
 	base    *template.Template
 	pages   map[string]*template.Template
 	plugins map[string]*template.Template
@@ -57,8 +61,35 @@ type buildStatus struct {
 
 func (a *Admin) store() storage.Store { return a.Reg.Store }
 
+// t translates a key (or returns a plain text unchanged).
+func (a *Admin) t(key string, args ...any) string { return a.i18n.T(a.Lang, key, args...) }
+
+// errorKeys maps sentinel errors to translation keys.
+var errorKeys = map[error]string{
+	auth.ErrInvalidLogin:       "login.invalid",
+	auth.ErrRateLimited:        "login.rateLimited",
+	storage.ErrInvalidRelation: "validation.relationTarget",
+	media.ErrType:              "media.error.type",
+	media.ErrSize:              "media.error.size",
+	media.ErrContent:           "media.error.content",
+}
+
+// tr translates an error for display.
+func (a *Admin) tr(err error) string {
+	for target, key := range errorKeys {
+		if errors.Is(err, target) {
+			return a.t(key)
+		}
+	}
+	return a.i18n.Tr(a.Lang, err)
+}
+
 // Init parses the admin templates. Call after all plugins are registered.
 func (a *Admin) Init() error {
+	if a.Lang == "" {
+		a.Lang = i18n.Default
+	}
+	a.i18n = i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(a.Reg)...)...)
 	base, err := template.New("").Funcs(a.funcs()).ParseFS(templateFS, "templates/layout.html", "templates/fields.html")
 	if err != nil {
 		return err
@@ -169,7 +200,7 @@ func (a *Admin) nav() []navItem {
 			items = append(items, navItem{Label: p.Label, URL: "/admin/p/" + p.Path, Key: "p/" + p.Path})
 		}
 	}
-	items = append(items, navItem{Label: "Medien", URL: "/admin/media", Key: "media"})
+	items = append(items, navItem{Label: "nav.media", URL: "/admin/media", Key: "media"})
 	for _, t := range a.Reg.Schema.Types() {
 		if t.Singleton && !t.Hidden {
 			items = append(items, navItem{Label: t.Label, URL: "/admin/c/" + t.Name, Key: "c/" + t.Name})
@@ -195,7 +226,7 @@ func (a *Admin) render(w http.ResponseWriter, r *http.Request, status int, tmpl 
 
 func (a *Admin) fail(w http.ResponseWriter, err error) {
 	a.Logger.Error("admin", "err", err)
-	http.Error(w, "Interner Fehler", http.StatusInternalServerError)
+	http.Error(w, a.t("error.internal"), http.StatusInternalServerError)
 }
 
 // ui implements plugin.AdminUI.
@@ -223,7 +254,7 @@ func (u ui) CSRFToken(r *http.Request) string {
 // --- auth ---
 
 func (a *Admin) loginPage(w http.ResponseWriter, r *http.Request) {
-	a.render(w, r, http.StatusOK, a.pages["login"], view{Title: "Anmelden"})
+	a.render(w, r, http.StatusOK, a.pages["login"], view{Title: a.t("login.submit")})
 }
 
 func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
@@ -231,12 +262,12 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	ses, err := a.Auth.Login(r.Context(), a.Reg.ClientIP(r), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
-		msg := err.Error()
+		msg := a.tr(err)
 		if !errors.Is(err, auth.ErrInvalidLogin) && !errors.Is(err, auth.ErrRateLimited) {
 			a.Logger.Error("login", "err", err)
-			msg = "Anmeldung fehlgeschlagen"
+			msg = a.t("login.failed")
 		}
-		a.render(w, r, http.StatusUnauthorized, a.pages["login"], view{Title: "Anmelden", Flash: msg, Page: r.FormValue("email")})
+		a.render(w, r, http.StatusUnauthorized, a.pages["login"], view{Title: a.t("login.submit"), Flash: msg, Page: r.FormValue("email")})
 		return
 	}
 	a.Auth.SetCookie(w, r, ses)
@@ -273,7 +304,7 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 	a.buildMu.Lock()
 	last := a.lastBuild
 	a.buildMu.Unlock()
-	a.render(w, r, http.StatusOK, a.pages["dashboard"], view{Title: "Übersicht", Active: "dashboard", Page: map[string]any{
+	a.render(w, r, http.StatusOK, a.pages["dashboard"], view{Title: a.t("nav.dashboard"), Active: "dashboard", Page: map[string]any{
 		"Counts": counts, "Build": last, "SettingsMissing": settings["baseURL"] == nil,
 	}})
 }
@@ -329,29 +360,25 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := make([]row, len(entries))
 	for i, e := range entries {
-		rows[i] = row{Entry: e, Title: fmt.Sprint(orDash(e.Data[t.Title()]))}
+		rows[i] = row{Entry: e, Title: fmt.Sprint(a.orDash(e.Data[t.Title()]))}
 	}
-	a.render(w, r, http.StatusOK, a.pages["list"], view{Title: t.LabelPlural, Active: "c/" + t.Name, Flash: flash(r), Page: map[string]any{
+	a.render(w, r, http.StatusOK, a.pages["list"], view{Title: a.t(t.LabelPlural), Active: "c/" + t.Name, Flash: a.flash(r), Page: map[string]any{
 		"Type": t, "Rows": rows, "Total": total, "Query": q, "PageNo": pageNo,
 		"HasNext": pageNo*perPage < total, "HasPrev": pageNo > 1, "Prev": pageNo - 1, "Next": pageNo + 1,
 	}})
 }
 
-func orDash(v any) any {
+func (a *Admin) orDash(v any) any {
 	if v == nil || v == "" {
-		return "(ohne Titel)"
+		return a.t("entry.untitled")
 	}
 	return v
 }
 
-func flash(r *http.Request) string {
-	switch r.URL.Query().Get("flash") {
-	case "saved":
-		return "Gespeichert."
-	case "published":
-		return "Veröffentlicht. Klicke in der Übersicht auf „Website bauen“, um die Änderung live zu bringen."
-	case "deleted":
-		return "Gelöscht."
+func (a *Admin) flash(r *http.Request) string {
+	switch f := r.URL.Query().Get("flash"); f {
+	case "saved", "published", "deleted":
+		return a.t("flash." + f)
 	}
 	return ""
 }
@@ -360,8 +387,8 @@ type editPage struct {
 	Type     *content.Type
 	Entry    *storage.Entry
 	Data     map[string]any
-	Errors   content.Errors
-	Blocks   map[string]any // block name -> empty item, for the "add block" menu
+	Errors   map[string]string // translated, by field path
+	Blocks   map[string]any    // block name -> empty item, for the "add block" menu
 	Labels   map[string]string
 	Settings map[string]any
 	IsNew    bool
@@ -422,7 +449,7 @@ func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []use
 		u := usedIn{Type: rt.Label, Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
 		u.Field = a.relationLabel(rt, ref, t.Name)
 		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
-			u.Title = fmt.Sprint(orDash(src.Data[rt.Title()]))
+			u.Title = fmt.Sprint(a.orDash(src.Data[rt.Title()]))
 		}
 		out = append(out, u)
 	}
@@ -467,17 +494,28 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 		item := skeleton(b.Fields, map[string]any{})
 		item[fields.BlockTypeKey] = b.Name
 		blocks[b.Name] = item
-		labels[b.Name] = b.Label
+		labels[b.Name] = a.t(b.Label)
 	}
 	settings, _ := fields.LoadSettings(r.Context(), a.store())
-	title := t.Label
+	title := a.t(t.Label)
 	if e.ID != 0 && !t.Singleton {
-		title = fmt.Sprint(orDash(e.Data[t.Title()]))
+		title = fmt.Sprint(a.orDash(e.Data[t.Title()]))
 	}
-	a.render(w, r, status, a.pages["edit"], view{Title: title, Active: "c/" + t.Name, Flash: flash(r), Page: editPage{
-		Type: t, Entry: e, Data: skeleton(t.Fields, data), Errors: errs, Blocks: blocks, Labels: labels,
+	a.render(w, r, status, a.pages["edit"], view{Title: title, Active: "c/" + t.Name, Flash: a.flash(r), Page: editPage{
+		Type: t, Entry: e, Data: skeleton(t.Fields, data), Errors: a.translateErrors(errs), Blocks: blocks, Labels: labels,
 		Settings: settings, IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
 	}})
+}
+
+func (a *Admin) translateErrors(errs content.Errors) map[string]string {
+	if len(errs) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(errs))
+	for path, err := range errs {
+		out[path] = a.tr(err)
+	}
+	return out
 }
 
 // skeleton fills in empty groups and lists so the Alpine editor can bind
@@ -531,7 +569,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(r.FormValue("data")), &raw); err != nil {
-		http.Error(w, "ungültige Daten", http.StatusBadRequest)
+		http.Error(w, a.t("error.badData"), http.StatusBadRequest)
 		return
 	}
 	clean, err := a.Reg.Schema.Validate(t.Fields, raw)
@@ -556,7 +594,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	}
 	if t.Routable && e.Slug != "" {
 		if msg := a.slugConflict(r, t, e, clean); msg != "" {
-			errs["slug"] = msg
+			errs["slug"] = i18n.M(msg)
 		}
 	}
 	if len(errs) > 0 {
@@ -571,7 +609,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		ev.UserID = cur.User.ID
 	}
 	if err := plugin.EntryBeforeSave.Run(ctx, a.Reg, ev); err != nil {
-		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err.Error()})
+		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err})
 		return
 	}
 	if e.ID == 0 {
@@ -580,7 +618,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		err = a.store().UpdateEntry(ctx, e)
 	}
 	if errors.Is(err, storage.ErrInvalidRelation) {
-		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err.Error()})
+		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, content.Errors{"_": err})
 		return
 	}
 	if err != nil {
@@ -610,7 +648,7 @@ func (a *Admin) slugConflict(r *http.Request, t *content.Type, e *storage.Entry,
 	parent := parentID(data["parent"])
 	for _, o := range all {
 		if o.ID != e.ID && o.Slug == e.Slug && parentID(o.Data["parent"]) == parent {
-			return "dieser URL-Pfad ist bereits vergeben"
+			return "validation.slugTaken"
 		}
 	}
 	return ""
@@ -657,7 +695,7 @@ func (a *Admin) refOptions(typ string) []content.Option {
 	}
 	out := make([]content.Option, 0, len(list))
 	for _, e := range list {
-		out = append(out, content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(orDash(e.Data[t.Title()]))})
+		out = append(out, content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(a.orDash(e.Data[t.Title()]))})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out
@@ -671,7 +709,7 @@ func (a *Admin) mediaPage(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	a.render(w, r, http.StatusOK, a.pages["media"], view{Title: "Medien", Active: "media", Flash: r.URL.Query().Get("error"), Page: files})
+	a.render(w, r, http.StatusOK, a.pages["media"], view{Title: a.t("nav.media"), Active: "media", Flash: r.URL.Query().Get("error"), Page: files})
 }
 
 func (a *Admin) mediaJSON(w http.ResponseWriter, r *http.Request) {
@@ -705,14 +743,14 @@ func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 		defer r.MultipartForm.RemoveAll()
 	}
 	if err != nil {
-		respondErr("Keine Datei erhalten")
+		respondErr(a.t("media.error.noFile"))
 		return
 	}
 	defer file.Close()
 	url, err := a.Media.Save(file, hdr.Filename)
 	if err != nil {
 		if errors.Is(err, media.ErrType) || errors.Is(err, media.ErrSize) || errors.Is(err, media.ErrContent) {
-			respondErr(err.Error())
+			respondErr(a.tr(err))
 			return
 		}
 		a.fail(w, err)

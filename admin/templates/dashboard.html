@@ -1,27 +1,27 @@
 {{define "content"}}
 <header class="page-head">
-  <div><h1>Übersicht</h1><p class="muted">Inhalte pflegen und die Website veröffentlichen.</p></div>
+  <div><h1>{{t "nav.dashboard"}}</h1><p class="muted">{{t "dash.intro"}}</p></div>
 </header>
 {{if .Page.SettingsMissing}}
-<div class="alert alert--warn">Bevor die Website gebaut werden kann, trage bitte die <a href="/admin/c/settings">Einstellungen</a> ein (Name und Basis-URL).</div>
+<div class="alert alert--warn">{{t "dash.settingsMissing"}} <a href="/admin/c/settings">{{t "type.settings"}}</a></div>
 {{end}}
 <section class="grid grid--cards">
   {{range .Page.Counts}}
   <a class="card card--stat" href="/admin/c/{{.Type.Name}}">
-    <span class="card--stat__label">{{.Type.LabelPlural}}</span>
+    <span class="card--stat__label">{{t .Type.LabelPlural}}</span>
     <span class="card--stat__value">{{.Total}}</span>
-    <span class="muted">{{.Published}} veröffentlicht</span>
+    <span class="muted">{{t "dash.published" .Published}}</span>
   </a>
   {{end}}
 </section>
 <section class="card card--panel">
   <div class="panel-row">
     <div>
-      <h2>Website veröffentlichen</h2>
-      <p class="muted">Erzeugt die statische Website aus allen veröffentlichten Inhalten.</p>
+      <h2>{{t "dash.publish"}}</h2>
+      <p class="muted">{{t "dash.publish.help"}}</p>
     </div>
     <button class="btn btn--primary" hx-post="/admin/build" hx-target="#build-status" hx-swap="innerHTML" hx-indicator="#build-spinner">
-      <span id="build-spinner" class="spinner htmx-indicator"></span> Website bauen
+      <span id="build-spinner" class="spinner htmx-indicator"></span> {{t "dash.build"}}
     </button>
   </div>
   <div id="build-status">{{template "build-status" .Page.Build}}</div>
@@ -31,11 +31,11 @@
 {{define "build-status"}}
 {{if .}}
   {{if .Err}}
-  <div class="alert alert--error"><strong>Build fehlgeschlagen:</strong> {{.Err}}</div>
+  <div class="alert alert--error"><strong>{{t "dash.build.failed"}}</strong> {{.Err}}</div>
   {{else}}
-  <div class="alert alert--ok">✓ {{.Result.Pages}} Seiten in {{.Result.Duration.Milliseconds}} ms gebaut · {{date .At}}</div>
+  <div class="alert alert--ok">✓ {{t "dash.build.ok" .Result.Pages .Result.Duration.Milliseconds}} · {{date .At}}</div>
   {{end}}
 {{else}}
-  <p class="muted">Seit dem Start wurde noch nicht gebaut.</p>
+  <p class="muted">{{t "dash.build.none"}}</p>
 {{end}}
 {{end}}

@@ -24,20 +24,20 @@ const (
 // SEOField is the standard SEO group added to every routable type.
 func SEOField() content.Field {
 	return content.Field{
-		Name: "seo", Label: "SEO", Kind: Group, Tab: TabSEO,
+		Name: "seo", Label: "seo", Kind: Group, Tab: TabSEO,
 		Fields: []content.Field{
-			{Name: "metaTitle", Label: "Meta-Titel", Kind: Text, Max: 70, Help: "Leer = Seitentitel. Ideal 50–60 Zeichen."},
-			{Name: "metaDescription", Label: "Meta-Beschreibung", Kind: Textarea, Max: 170, Help: "Ideal 120–160 Zeichen."},
-			{Name: "canonical", Label: "Canonical-URL", Kind: URL, Help: "Nur setzen, wenn der Inhalt woanders das Original ist."},
-			{Name: "noindex", Label: "Nicht indexieren (noindex)", Kind: Bool},
-			{Name: "nofollow", Label: "Links nicht folgen (nofollow)", Kind: Bool},
-			{Name: "ogTitle", Label: "Social-Titel", Kind: Text, Max: 90},
-			{Name: "ogDescription", Label: "Social-Beschreibung", Kind: Textarea, Max: 200},
-			{Name: "ogImage", Label: "Social-Bild", Kind: Image, Help: "Empfohlen 1200×630 px."},
-			{Name: "sitemapExclude", Label: "Nicht in Sitemap aufnehmen", Kind: Bool},
-			{Name: "sitemapPriority", Label: "Sitemap-Priorität", Kind: Select, Options: []content.Option{
-				{Value: "", Label: "Standard (0.5)"}, {Value: "1.0", Label: "1.0 – sehr wichtig"},
-				{Value: "0.8", Label: "0.8"}, {Value: "0.3", Label: "0.3 – unwichtig"},
+			{Name: "metaTitle", Label: "seo.metaTitle", Kind: Text, Max: 70, Help: "seo.metaTitle.help"},
+			{Name: "metaDescription", Label: "seo.metaDescription", Kind: Textarea, Max: 170, Help: "seo.metaDescription.help"},
+			{Name: "canonical", Label: "seo.canonical", Kind: URL, Help: "seo.canonical.help"},
+			{Name: "noindex", Label: "seo.noindex", Kind: Bool},
+			{Name: "nofollow", Label: "seo.nofollow", Kind: Bool},
+			{Name: "ogTitle", Label: "seo.ogTitle", Kind: Text, Max: 90},
+			{Name: "ogDescription", Label: "seo.ogDescription", Kind: Textarea, Max: 200},
+			{Name: "ogImage", Label: "seo.ogImage", Kind: Image, Help: "seo.ogImage.help"},
+			{Name: "sitemapExclude", Label: "seo.sitemapExclude", Kind: Bool},
+			{Name: "sitemapPriority", Label: "seo.sitemapPriority", Kind: Select, Options: []content.Option{
+				{Value: "", Label: "seo.priority.default"}, {Value: "1.0", Label: "seo.priority.high"},
+				{Value: "0.8", Label: "0.8"}, {Value: "0.3", Label: "seo.priority.low"},
 			}},
 		},
 	}
@@ -46,8 +46,8 @@ func SEOField() content.Field {
 // RoutableFields wraps the fields of a routable type with title, slug and SEO.
 func RoutableFields(fs ...content.Field) []content.Field {
 	out := []content.Field{
-		{Name: "title", Label: "Titel", Kind: Text, Required: true, Max: 200},
-		{Name: "slug", Label: "URL-Pfad", Kind: Slug, Required: true, Help: "„index“ ist die Startseite."},
+		{Name: "title", Label: "field.title", Kind: Text, Required: true, Max: 200},
+		{Name: "slug", Label: "field.slug", Kind: Slug, Required: true, Help: "field.slug.help"},
 	}
 	out = append(out, fs...)
 	return append(out, SEOField())
@@ -66,9 +66,9 @@ func (Core) Register(r *plugin.Registry) error {
 		}
 	}
 	blocks := []content.Block{
-		{Name: "heading", Label: "Überschrift", Fields: []content.Field{
-			{Name: "text", Label: "Text", Kind: Text, Required: true},
-			{Name: "level", Label: "Ebene", Kind: Select, Options: []content.Option{{Value: "h2", Label: "H2"}, {Value: "h3", Label: "H3"}}},
+		{Name: "heading", Label: "block.heading", Fields: []content.Field{
+			{Name: "text", Label: "block.heading.text", Kind: Text, Required: true},
+			{Name: "level", Label: "block.heading.level", Kind: Select, Options: []content.Option{{Value: "h2", Label: "H2"}, {Value: "h3", Label: "H3"}}},
 		}, Markdown: func(d map[string]any) string {
 			prefix := "## "
 			if d["level"] == "h3" {
@@ -76,20 +76,20 @@ func (Core) Register(r *plugin.Registry) error {
 			}
 			return prefix + str(d["text"])
 		}},
-		{Name: "richtext", Label: "Text", Fields: []content.Field{
-			{Name: "html", Label: "Inhalt", Kind: RichText, Required: true},
+		{Name: "richtext", Label: "block.richtext", Fields: []content.Field{
+			{Name: "html", Label: "block.richtext.html", Kind: RichText, Required: true},
 		}, Markdown: func(d map[string]any) string { return HTMLToMarkdown(str(d["html"])) }},
-		{Name: "image", Label: "Bild", Fields: []content.Field{
-			{Name: "src", Label: "Bild", Kind: Image, Required: true},
-			{Name: "alt", Label: "Alternativtext", Kind: Text, Help: "Beschreibt das Bild für Screenreader und Suchmaschinen."},
-			{Name: "caption", Label: "Bildunterschrift", Kind: Text},
+		{Name: "image", Label: "block.image", Fields: []content.Field{
+			{Name: "src", Label: "block.image.src", Kind: Image, Required: true},
+			{Name: "alt", Label: "block.image.alt", Kind: Text, Help: "block.image.alt.help"},
+			{Name: "caption", Label: "block.image.caption", Kind: Text},
 		}, Markdown: func(d map[string]any) string {
 			return "![" + str(d["alt"]) + "](" + str(d["src"]) + ")"
 		}},
-		{Name: "cta", Label: "Call-to-Action", Fields: []content.Field{
-			{Name: "text", Label: "Text", Kind: Textarea},
-			{Name: "label", Label: "Button-Text", Kind: Text, Required: true},
-			{Name: "href", Label: "Link", Kind: URL, Required: true},
+		{Name: "cta", Label: "block.cta", Fields: []content.Field{
+			{Name: "text", Label: "block.cta.text", Kind: Textarea},
+			{Name: "label", Label: "block.cta.label", Kind: Text, Required: true},
+			{Name: "href", Label: "block.cta.href", Kind: URL, Required: true},
 		}, Markdown: func(d map[string]any) string {
 			md := "[" + str(d["label"]) + "](" + str(d["href"]) + ")"
 			if t := str(d["text"]); t != "" {
@@ -99,9 +99,9 @@ func (Core) Register(r *plugin.Registry) error {
 		}},
 	}
 	// The article container nests any blocks, including articles (unbounded).
-	blocks = append(blocks, content.Block{Name: "article", Label: "Artikel", Fields: []content.Field{
-		{Name: "title", Label: "Überschrift", Kind: Text},
-		{Name: "children", Label: "Inhalt", Kind: Blocks},
+	blocks = append(blocks, content.Block{Name: "article", Label: "block.article", Fields: []content.Field{
+		{Name: "title", Label: "block.article.title", Kind: Text},
+		{Name: "children", Label: "block.article.children", Kind: Blocks},
 	}, Markdown: func(d map[string]any) string {
 		if t := str(d["title"]); t != "" {
 			return "## " + t
@@ -114,24 +114,24 @@ func (Core) Register(r *plugin.Registry) error {
 		}
 	}
 	if err := r.ContentType(content.Type{
-		Name: PageType, Label: "Seite", LabelPlural: "Seiten", Routable: true,
+		Name: PageType, Label: "type.page", LabelPlural: "type.page.plural", Routable: true,
 		Fields: RoutableFields(
-			content.Field{Name: "parent", Label: "Übergeordnete Seite", Kind: Relation, Ref: PageType, Inverse: "children"},
-			content.Field{Name: "body", Label: "Inhalt", Kind: Blocks},
+			content.Field{Name: "parent", Label: "page.parent", Kind: Relation, Ref: PageType, Inverse: "children"},
+			content.Field{Name: "body", Label: "page.body", Kind: Blocks},
 		),
 	}); err != nil {
 		return err
 	}
 	return r.ContentType(content.Type{
-		Name: SettingsType, Label: "Einstellungen", LabelPlural: "Einstellungen", Singleton: true, TitleField: "siteName",
+		Name: SettingsType, Label: "type.settings", LabelPlural: "type.settings.plural", Singleton: true, TitleField: "siteName",
 		Fields: []content.Field{
-			{Name: "siteName", Label: "Name der Website", Kind: Text, Required: true},
-			{Name: "baseURL", Label: "Basis-URL", Kind: URL, Required: true, Help: "z. B. https://www.example.com – für Canonicals, Sitemap und llms.txt."},
-			{Name: "language", Label: "Sprache", Kind: Text, Help: "z. B. de"},
-			{Name: "serverURL", Label: "CMS-Server-URL", Kind: URL, Help: "Öffentliche URL dieses CMS. Formulare senden dorthin."},
-			{Name: "defaultOgImage", Label: "Standard-Social-Bild", Kind: Image},
-			{Name: "llmsTxt", Label: "llms.txt erzeugen", Kind: Bool, Tab: TabLLM, Help: "Stellt KI-Systemen unter /llms.txt eine Übersicht aller indexierbaren Seiten bereit."},
-			{Name: "llmsContent", Label: "Zusatzinhalt für llms.txt", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "Markdown, erscheint vor der Seitenliste – z. B. „> Kurzbeschreibung“, Leistungen, Kontakt."},
+			{Name: "siteName", Label: "settings.siteName", Kind: Text, Required: true},
+			{Name: "baseURL", Label: "settings.baseURL", Kind: URL, Required: true, Help: "settings.baseURL.help"},
+			{Name: "language", Label: "settings.language", Kind: Text, Help: "settings.language.help"},
+			{Name: "serverURL", Label: "settings.serverURL", Kind: URL, Help: "settings.serverURL.help"},
+			{Name: "defaultOgImage", Label: "settings.defaultOgImage", Kind: Image},
+			{Name: "llmsTxt", Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
+			{Name: "llmsContent", Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
 		},
 	})
 }

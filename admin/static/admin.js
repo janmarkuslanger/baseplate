@@ -3,6 +3,14 @@
   'use strict';
 
   const csrf = () => document.body.dataset.csrf || '';
+  // Translations for scripts ("js.*" keys), provided by the layout.
+  let messages = null;
+  const tr = (key, ...args) => {
+    if (!messages) messages = JSON.parse(document.body.dataset.i18n || '{}');
+    let s = messages[key] || key;
+    args.forEach((a, i) => { s = s.replace('{' + i + '}', a); });
+    return s;
+  };
   // New items get "n…" keys; stored items keep the server's "<table>:<id>".
   const uid = () => 'n' + Math.random().toString(36).slice(2, 10);
 
@@ -163,7 +171,7 @@
       cmd(c) { this.$refs.editor.focus(); document.execCommand(c, false, null); this.sync(); },
       block(tag) { this.$refs.editor.focus(); document.execCommand('formatBlock', false, tag); this.sync(); },
       link() {
-        const url = window.prompt('Link-Adresse (https://…, /pfad oder mailto:…)');
+        const url = window.prompt(tr('js.linkPrompt'));
         if (!url) return;
         this.$refs.editor.focus();
         document.execCommand('createLink', false, url);
@@ -180,7 +188,7 @@
       open: false,
       label(id) {
         const o = this.options.find((o) => Number(o.Value) === Number(id));
-        return o ? o.Label : '#' + id + ' (gelöscht?)';
+        return o ? o.Label : tr('js.relationMissing', id);
       },
       matches() {
         const q = this.q.toLowerCase();
@@ -222,7 +230,7 @@
         try {
           const res = await fetch('/admin/media', { method: 'POST', body, headers: { 'X-CSRF-Token': csrf(), Accept: 'application/json' } });
           const out = await res.json();
-          if (!res.ok) throw new Error(out.error || 'Upload fehlgeschlagen');
+          if (!res.ok) throw new Error(out.error || tr('js.uploadFailed'));
           this.value = out.url;
         } catch (err) {
           this.error = err.message;

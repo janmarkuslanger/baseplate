@@ -63,6 +63,7 @@ migrations run automatically on start.
 | `BASEPLATE_DIST_DIR` | `./dist` | static build output |
 | `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail. Without a host, mails are only logged |
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
+| `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in `i18n/locales`) |
 | `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits. Only behind a proxy that overwrites it |
 
 ## Themes
