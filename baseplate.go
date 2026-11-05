@@ -57,6 +57,9 @@ type Config struct {
 	// SecureCookies sets the Secure flag on the admin session cookie; enable
 	// it behind an HTTPS proxy (BASEPLATE_SECURE_COOKIES=1).
 	SecureCookies bool
+	// AdminLocale is the admin language, e.g. "de" or "en"
+	// (BASEPLATE_ADMIN_LOCALE, default "de").
+	AdminLocale string
 	// TrustedProxyHeader names a header carrying the client IP, e.g.
 	// "X-Forwarded-For" (BASEPLATE_TRUSTED_PROXY_HEADER). Rate limits use it
 	// instead of the connection address. Only set it behind a proxy that
@@ -84,6 +87,7 @@ func (c *Config) LoadEnv() {
 	str("BASEPLATE_SMTP_PASSWORD", &c.SMTP.Password)
 	str("BASEPLATE_SMTP_FROM", &c.SMTP.From)
 	str("BASEPLATE_TRUSTED_PROXY_HEADER", &c.TrustedProxyHeader)
+	str("BASEPLATE_ADMIN_LOCALE", &c.AdminLocale)
 	if v, err := strconv.Atoi(os.Getenv("BASEPLATE_SMTP_PORT")); err == nil {
 		c.SMTP.Port = v
 	}
@@ -234,7 +238,7 @@ func (a *App) Setup(ctx context.Context) error {
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies}
-	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger}
+	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale}
 	return a.admin.Init()
 }
 

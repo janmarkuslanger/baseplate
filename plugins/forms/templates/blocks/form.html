@@ -14,7 +14,7 @@
     {{end}}
   </div>
   {{end}}
-  <div style="position:absolute;left:-10000px" aria-hidden="true"><label>Nicht ausfüllen <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label></div>
-  <button type="submit" class="bp-button">{{with $f.Data.submitLabel}}{{.}}{{else}}Absenden{{end}}</button>
+  <div style="position:absolute;left:-10000px" aria-hidden="true"><label>{{formsT $.Page.Site.language "forms.public.honeypot"}} <input type="text" name="_hp" tabindex="-1" autocomplete="off"></label></div>
+  <button type="submit" class="bp-button">{{with $f.Data.submitLabel}}{{.}}{{else}}{{formsT $.Page.Site.language "forms.public.submit"}}{{end}}</button>
 </form>
 {{end}}{{end}}

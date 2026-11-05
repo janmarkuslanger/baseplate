@@ -114,7 +114,7 @@ textarea.input { resize: vertical; min-height: 80px; }
 .rte__toolbar button { height: 28px; min-width: 28px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--c-text); font: inherit; font-size: 13px; cursor: pointer; }
 .rte__toolbar button:hover { background: var(--c-surface); box-shadow: var(--shadow); }
 .rte__editor { min-height: 140px; padding: 12px 14px; outline: none; line-height: 1.6; }
-.rte__editor:empty::before { content: "Text eingeben…"; color: var(--c-muted); }
+.rte__editor:empty::before { content: attr(data-placeholder); color: var(--c-muted); }
 .rte__editor > :first-child { margin-top: 0; }
 .rte__editor p { margin: 0 0 .75em; }
 .rte__editor h2 { font-size: 20px; margin: 1em 0 .5em; }

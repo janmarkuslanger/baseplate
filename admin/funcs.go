@@ -47,7 +47,10 @@ var staticVersion = func() string {
 
 func (a *Admin) funcs() template.FuncMap {
 	return template.FuncMap{
-		"asset": func(name string) string { return "/admin/static/" + name + "?v=" + staticVersion },
+		"t":        a.t,
+		"lang":     func() string { return a.Lang },
+		"messages": func(prefix string) map[string]string { return a.i18n.Messages(a.Lang, prefix) },
+		"asset":    func(name string) string { return "/admin/static/" + name + "?v=" + staticVersion },
 		// json returns a plain string so it can be used in data-* attributes,
 		// where html/template escapes it.
 		"json": func(v any) (string, error) {
@@ -80,7 +83,7 @@ func (a *Admin) funcs() template.FuncMap {
 		"kindField": func(args fieldArgs) (template.HTML, error) {
 			t := a.base.Lookup("kind/" + args.F.Kind)
 			if t == nil {
-				return template.HTML(`<p class="field__error">Feldtyp „` + template.HTMLEscapeString(args.F.Kind) + `“ hat kein Admin-Template.</p>`), nil
+				return template.HTML(`<p class="field__error">` + template.HTMLEscapeString(a.t("kind.noTemplate", args.F.Kind)) + `</p>`), nil
 			}
 			var buf strings.Builder
 			if err := t.Execute(&buf, args); err != nil {
@@ -105,22 +108,22 @@ func (a *Admin) funcs() template.FuncMap {
 		},
 		"tabLabel": func(tab string) string {
 			if tab == "" {
-				return "Inhalt"
+				return a.t("tab.content")
 			}
-			return tab
+			return a.t(tab)
 		},
-		"date": func(t time.Time) string { return t.Local().Format("02.01.2006 15:04") },
+		"date": func(t time.Time) string { return t.Local().Format(a.t("format.datetime")) },
 		"ago": func(t time.Time) string {
 			d := time.Since(t)
 			switch {
 			case d < time.Minute:
-				return "gerade eben"
+				return a.t("ago.now")
 			case d < time.Hour:
-				return fmt.Sprintf("vor %d Min.", int(d.Minutes()))
+				return a.t("ago.minutes", int(d.Minutes()))
 			case d < 24*time.Hour:
-				return fmt.Sprintf("vor %d Std.", int(d.Hours()))
+				return a.t("ago.hours", int(d.Hours()))
 			}
-			return t.Local().Format("02.01.2006")
+			return t.Local().Format(a.t("format.date"))
 		},
 		"size": func(n int64) string {
 			if n < 1<<20 {

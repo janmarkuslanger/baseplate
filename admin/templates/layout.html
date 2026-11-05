@@ -1,5 +1,5 @@
 {{define "layout"}}<!doctype html>
-<html lang="de">
+<html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,18 +10,18 @@
 <script src="{{asset "alpine.min.js"}}" defer></script>
 </head>
 {{if .User}}
-<body class="app" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' data-csrf="{{.CSRF}}">
+<body class="app" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' data-csrf="{{.CSRF}}" data-i18n="{{json (messages "js.")}}">
 <aside class="sidebar">
   <a class="brand" href="/admin/"><span class="brand__mark">b</span> baseplate</a>
   <nav class="nav">
-    <a class="nav__item {{if eq .Active "dashboard"}}is-active{{end}}" href="/admin/">Übersicht</a>
-    <div class="nav__section">Inhalte</div>
-    {{range .Nav}}<a class="nav__item {{if eq $.Active .Key}}is-active{{end}}" href="{{.URL}}">{{.Label}}</a>{{end}}
+    <a class="nav__item {{if eq .Active "dashboard"}}is-active{{end}}" href="/admin/">{{t "nav.dashboard"}}</a>
+    <div class="nav__section">{{t "nav.content"}}</div>
+    {{range .Nav}}<a class="nav__item {{if eq $.Active .Key}}is-active{{end}}" href="{{.URL}}">{{t .Label}}</a>{{end}}
   </nav>
   <div class="sidebar__user">
     <span class="avatar">{{initial .User.Email}}</span>
     <span class="sidebar__email">{{.User.Email}}</span>
-    <form method="post" action="/admin/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="btn btn--ghost btn--sm" title="Abmelden">Abmelden</button></form>
+    <form method="post" action="/admin/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="btn btn--ghost btn--sm" title="{{t "nav.logout"}}">{{t "nav.logout"}}</button></form>
   </div>
 </aside>
 <main class="main">

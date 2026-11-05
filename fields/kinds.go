@@ -3,8 +3,6 @@
 package fields
 
 import (
-	"errors"
-	"fmt"
 	"net/mail"
 	"regexp"
 	"strconv"
@@ -12,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/i18n"
 )
 
 // Kind names.
@@ -66,7 +65,7 @@ func asString(raw any) (string, error) {
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64), nil
 	}
-	return "", errors.New("Text erwartet")
+	return "", i18n.M("validation.text")
 }
 
 func stringKind(name string, st content.Storage, check func(f content.Field, s string) (string, error)) content.Kind {
@@ -85,7 +84,7 @@ func stringKind(name string, st content.Storage, check func(f content.Field, s s
 				return nil, nil
 			}
 			if f.Max > 0 && utf8.RuneCountInString(s) > f.Max {
-				return nil, fmt.Errorf("maximal %d Zeichen", f.Max)
+				return nil, i18n.M("validation.maxLength", f.Max)
 			}
 			if check != nil {
 				return check(f, s)
@@ -106,7 +105,7 @@ func Kinds() []content.Kind {
 		stringKind(Slug, content.StoreText, func(_ content.Field, s string) (string, error) {
 			s = strings.ToLower(s)
 			if !slugRe.MatchString(s) {
-				return "", errors.New("nur Kleinbuchstaben, Ziffern und Bindestriche")
+				return "", i18n.M("validation.slug")
 			}
 			return s, nil
 		}),
@@ -116,24 +115,24 @@ func Kinds() []content.Kind {
 					return s, nil
 				}
 			}
-			return "", errors.New("ungültige Auswahl")
+			return "", i18n.M("validation.select")
 		}),
 		stringKind(Image, content.StoreText, func(_ content.Field, s string) (string, error) {
 			if strings.HasPrefix(s, "/media/") || strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") {
 				return s, nil
 			}
-			return "", errors.New("ungültiger Bildpfad")
+			return "", i18n.M("validation.image")
 		}),
 		stringKind(Email, content.StoreText, func(_ content.Field, s string) (string, error) {
 			a, err := mail.ParseAddress(s)
 			if err != nil || a.Address != s {
-				return "", errors.New("ungültige E-Mail-Adresse")
+				return "", i18n.M("validation.email")
 			}
 			return s, nil
 		}),
 		stringKind(URL, content.StoreText, func(_ content.Field, s string) (string, error) {
 			if !safeURL(s) {
-				return "", errors.New("URL muss mit https://, http://, / oder mailto: beginnen")
+				return "", i18n.M("validation.url")
 			}
 			return s, nil
 		}),
@@ -153,11 +152,11 @@ func Kinds() []content.Kind {
 					}
 					n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 					if err != nil {
-						return nil, errors.New("Zahl erwartet")
+						return nil, i18n.M("validation.number")
 					}
 					return n, nil
 				}
-				return nil, errors.New("Zahl erwartet")
+				return nil, i18n.M("validation.number")
 			},
 		},
 		{
@@ -173,7 +172,7 @@ func Kinds() []content.Kind {
 				case string:
 					return v == "true" || v == "on" || v == "1", nil
 				}
-				return nil, errors.New("Ja/Nein erwartet")
+				return nil, i18n.M("validation.bool")
 			},
 			Empty: func(v any) bool { b, _ := v.(bool); return !b },
 		},
@@ -214,7 +213,7 @@ func Kinds() []content.Kind {
 					raw = map[string]any{}
 				}
 				if _, ok := raw.(map[string]any); !ok {
-					return nil, errors.New("Objekt erwartet")
+					return nil, i18n.M("validation.object")
 				}
 				v, err := s.ValidateNested(f.Fields, raw)
 				return keepKey(v, raw), err
@@ -265,7 +264,7 @@ func Kinds() []content.Kind {
 					name, _ := m[BlockTypeKey].(string)
 					b, ok := s.Block(name)
 					if !ok || !allowed[name] {
-						errs[strconv.Itoa(i)] = fmt.Sprintf("unbekanntes Element %q", name)
+						errs[strconv.Itoa(i)] = i18n.M("validation.unknownBlock", name)
 						continue
 					}
 					v, err := s.ValidateNested(b.Fields, m)
@@ -304,11 +303,11 @@ func refID(raw any) (any, error) {
 		}
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n <= 0 {
-			return nil, errors.New("ungültige Verknüpfung")
+			return nil, i18n.M("validation.relation")
 		}
 		return n, nil
 	}
-	return nil, errors.New("ungültige Verknüpfung")
+	return nil, i18n.M("validation.relation")
 }
 
 func asList(raw any) ([]any, error) {
@@ -317,7 +316,7 @@ func asList(raw any) ([]any, error) {
 	}
 	items, ok := raw.([]any)
 	if !ok {
-		return nil, errors.New("Liste erwartet")
+		return nil, i18n.M("validation.list")
 	}
 	return items, nil
 }
@@ -332,5 +331,5 @@ func collect(errs content.Errors, i int, err error) {
 		}
 		return
 	}
-	errs[strconv.Itoa(i)] = err.Error()
+	errs[strconv.Itoa(i)] = err
 }

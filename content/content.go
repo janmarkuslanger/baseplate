@@ -5,6 +5,8 @@ package content
 
 import (
 	"fmt"
+
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"sort"
 	"strings"
 )
@@ -320,8 +322,9 @@ func (s *Schema) Check() error {
 	return nil
 }
 
-// Errors maps field paths (e.g. "seo.metaTitle", "body.2.text") to messages.
-type Errors map[string]string
+// Errors maps field paths (e.g. "seo.metaTitle", "body.2.text") to errors.
+// Validation errors are i18n.Msg values, translated where they are shown.
+type Errors map[string]error
 
 func (e Errors) Error() string {
 	keys := make([]string, 0, len(e))
@@ -331,7 +334,7 @@ func (e Errors) Error() string {
 	sort.Strings(keys)
 	parts := make([]string, len(keys))
 	for i, k := range keys {
-		parts[i] = k + ": " + e[k]
+		parts[i] = k + ": " + e[k].Error()
 	}
 	return strings.Join(parts, "; ")
 }
@@ -359,12 +362,12 @@ func (s *Schema) validateFields(prefix string, fields []Field, data map[string]a
 					errs[path+"."+p] = m
 				}
 			} else {
-				errs[path] = err.Error()
+				errs[path] = err
 			}
 			continue
 		}
 		if f.Required && (v == nil || (k.Empty != nil && k.Empty(v))) {
-			errs[path] = "Pflichtfeld"
+			errs[path] = i18n.M("validation.required")
 			continue
 		}
 		if v != nil {
