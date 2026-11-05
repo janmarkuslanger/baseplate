@@ -3,11 +3,13 @@
 package media
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,6 +24,23 @@ const MaxSize = 20 << 20
 var allowed = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".avif": true, ".pdf": true}
 
 var ErrType = errors.New("Dateityp nicht erlaubt (jpg, png, gif, webp, avif, pdf)")
+var ErrContent = errors.New("Dateiinhalt passt nicht zur Dateiendung")
+
+// sniffed maps extensions to the content type http.DetectContentType
+// reports for them. AVIF is not detected by Go and checked by signature.
+var sniffed = map[string]string{
+	".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+	".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf",
+}
+
+// matchesExt reports whether the first bytes of a file fit its extension.
+func matchesExt(ext string, head []byte) bool {
+	if ext == ".avif" {
+		return len(head) >= 12 && string(head[4:8]) == "ftyp" && (string(head[8:12]) == "avif" || string(head[8:12]) == "avis")
+	}
+	return http.DetectContentType(head) == sniffed[ext]
+}
+
 var ErrSize = fmt.Errorf("Datei größer als %d MB", MaxSize>>20)
 
 type Store struct{ Dir string }
@@ -41,6 +60,16 @@ func (s Store) Save(r io.Reader, filename string) (string, error) {
 	if !allowed[ext] {
 		return "", ErrType
 	}
+	head := make([]byte, 512)
+	hn, err := io.ReadFull(r, head)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	head = head[:hn]
+	if !matchesExt(ext, head) {
+		return "", ErrContent
+	}
+	r = io.MultiReader(bytes.NewReader(head), r)
 	if err := os.MkdirAll(s.Dir, 0o755); err != nil {
 		return "", err
 	}

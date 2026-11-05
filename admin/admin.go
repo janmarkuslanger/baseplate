@@ -716,7 +716,7 @@ func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	url, err := a.Media.Save(file, hdr.Filename)
 	if err != nil {
-		if errors.Is(err, media.ErrType) || errors.Is(err, media.ErrSize) {
+		if errors.Is(err, media.ErrType) || errors.Is(err, media.ErrSize) || errors.Is(err, media.ErrContent) {
 			respondErr(err.Error())
 			return
 		}
