@@ -1,0 +1,170 @@
+{{/* Recursive field editor. Argument: fieldArgs {F, M, E, D}. */}}
+{{define "field"}}
+{{- $a := . -}}
+<div class="field field--{{.F.Kind}}">
+  {{if not (isContainer .F.Kind)}}{{if ne .F.Kind "bool"}}
+  <label class="field__label">{{.F.Label}}{{if .F.Required}} <span class="req">*</span>{{end}}</label>
+  {{end}}{{end}}
+
+  {{if or (eq .F.Kind "text") (eq .F.Kind "url") (eq .F.Kind "email")}}
+    <input class="input" type="{{if eq .F.Kind "email"}}email{{else}}text{{end}}" x-model="{{.M}}" {{if eq .F.Kind "url"}}placeholder="https://…"{{end}}>
+  {{else if eq .F.Kind "slug"}}
+    <div class="input-group">
+      <span class="input-group__prefix">/</span>
+      <input class="input" type="text" x-model="{{.M}}" x-on:input="{{.M}} = slugify({{.M}}, true)">
+      <button type="button" class="btn btn--ghost btn--sm" x-on:click="{{.M}} = slugify(data.title || '')">aus Titel</button>
+    </div>
+  {{else if eq .F.Kind "textarea"}}
+    <textarea class="input" rows="3" x-model="{{.M}}"></textarea>
+  {{else if eq .F.Kind "richtext"}}
+    <div class="rte" x-data="richtext" x-modelable="value" x-model="{{.M}}">
+      <div class="rte__toolbar">
+        <button type="button" x-on:click="cmd('bold')" title="Fett"><b>B</b></button>
+        <button type="button" x-on:click="cmd('italic')" title="Kursiv"><i>I</i></button>
+        <button type="button" x-on:click="block('h2')" title="Überschrift">H2</button>
+        <button type="button" x-on:click="block('h3')" title="Unterüberschrift">H3</button>
+        <button type="button" x-on:click="block('p')" title="Absatz">¶</button>
+        <button type="button" x-on:click="cmd('insertUnorderedList')" title="Liste">• Liste</button>
+        <button type="button" x-on:click="cmd('insertOrderedList')" title="Nummerierte Liste">1. Liste</button>
+        <button type="button" x-on:click="link()" title="Link">Link</button>
+        <button type="button" x-on:click="cmd('removeFormat'); cmd('unlink')" title="Formatierung entfernen">⌫</button>
+      </div>
+      <div class="rte__editor" contenteditable="true" x-ref="editor" x-on:input="sync()" x-on:blur="sync()"></div>
+    </div>
+  {{else if eq .F.Kind "number"}}
+    <input class="input input--short" type="number" step="any" x-model.number="{{.M}}">
+  {{else if eq .F.Kind "bool"}}
+    <label class="switch"><input type="checkbox" x-model="{{.M}}"><span class="switch__track"></span>{{.F.Label}}</label>
+  {{else if eq .F.Kind "select"}}
+    <select class="input" x-model="{{.M}}">
+      {{if not .F.Required}}{{$hasEmpty := false}}{{range .F.Options}}{{if eq .Value ""}}{{$hasEmpty = true}}{{end}}{{end}}{{if not $hasEmpty}}<option value="">– bitte wählen –</option>{{end}}{{end}}
+      {{range .F.Options}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+    </select>
+  {{else if eq .F.Kind "image"}}
+    <div class="image-field" x-data="imageField" x-modelable="value" x-model="{{.M}}">
+      <template x-if="value"><img class="image-field__preview" x-bind:src="value" alt=""></template>
+      <div class="image-field__empty" x-show="!value">Kein Bild</div>
+      <div class="image-field__actions">
+        <label class="btn btn--sm">Hochladen<input type="file" accept="image/*" hidden x-on:change="upload($event)"></label>
+        <button type="button" class="btn btn--sm btn--ghost" x-on:click="openLibrary()">Mediathek</button>
+        <button type="button" class="btn btn--sm btn--ghost" x-show="value" x-on:click="value = ''">Entfernen</button>
+        <span class="muted" x-show="busy">lädt…</span>
+        <span class="error-text" x-text="error"></span>
+      </div>
+      <div class="modal" x-show="library" x-cloak x-on:keydown.escape.window="library = false">
+        <div class="modal__panel">
+          <header class="modal__head"><h3>Mediathek</h3><button type="button" class="btn btn--ghost btn--sm" x-on:click="library = false">Schließen</button></header>
+          <div class="media-grid">
+            <template x-for="f in files" :key="f.URL">
+              <button type="button" class="media-grid__item" x-show="f.IsImage" x-on:click="value = f.URL; library = false"><img x-bind:src="f.URL" alt="" loading="lazy"></button>
+            </template>
+            <p class="muted" x-show="files.length === 0">Noch keine Bilder hochgeladen.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {{else if eq .F.Kind "relation"}}
+    <div class="rel" x-data="relationField({{json (refOptions .F.Ref)}}, {{.F.Many}})" x-modelable="value" x-model="{{.M}}" x-on:click.outside="open = false">
+      <template x-if="many">
+        <ul class="rel__list">
+          <template x-for="(id, i) in value" :key="id">
+            <li class="rel__chip">
+              <span x-text="label(id)"></span>
+              <button type="button" class="icon-btn" title="nach oben" x-on:click="move(i, -1)">↑</button>
+              <button type="button" class="icon-btn" title="nach unten" x-on:click="move(i, 1)">↓</button>
+              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="remove(i)">✕</button>
+            </li>
+          </template>
+        </ul>
+      </template>
+      <div class="rel__picker">
+        <input class="input" type="search" x-model="q" x-on:focus="open = true" x-on:keydown.escape="open = false"
+               x-bind:placeholder="many ? 'Hinzufügen – suchen…' : (value ? label(value) : 'Auswählen – suchen…')">
+        <button type="button" class="btn btn--ghost btn--sm" x-show="!many && value" x-on:click="value = null">Entfernen</button>
+        <div class="rel__menu" x-show="open" x-cloak>
+          <template x-for="o in matches()" :key="o.Value">
+            <button type="button" class="rel__option" x-on:click="pick(o)" x-text="o.Label"></button>
+          </template>
+          <p class="muted rel__empty" x-show="matches().length === 0">Keine Treffer</p>
+        </div>
+      </div>
+    </div>
+  {{else if eq .F.Kind "group"}}
+    <fieldset class="group">
+      {{if .F.Label}}<legend class="group__legend">{{.F.Label}}</legend>{{end}}
+      {{range .F.Fields}}{{template "field" (child $a .)}}{{end}}
+    </fieldset>
+  {{else if eq .F.Kind "list"}}
+    <div class="list-field">
+      <div class="field__label">{{.F.Label}}{{if .F.Required}} <span class="req">*</span>{{end}}</div>
+      <template x-for="(it{{.D}}, i{{.D}}) in {{.M}}" :key="it{{.D}}._key">
+        <div class="card card--item">
+          <div class="card__bar">
+            <span class="card__title" x-text="'#' + (i{{.D}} + 1)"></span>
+            <span class="card__tools">
+              <button type="button" class="icon-btn" title="nach oben" x-on:click="move({{.M}}, i{{.D}}, -1)">↑</button>
+              <button type="button" class="icon-btn" title="nach unten" x-on:click="move({{.M}}, i{{.D}}, 1)">↓</button>
+              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="{{.M}}.splice(i{{.D}}, 1)">✕</button>
+            </span>
+          </div>
+          <div class="card__body">{{range .F.Fields}}{{template "field" (item $a .)}}{{end}}</div>
+        </div>
+      </template>
+      <button type="button" class="btn btn--ghost btn--add" x-on:click="{{.M}}.push(withKey({{json (skeleton .F.Fields)}}))">+ Eintrag hinzufügen</button>
+    </div>
+  {{else if eq .F.Kind "blocks"}}
+    {{/* Block editors are rendered once per block type (see "block-templates")
+         and inserted per item, so nesting depth is unbounded. x-init inserts
+         them once; x-html would re-insert (and re-init) on reactive changes. Each card opens
+         a scope with "item" (the block), "list" (the list holding it; captured
+         at init because "item" is shadowed inside) and "path" (error path). */}}
+    <div class="blocks-field">
+      <div class="field__label">{{.F.Label}}</div>
+      <template x-for="(child, ci) in {{.M}}" :key="child._key">
+        <div class="card card--block" x-data="{open: true, item: child, list: {{.M}}, path: {{.E}} + '.' + ci}"
+             x-on:dragover.prevent.stop="dragOver($event)"
+             x-on:dragleave.stop="dragLeave($event)"
+             x-on:drop.prevent.stop="drop($event, list, ci)">
+          <div class="card__bar">
+            <span class="drag-handle" title="Ziehen zum Sortieren oder Verschieben" draggable="true" x-on:dragstart.stop="dragStart($event, list, ci)" x-on:dragend="dragEnd()">⋮⋮</span>
+            <button type="button" class="card__title card__toggle" x-on:click="open = !open" x-text="blockLabel(item._type) + (item.title ? ' – ' + item.title : '')"></button>
+            <span class="card__tools">
+              <button type="button" class="icon-btn" title="nach oben" x-on:click="move(list, ci, -1)">↑</button>
+              <button type="button" class="icon-btn" title="nach unten" x-on:click="move(list, ci, 1)">↓</button>
+              <button type="button" class="icon-btn" title="duplizieren" x-on:click="duplicate(list, ci)">⧉</button>
+              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="list.splice(ci, 1)">✕</button>
+            </span>
+          </div>
+          <p class="field__error" x-show="err(path)" x-text="err(path)"></p>
+          <div class="card__body" x-show="open" x-init="mountBlock($el, item._type)"></div>
+        </div>
+      </template>
+      <div class="blocks-field__drop"
+           x-on:dragover.prevent.stop="dragOver($event)"
+           x-on:dragleave.stop="dragLeave($event)"
+           x-on:drop.prevent.stop="drop($event, {{.M}}, {{.M}}.length)">
+        <p class="muted" x-show="{{.M}}.length === 0">Noch keine Inhalte. Element hinzufügen oder hierher ziehen.</p>
+        <div class="add-block" x-data="{menu: false}">
+          <button type="button" class="btn btn--ghost btn--add" x-on:click="menu = !menu">+ Element hinzufügen</button>
+          <div class="add-block__menu" x-show="menu" x-cloak x-on:click.outside="menu = false">
+            {{range blocksFor .F}}<button type="button" class="add-block__item" x-on:click="{{$a.M}}.push(newBlock('{{.Name}}')); menu = false">{{.Label}}</button>{{end}}
+          </div>
+        </div>
+      </div>
+    </div>
+  {{else}}
+    {{kindField .}}
+  {{end}}
+
+  {{with .F.Help}}<p class="field__help">{{.}}</p>{{end}}
+  {{if and .F.Max (not (isContainer .F.Kind))}}<p class="field__counter" x-bind:class="{'is-over': ({{.M}}||'').length > {{.F.Max}}}" x-text="({{.M}}||'').length + ' / {{.F.Max}}'"></p>{{end}}
+  {{if not (isContainer .F.Kind)}}<p class="field__error" x-show="err({{.E}})" x-text="err({{.E}})"></p>{{end}}
+</div>
+{{end}}
+
+{{/* One editor template per block type; fields bind to "item" / "path". */}}
+{{define "block-templates"}}
+{{range blocksFor (emptyField)}}{{$b := .}}
+<template id="bp-block-{{$b.Name}}">{{range $b.Fields}}{{template "field" (blockField .)}}{{end}}</template>
+{{end}}
+{{end}}

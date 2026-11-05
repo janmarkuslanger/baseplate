@@ -1,0 +1,26 @@
+{{define "baseplate/head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Meta.Title}}</title>
+{{with .Meta.Description}}<meta name="description" content="{{.}}">{{end}}
+<link rel="canonical" href="{{.Meta.Canonical}}">
+<meta name="robots" content="{{.Meta.Robots}}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{.Meta.Canonical}}">
+<meta property="og:title" content="{{.Meta.OGTitle}}">
+{{with .Meta.OGDescription}}<meta property="og:description" content="{{.}}">{{end}}
+{{with .Meta.OGImage}}<meta property="og:image" content="{{.}}"><meta name="twitter:card" content="summary_large_image">{{end}}
+{{with .Site.siteName}}<meta property="og:site_name" content="{{.}}">{{end}}
+<link rel="alternate" type="text/markdown" href="{{.MarkdownURL}}">
+{{end}}
+
+{{define "block/heading"}}{{if eq (print .Block.level) "h3"}}<h3>{{.Block.text}}</h3>{{else}}<h2>{{.Block.text}}</h2>{{end}}{{end}}
+
+{{define "block/richtext"}}<div class="bp-richtext">{{richtext .Block.html}}</div>{{end}}
+
+{{define "block/image"}}<figure class="bp-image"><img src="{{.Block.src}}" alt="{{.Block.alt}}" loading="lazy">{{with .Block.caption}}<figcaption>{{.}}</figcaption>{{end}}</figure>{{end}}
+
+{{define "block/article"}}<article class="bp-article">{{with .Block.title}}<h2>{{.}}</h2>{{end}}
+{{blocks .Block.children .Page}}</article>{{end}}
+
+{{define "block/cta"}}<div class="bp-cta">{{with .Block.text}}<p>{{.}}</p>{{end}}<a class="bp-button" href="{{.Block.href}}">{{.Block.label}}</a></div>{{end}}

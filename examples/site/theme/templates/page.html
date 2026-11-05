@@ -1,0 +1,18 @@
+{{define "page"}}<!doctype html>
+<html lang="{{with .Site.language}}{{.}}{{else}}de{{end}}">
+<head>
+  {{template "baseplate/head" .}}
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="/">{{.Site.siteName}}</a>
+    <nav>{{range .Nav}}{{if eq .Parent 0}}<a href="{{.URL}}"{{if eq .URL $.URL}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}</nav>
+  </header>
+  <main class="content">
+    <h1>{{.Data.title}}</h1>
+    {{blocks .Data.body .}}
+  </main>
+  <footer class="site-footer">© {{.Site.siteName}}</footer>
+</body>
+</html>{{end}}

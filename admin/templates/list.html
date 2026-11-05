@@ -1,0 +1,43 @@
+{{define "content"}}
+{{$t := .Page.Type}}
+<header class="page-head">
+  <div><h1>{{$t.LabelPlural}}</h1><p class="muted">{{.Page.Total}} Einträge</p></div>
+  <a class="btn btn--primary" href="/admin/c/{{$t.Name}}/new">+ {{$t.Label}} anlegen</a>
+</header>
+<form class="toolbar" method="get" action="/admin/c/{{$t.Name}}" hx-get="/admin/c/{{$t.Name}}" hx-trigger="input changed delay:300ms from:input, change from:select" hx-target="#rows" hx-select="#rows" hx-swap="outerHTML" hx-push-url="true">
+  <input class="input input--search" type="search" name="q" value="{{.Page.Query.Search}}" placeholder="Suchen…">
+  <select class="input input--short" name="status">
+    <option value="">Alle Status</option>
+    <option value="published" {{if eq .Page.Query.Status "published"}}selected{{end}}>Veröffentlicht</option>
+    <option value="draft" {{if eq .Page.Query.Status "draft"}}selected{{end}}>Entwurf</option>
+  </select>
+</form>
+<div id="rows" class="card card--table">
+  {{if .Page.Rows}}
+  <table class="table">
+    <thead><tr><th>Titel</th>{{if $t.Routable}}<th>URL-Pfad</th>{{end}}<th>Status</th><th>Geändert</th></tr></thead>
+    <tbody>
+    {{range .Page.Rows}}
+      <tr class="table__row" onclick="location.href='/admin/c/{{$t.Name}}/{{.Entry.ID}}'">
+        <td><a href="/admin/c/{{$t.Name}}/{{.Entry.ID}}" class="table__title">{{.Title}}</a></td>
+        {{if $t.Routable}}<td class="muted mono">/{{.Entry.Slug}}</td>{{end}}
+        <td>{{if eq .Entry.Status "published"}}<span class="pill pill--ok">Veröffentlicht</span>{{else}}<span class="pill">Entwurf</span>{{end}}</td>
+        <td class="muted" title="{{date .Entry.UpdatedAt}}">{{ago .Entry.UpdatedAt}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{if or .Page.HasPrev .Page.HasNext}}
+  <div class="pager">
+    {{if .Page.HasPrev}}<a class="btn btn--ghost btn--sm" href="?page={{.Page.Prev}}&q={{.Page.Query.Search}}&status={{.Page.Query.Status}}">← zurück</a>{{end}}
+    {{if .Page.HasNext}}<a class="btn btn--ghost btn--sm" href="?page={{.Page.Next}}&q={{.Page.Query.Search}}&status={{.Page.Query.Status}}">weiter →</a>{{end}}
+  </div>
+  {{end}}
+  {{else}}
+  <div class="empty">
+    <p><strong>Noch nichts hier.</strong></p>
+    <p class="muted">{{if .Page.Query.Search}}Keine Treffer für „{{.Page.Query.Search}}“.{{else}}Lege den ersten Eintrag an.{{end}}</p>
+  </div>
+  {{end}}
+</div>
+{{end}}

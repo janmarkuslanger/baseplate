@@ -1,0 +1,23 @@
+{{define "content"}}
+<header class="page-head">
+  <div><h1>Medien</h1><p class="muted">Bilder und PDFs für alle Inhalte. Erlaubt: jpg, png, gif, webp, avif, pdf (max. 20 MB).</p></div>
+  <form method="post" action="/admin/media" enctype="multipart/form-data" x-data>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label class="btn btn--primary">Datei hochladen<input type="file" name="file" hidden x-on:change="$el.form.submit()"></label>
+  </form>
+</header>
+{{if .Page}}
+<div class="media-grid media-grid--large">
+  {{range .Page}}
+  <figure class="media-card">
+    {{if .IsImage}}<img src="{{.URL}}" alt="" loading="lazy">{{else}}<div class="media-card__file">PDF</div>{{end}}
+    <figcaption><span class="mono" title="{{.Name}}">{{.Name}}</span><span class="muted">{{size .Size}}</span>
+      <button type="button" class="btn btn--ghost btn--sm" x-data x-on:click="navigator.clipboard.writeText({{json .URL}}); $el.textContent = 'kopiert ✓'">URL kopieren</button>
+    </figcaption>
+  </figure>
+  {{end}}
+</div>
+{{else}}
+<div class="card empty"><p><strong>Noch keine Dateien.</strong></p><p class="muted">Lade das erste Bild hoch – es steht danach in allen Bildfeldern zur Auswahl.</p></div>
+{{end}}
+{{end}}
