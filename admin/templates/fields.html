@@ -152,6 +152,8 @@
         </div>
       </div>
     </div>
+  {{else}}
+    {{kindField .}}
   {{end}}
 
   {{with .F.Help}}<p class="field__help">{{.}}</p>{{end}}

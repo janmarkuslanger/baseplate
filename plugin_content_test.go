@@ -123,3 +123,47 @@ func TestPluginContentInAdmin(t *testing.T) {
 		t.Errorf("news page not built: %q", body)
 	}
 }
+
+// colorPlugin adds a field kind with its own admin input.
+type colorPlugin struct{}
+
+func (colorPlugin) Name() string { return "color" }
+func (colorPlugin) Register(r *plugin.Registry) error {
+	if err := r.Kind(content.Kind{
+		Name: "color", Storage: content.StoreText,
+		Normalize: func(_ *content.Schema, _ content.Field, raw any) (any, error) {
+			s, _ := raw.(string)
+			if s == "" {
+				return nil, nil
+			}
+			return s, nil
+		},
+		AdminTemplate: `<input type="color" class="color-input" x-model="{{.M}}">`,
+	}); err != nil {
+		return err
+	}
+	return r.Extend("page", content.Field{Name: "accent", Label: "Akzentfarbe", Kind: "color"})
+}
+
+func TestPluginKindAdminTemplate(t *testing.T) {
+	dir := t.TempDir()
+	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	app.Use(colorPlugin{})
+	if err := app.Run(context.Background(), []string{"user", "add", "a@b.de"}, strings.NewReader("sehr-geheim-123\n"), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(appHandler(t, app))
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar}
+	c.PostForm(srv.URL+"/admin/login", url.Values{"email": {"a@b.de"}, "password": {"sehr-geheim-123"}})
+	res, err := c.Get(srv.URL + "/admin/c/page/new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(string(b), `<input type="color" class="color-input" x-model="data.accent">`) || !strings.Contains(string(b), "Akzentfarbe") {
+		t.Errorf("plugin kind input missing")
+	}
+}

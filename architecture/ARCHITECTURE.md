@@ -78,4 +78,5 @@ plugins/* ─▶ plugin, content, fields
 | Admin pages | submissions |
 | Public routes | form endpoint |
 | Hooks | save, build |
+| Data migrations | renamed fields, content fixes |
 | Theme | templates + assets per customer |

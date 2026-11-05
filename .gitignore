@@ -5,3 +5,4 @@
 examples/site/data/
 examples/site/dist/
 /.slow-down/
+/.claude/settings.local.json

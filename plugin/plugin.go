@@ -94,6 +94,7 @@ type Registry struct {
 	adminTemplates []fs.FS
 	funcs          TemplateFuncs
 	migrations     []storage.Migration
+	dataMigrations []DataMigration
 	hooks          map[Event][]Hook
 }
 
@@ -133,6 +134,19 @@ func (r *Registry) PublicRoute(rt Route)          { r.routes = append(r.routes, 
 func (r *Registry) On(e Event, h Hook)            { r.hooks[e] = append(r.hooks[e], h) }
 func (r *Registry) Migration(m storage.Migration) { r.migrations = append(r.migrations, m) }
 
+// DataMigration changes stored content after a schema change, e.g. copying
+// values of a renamed field. It runs once, after tables are synced, using the
+// regular entry methods of the store. Name must be unique and stable.
+// Write migrations so they can be re-run safely: a failed run is retried on
+// the next start.
+type DataMigration struct {
+	Name string
+	Run  func(ctx context.Context, st storage.Store) error
+}
+
+// DataMigration registers a data migration (see DataMigration).
+func (r *Registry) DataMigration(m DataMigration) { r.dataMigrations = append(r.dataMigrations, m) }
+
 // Templates adds frontend templates. Later registrations override earlier
 // ones with the same name, so the customer theme (registered last) wins.
 func (r *Registry) Templates(f fs.FS) { r.templates = append(r.templates, f) }
@@ -157,6 +171,7 @@ func (r *Registry) TemplateFS() []fs.FS             { return r.templates }
 func (r *Registry) AdminTemplateFS() []fs.FS        { return r.adminTemplates }
 func (r *Registry) TemplateFuncs() TemplateFuncs    { return r.funcs }
 func (r *Registry) Migrations() []storage.Migration { return r.migrations }
+func (r *Registry) DataMigrations() []DataMigration { return r.dataMigrations }
 
 // Run calls all hooks for e in registration order and stops at the first error.
 func (r *Registry) Run(ctx context.Context, e Event, entry *storage.Entry) error {

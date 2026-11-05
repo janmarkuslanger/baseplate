@@ -100,14 +100,27 @@ func (News) Register(r *plugin.Registry) error {
 | Registry method | Purpose |
 |---|---|
 | `ContentType`, `Extend` | new content types, extra fields on existing ones (e.g. `page`) |
-| `Kind` | new field kinds |
+| `Kind` | new field kinds (`Storage` = column type, `AdminTemplate` = admin input) |
 | `Block` (+ `Templates`) | new content elements; frontend template `block/<name>` |
 | `Generator` | extra build output (archives, feeds, …) |
 | `AdminPage` (+ `AdminTemplates`) | custom admin screens |
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |
+| `DataMigration` | one-time content changes after schema changes (e.g. renamed fields) |
 | `On` | hooks: `entry.beforeSave`, `entry.afterSave`, `build.after` |
 | `Funcs` | frontend template functions |
+
+### Relations
+
+```go
+content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
+	Ref: "category", Many: true, Inverse: "articles"}
+```
+
+- `Many` false → one target, true → ordered list
+- `Inverse` adds a read-only field on the target (`.Data.articles` in its template)
+- templates get resolved targets: `{{range .Data.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}`
+- deleting a target removes the links; the admin shows "Verwendet in" and warns before deleting
 
 `plugins/forms` is a complete example that uses most of these.
 

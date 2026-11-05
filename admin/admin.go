@@ -42,6 +42,7 @@ type Admin struct {
 	Builder *build.Builder
 	Logger  *slog.Logger
 
+	base    *template.Template
 	pages   map[string]*template.Template
 	plugins map[string]*template.Template
 
@@ -63,6 +64,15 @@ func (a *Admin) Init() error {
 	if err != nil {
 		return err
 	}
+	for _, k := range a.Reg.Schema.Kinds() {
+		if k.AdminTemplate == "" {
+			continue
+		}
+		if _, err := base.New("kind/" + k.Name).Parse(k.AdminTemplate); err != nil {
+			return fmt.Errorf("admin template of kind %s: %w", k.Name, err)
+		}
+	}
+	a.base = base
 	a.pages = map[string]*template.Template{}
 	for _, name := range []string{"login", "dashboard", "list", "edit", "media"} {
 		t, err := template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html")
@@ -365,6 +375,36 @@ type editPage struct {
 	UsedIn   []usedIn
 }
 
+// relationLabel names the relation field of a referrer: its label, or
+// "<block> › <field>" when the field sits inside a block.
+func (a *Admin) relationLabel(rt *content.Type, ref storage.Referrer, target string) string {
+	if !ref.Nested {
+		for _, f := range rt.Fields {
+			if f.Name == ref.Field && f.Label != "" {
+				return f.Label
+			}
+		}
+		return ref.Field
+	}
+	for _, b := range a.Reg.Schema.AllBlocks() {
+		for _, f := range b.Fields {
+			if f.Name == ref.Field && f.Ref == target {
+				return b.Label + " › " + firstNonEmpty(f.Label, f.Name)
+			}
+		}
+	}
+	return ref.Field
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // usedIn is an entry whose relation points at the edited entry.
 type usedIn struct {
 	Type, Title, Field, URL string
@@ -387,11 +427,7 @@ func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []use
 			continue
 		}
 		u := usedIn{Type: rt.Label, Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
-		for _, f := range rt.Fields {
-			if f.Name == ref.Field && f.Label != "" {
-				u.Field = f.Label
-			}
-		}
+		u.Field = a.relationLabel(rt, ref, t.Name)
 		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
 			u.Title = fmt.Sprint(orDash(src.Data[rt.Title()]))
 		}

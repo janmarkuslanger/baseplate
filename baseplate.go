@@ -214,6 +214,12 @@ func (a *App) Setup(ctx context.Context) error {
 	if err := st.UseSchema(ctx, reg.Schema); err != nil {
 		return err
 	}
+	for _, m := range reg.DataMigrations() {
+		m := m
+		if err := st.RunOnce(ctx, m.Name, func(ctx context.Context) error { return m.Run(ctx, st) }); err != nil {
+			return err
+		}
+	}
 	mediaStore := media.Store{Dir: filepath.Join(c.DataDir, "media")}
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}

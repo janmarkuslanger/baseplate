@@ -101,6 +101,9 @@ type Store interface {
 	// UseSchema creates missing tables and columns for the content schema.
 	// It must be called before any entry method.
 	UseSchema(ctx context.Context, s *content.Schema) error
+	// RunOnce runs fn unless a run with this name was recorded before; the
+	// run is recorded only if fn succeeds. Used for data migrations.
+	RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error
 	Close() error
 
 	CreateEntry(ctx context.Context, e *Entry) error

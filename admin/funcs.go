@@ -76,6 +76,18 @@ func (a *Admin) funcs() template.FuncMap {
 			return fieldArgs{F: f, M: "item." + f.Name, E: "path+'." + f.Name + "'"}
 		},
 		"emptyField": func() content.Field { return content.Field{} },
+		// kindField renders the AdminTemplate of a plugin kind.
+		"kindField": func(args fieldArgs) (template.HTML, error) {
+			t := a.base.Lookup("kind/" + args.F.Kind)
+			if t == nil {
+				return template.HTML(`<p class="field__error">Feldtyp „` + template.HTMLEscapeString(args.F.Kind) + `“ hat kein Admin-Template.</p>`), nil
+			}
+			var buf strings.Builder
+			if err := t.Execute(&buf, args); err != nil {
+				return "", err
+			}
+			return template.HTML(buf.String()), nil
+		},
 		"blocksFor":  func(f content.Field) []content.Block { return a.Reg.Schema.Blocks(f) },
 		"refOptions": a.refOptions,
 		"skeleton":   func(fs []content.Field) map[string]any { return skeleton(fs, nil) },

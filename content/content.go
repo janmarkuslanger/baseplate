@@ -133,6 +133,12 @@ type Kind struct {
 	Normalize func(s *Schema, f Field, raw any) (any, error)
 	// Empty reports whether a normalized value counts as empty for Required.
 	Empty func(v any) bool
+	// AdminTemplate is the html/template source of the admin input for
+	// kinds that are not built in. It receives {F, M, E}: the Field, the
+	// Alpine.js expression of the bound value (use x-model="{{.M}}") and
+	// the expression of its error path. Label, help and errors are
+	// rendered around it.
+	AdminTemplate string
 }
 
 // Schema holds all registered kinds, types and blocks.
@@ -203,6 +209,16 @@ func (s *Schema) AddBlock(b Block) error {
 	}
 	s.blocks[b.Name] = b
 	return nil
+}
+
+// Kinds returns all registered kinds, sorted by name.
+func (s *Schema) Kinds() []Kind {
+	out := make([]Kind, 0, len(s.kinds))
+	for _, k := range s.kinds {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // Kind returns a registered kind.

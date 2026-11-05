@@ -147,6 +147,22 @@ func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
 	return nil
 }
 
+func (s *SQLStore) RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error {
+	key := "data:" + name
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, key).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	if err := fn(ctx); err != nil {
+		return fmt.Errorf("data migration %s: %w", name, err)
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, key, s.now().Unix())
+	return err
+}
+
 // splitStatements splits a script on ";" at line ends. Migration scripts
 // must not contain semicolons inside string literals.
 func splitStatements(script string) []string {
