@@ -287,3 +287,69 @@ func TestStableComponentIDs(t *testing.T) {
 		t.Error("other entry was modified")
 	}
 }
+
+func TestRenamedFrom(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	schema := func(renamed bool) *content.Schema {
+		name := func(old, new string) (string, string) {
+			if renamed {
+				return new, old
+			}
+			return old, ""
+		}
+		teaser, teaserFrom := name("teaser", "summary")
+		links, linksFrom := name("links", "references")
+		meta, metaFrom := name("meta", "info")
+		cats, catsFrom := name("cats", "categories")
+		body, bodyFrom := name("body", "content")
+		reg := plugin.NewRegistry(plugin.Services{Store: s})
+		reg.Use(fields.Core{})
+		reg.ContentType(content.Type{Name: "category", Fields: []content.Field{{Name: "title", Kind: fields.Text}}})
+		reg.ContentType(content.Type{Name: "news", Fields: []content.Field{
+			{Name: teaser, RenamedFrom: teaserFrom, Kind: fields.Text},
+			{Name: links, RenamedFrom: linksFrom, Kind: fields.List, Fields: []content.Field{
+				{Name: "label", Kind: fields.Text},
+				{Name: "extra", Kind: fields.Group, Fields: []content.Field{{Name: "note", Kind: fields.Text}}},
+			}},
+			{Name: meta, RenamedFrom: metaFrom, Kind: fields.Group, Fields: []content.Field{{Name: "author", Kind: fields.Text}}},
+			{Name: cats, RenamedFrom: catsFrom, Kind: fields.Relation, Ref: "category", Many: true},
+			{Name: body, RenamedFrom: bodyFrom, Kind: fields.Blocks},
+		}})
+		return reg.Schema
+	}
+	if err := s.UseSchema(ctx, schema(false)); err != nil {
+		t.Fatal(err)
+	}
+	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
+	s.CreateEntry(ctx, cat)
+	n := &storage.Entry{Type: "news", Data: map[string]any{
+		"teaser": "Kurz",
+		"links":  []any{map[string]any{"label": "L", "extra": map[string]any{"note": "tief"}}},
+		"meta":   map[string]any{"author": "Ada"},
+		"cats":   []any{cat.ID},
+		"body":   []any{map[string]any{"_type": "heading", "text": "H"}},
+	}}
+	if err := s.CreateEntry(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ { // second start: rename is a no-op
+		if err := s.UseSchema(ctx, schema(true)); err != nil {
+			t.Fatalf("start %d: %v", i, err)
+		}
+		got, err := s.GetEntry(ctx, "news", n.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := got.Data
+		link := d["references"].([]any)[0].(map[string]any)
+		if d["summary"] != "Kurz" || link["label"] != "L" || link["extra"].(map[string]any)["note"] != "tief" ||
+			d["info"].(map[string]any)["author"] != "Ada" || len(d["categories"].([]any)) != 1 ||
+			d["content"].([]any)[0].(map[string]any)["text"] != "H" {
+			t.Fatalf("start %d: data not carried over: %#v", i, d)
+		}
+	}
+	if storage.ComponentTable(storage.EntryTable("news"), "references") != "ct_news__references" || storage.Column("metaTitle") != "meta_title" {
+		t.Error("naming helpers")
+	}
+}

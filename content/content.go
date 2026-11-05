@@ -33,6 +33,9 @@ type Field struct {
 	Blocks []string
 	// Fields are the sub-fields of the "group" and "list" kinds.
 	Fields []Field
+	// RenamedFrom is the field's previous name. On start, stored data under
+	// the old name is moved to the new one (once; afterwards it is a no-op).
+	RenamedFrom string
 }
 
 type Option struct {

@@ -63,6 +63,7 @@ plugins/* ─▶ plugin, content, fields
 
 - tables follow the code schema; created/extended on start, never dropped
 - kind change of an existing field → startup error
+- `RenamedFrom` moves data on start; table/column names are stable API (`storage.EntryTable` …)
 - save = one transaction (row, components, relations)
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
 - delete removes components and all relations from/to the entry

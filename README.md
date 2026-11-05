@@ -108,7 +108,7 @@ func (News) Register(r *plugin.Registry) error {
 | `AdminPage` (+ `AdminTemplates`) | custom admin screens |
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |
-| `DataMigration` | one-time content changes after schema changes (e.g. renamed fields) |
+| `DataMigration` | one-time content changes after schema changes |
 | `On` | hooks: `entry.beforeSave`, `entry.afterSave`, `build.after` |
 | `Funcs` | frontend template functions |
 
@@ -123,6 +123,16 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 - `Inverse` adds a read-only field on the target (`.Data.articles` in its template)
 - templates get resolved targets: `{{range .Data.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}`
 - deleting a target removes the links; the admin shows "Verwendet in" and warns before deleting
+
+### Schema changes
+
+| Change | How |
+|---|---|
+| add field | nothing – column/table is created on start |
+| rename field | `content.Field{Name: "summary", RenamedFrom: "teaser", ...}` |
+| anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names |
+| remove field | remove it; the column stays, data is kept |
+| change kind | startup error – rename the field and migrate the data |
 
 `plugins/forms` is a complete example that uses most of these.
 

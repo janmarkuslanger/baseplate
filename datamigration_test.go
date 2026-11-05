@@ -29,7 +29,7 @@ func (p newsV2) Register(r *plugin.Registry) error {
 	r.DataMigration(plugin.DataMigration{Name: "news: teaser → summary", Run: func(ctx context.Context, st storage.Store) error {
 		*p.runs++
 		// The old column is no longer in the schema, so it is read via SQL.
-		_, err := st.DB().ExecContext(ctx, `UPDATE ct_news SET summary = teaser WHERE summary IS NULL`)
+		_, err := st.DB().ExecContext(ctx, `UPDATE `+storage.EntryTable("news")+` SET `+storage.Column("summary")+` = teaser WHERE summary IS NULL`)
 		return err
 	}})
 	return r.ContentType(content.Type{Name: "news", Fields: []content.Field{{Name: "summary", Kind: fields.Text}}})

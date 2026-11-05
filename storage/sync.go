@@ -17,6 +17,8 @@ type dialectSQL struct {
 	// columns returns the existing columns of a table (lowercased name →
 	// uppercased type); an empty map means the table does not exist.
 	columns func(ctx context.Context, q querier, table string) (map[string]string, error)
+	// tables lists all table names.
+	tables func(ctx context.Context, q querier) ([]string, error)
 }
 
 var dialects = map[Dialect]dialectSQL{
@@ -34,6 +36,9 @@ var dialects = map[Dialect]dialectSQL{
 			}
 			return scanColumns(rows)
 		},
+		tables: func(ctx context.Context, q querier) ([]string, error) {
+			return scanNames(q.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`))
+		},
 	},
 	MySQL: {
 		idPK:     "BIGINT AUTO_INCREMENT PRIMARY KEY",
@@ -49,7 +54,26 @@ var dialects = map[Dialect]dialectSQL{
 			}
 			return scanColumns(rows)
 		},
+		tables: func(ctx context.Context, q querier) ([]string, error) {
+			return scanNames(q.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()`))
+		},
 	},
+}
+
+func scanNames(rows *sql.Rows, err error) ([]string, error) {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
 }
 
 func scanColumns(rows *sql.Rows) (map[string]string, error) {
@@ -70,6 +94,9 @@ func scanColumns(rows *sql.Rows) (map[string]string, error) {
 // error, so data is never converted silently.
 func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 	d := dialects[s.dialect]
+	if err := s.renames(ctx, l); err != nil {
+		return err
+	}
 	for _, name := range l.order {
 		t := l.tables[name]
 		existing, err := d.columns(ctx, s.db, t.Name)
@@ -125,4 +152,93 @@ func sameType(have, want string) bool {
 		return s
 	}
 	return norm(have) == norm(want)
+}
+
+// renames applies RenamedFrom: columns, component tables (with their
+// nested tables) and link rows move from the old field name to the new one.
+// A rename whose old name no longer exists has already happened.
+func (s *SQLStore) renames(ctx context.Context, l *layout) error {
+	d := dialects[s.dialect]
+	for _, name := range l.order { // parents before children
+		t := l.tables[name]
+		for _, f := range t.Fields {
+			if f.RenamedFrom == "" || f.RenamedFrom == f.Name {
+				continue
+			}
+			switch l.fieldStorage(f) {
+			case content.StoreGroup, content.StoreList:
+				if err := s.renameTables(ctx, d, ComponentTable(t.Name, f.RenamedFrom), ComponentTable(t.Name, f.Name)); err != nil {
+					return err
+				}
+				if _, err := s.db.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
+					return err
+				}
+			case content.StoreBlocks:
+				if _, err := s.db.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
+					return err
+				}
+			case content.StoreRelation:
+				if _, err := s.db.ExecContext(ctx, `UPDATE relations SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
+					return err
+				}
+			default:
+				cols, err := d.columns(ctx, s.db, t.Name)
+				if err != nil {
+					return err
+				}
+				oldCol, newCol := Column(f.RenamedFrom), Column(f.Name)
+				if _, ok := cols[oldCol]; !ok {
+					continue
+				}
+				if _, ok := cols[newCol]; ok {
+					return fmt.Errorf("storage: cannot rename %s.%s to %s: both columns exist", t.Name, oldCol, newCol)
+				}
+				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, t.Name, oldCol, newCol)); err != nil {
+					return fmt.Errorf("rename %s.%s: %w", t.Name, oldCol, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// renameTables renames a component table and every table nested below it
+// (same prefix), and updates the link tables.
+func (s *SQLStore) renameTables(ctx context.Context, d dialectSQL, from, to string) error {
+	all, err := d.tables(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	exists := map[string]bool{}
+	for _, n := range all {
+		exists[n] = true
+	}
+	if exists[to] {
+		if exists[from] {
+			return fmt.Errorf("storage: cannot rename %s to %s: both tables exist", from, to)
+		}
+		return nil // already renamed
+	}
+	for _, old := range all {
+		if old != from && !strings.HasPrefix(old, from+"__") {
+			continue
+		}
+		renamed := to + strings.TrimPrefix(old, from)
+		if !identRe.MatchString(renamed) {
+			return fmt.Errorf("storage: renamed table name %q is invalid or too long", renamed)
+		}
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, old, renamed)); err != nil {
+			return fmt.Errorf("rename table %s: %w", old, err)
+		}
+		for _, stmt := range []string{
+			`UPDATE components SET component_table = ? WHERE component_table = ?`,
+			`UPDATE components SET owner_table = ? WHERE owner_table = ?`,
+			`UPDATE relations SET owner_table = ? WHERE owner_table = ?`,
+		} {
+			if _, err := s.db.ExecContext(ctx, stmt, renamed, old); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -48,8 +48,24 @@ type layout struct {
 	order  []string
 }
 
-func entryTable(typ string) string  { return "ct_" + typ }
-func blockTable(name string) string { return "cb_" + name }
+// Table and column names are part of the public API: data migrations use
+// them to reach data the schema no longer describes. They stay stable.
+
+// EntryTable is the table of a content type, e.g. "ct_news".
+func EntryTable(typ string) string { return "ct_" + typ }
+
+// BlockTable is the table of a block, e.g. "cb_heading".
+func BlockTable(name string) string { return "cb_" + name }
+
+// ComponentTable is the table holding a group or list field of the given
+// owner table, e.g. ComponentTable(EntryTable("page"), "seo") = "ct_page__seo".
+func ComponentTable(ownerTable, field string) string { return ownerTable + "__" + Column(field) }
+
+// Column is the column of a field, e.g. "metaTitle" → "meta_title".
+func Column(field string) string { return snake(field) }
+
+func entryTable(typ string) string  { return EntryTable(typ) }
+func blockTable(name string) string { return BlockTable(name) }
 
 // snake converts a field name like "metaTitle" to "meta_title".
 func snake(s string) string {
@@ -107,7 +123,7 @@ func (l *layout) add(t *table) error {
 		seen[col] = true
 		switch {
 		case k.Storage == content.StoreGroup || k.Storage == content.StoreList:
-			child := &table{Name: t.Name + "__" + col, Fields: f.Fields}
+			child := &table{Name: ComponentTable(t.Name, f.Name), Fields: f.Fields}
 			t.children[f.Name] = child.Name
 			if err := l.add(child); err != nil {
 				return err
