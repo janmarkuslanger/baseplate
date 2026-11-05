@@ -4,6 +4,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -43,6 +44,13 @@ type Admin struct {
 	Logger  *slog.Logger
 	// Lang is the admin language (default i18n.Default).
 	Lang string
+	// BuildOnPublish rebuilds the site in the background whenever published
+	// content changes (publish, update, unpublish, delete).
+	BuildOnPublish bool
+
+	autoMu      sync.Mutex
+	autoRunning bool
+	autoPending bool
 
 	i18n    *i18n.Bundle
 	base    *template.Template
@@ -309,6 +317,43 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
+// contentChanged starts a background build if BuildOnPublish is set.
+// Changes during a running build cause exactly one more build afterwards.
+func (a *Admin) contentChanged() {
+	if !a.BuildOnPublish {
+		return
+	}
+	a.autoMu.Lock()
+	if a.autoRunning {
+		a.autoPending = true
+		a.autoMu.Unlock()
+		return
+	}
+	a.autoRunning = true
+	a.autoMu.Unlock()
+	go func() {
+		for {
+			res, err := a.Builder.Build(context.Background())
+			st := &buildStatus{Result: res, At: time.Now()}
+			if err != nil {
+				st.Err = err.Error()
+				a.Logger.Error("auto build", "err", err)
+			}
+			a.buildMu.Lock()
+			a.lastBuild = st
+			a.buildMu.Unlock()
+			a.autoMu.Lock()
+			if !a.autoPending {
+				a.autoRunning = false
+				a.autoMu.Unlock()
+				return
+			}
+			a.autoPending = false
+			a.autoMu.Unlock()
+		}
+	}()
+}
+
 func (a *Admin) build(w http.ResponseWriter, r *http.Request) {
 	res, err := a.Builder.Build(r.Context())
 	st := &buildStatus{Result: res, At: time.Now()}
@@ -566,6 +611,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 			e = got
 		}
 	}
+	wasPublished := e.Status == storage.StatusPublished
 
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(r.FormValue("data")), &raw); err != nil {
@@ -628,6 +674,9 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 	if err := plugin.EntryAfterSave.Run(ctx, a.Reg, ev); err != nil {
 		a.Logger.Error("afterSave hook", "err", err)
 	}
+	if wasPublished || e.Status == storage.StatusPublished {
+		a.contentChanged()
+	}
 	fl := "saved"
 	if e.Status == storage.StatusPublished && !t.Singleton {
 		fl = "published"
@@ -679,6 +728,9 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	if err := a.store().DeleteEntry(r.Context(), t.Name, id); err != nil {
 		a.fail(w, err)
 		return
+	}
+	if e.Status == storage.StatusPublished {
+		a.contentChanged()
 	}
 	http.Redirect(w, r, "/admin/c/"+t.Name+"?flash=deleted", http.StatusSeeOther)
 }
