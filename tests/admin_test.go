@@ -1,4 +1,4 @@
-package baseplate
+package tests
 
 import (
 	"bytes"
@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/janmarkuslanger/baseplate"
 )
 
 var testTheme = fstest.MapFS{
@@ -29,10 +31,11 @@ type client struct {
 	csrf string
 }
 
-func newTestApp(t *testing.T) (*App, *client) {
+// newTestApp starts a server with an admin user; it returns the dist dir.
+func newTestApp(t *testing.T) (string, *client) {
 	t.Helper()
 	dir := t.TempDir()
-	app := New(Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Theme: testTheme,
+	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Theme: testTheme,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	var out bytes.Buffer
 	if err := app.Run(context.Background(), []string{"user", "add", "admin@example.com"}, strings.NewReader("sehr-geheim-123\n"), &out); err != nil {
@@ -47,7 +50,7 @@ func newTestApp(t *testing.T) (*App, *client) {
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
 	c := &client{t: t, srv: srv, http: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
-	return app, c
+	return filepath.Join(dir, "dist"), c
 }
 
 func (c *client) do(method, path string, form url.Values) (*http.Response, string) {
@@ -91,7 +94,7 @@ func (c *client) save(typ string, status string, data map[string]any) (*http.Res
 }
 
 func TestAdminFlow(t *testing.T) {
-	app, c := newTestApp(t)
+	dist, c := newTestApp(t)
 
 	if res, _ := c.do("GET", "/admin/", nil); res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("anonymous dashboard: %d", res.StatusCode)
@@ -145,7 +148,7 @@ func TestAdminFlow(t *testing.T) {
 	if res.StatusCode != 200 || !strings.Contains(body, "1 Seiten") {
 		t.Fatalf("build: %d %s", res.StatusCode, body)
 	}
-	html, err := os.ReadFile(filepath.Join(app.cfg.DistDir, "index.html"))
+	html, err := os.ReadFile(filepath.Join(dist, "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}

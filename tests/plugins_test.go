@@ -1,4 +1,4 @@
-package baseplate_test
+package tests
 
 import (
 	"context"
