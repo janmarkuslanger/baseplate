@@ -91,11 +91,18 @@ func SanitizeHTML(in string) string {
 	}
 }
 
+// urlIgnored are characters browsers strip from URLs before parsing.
+var urlIgnored = strings.NewReplacer("\t", "", "\n", "", "\r", "")
+
 func safeURL(u string) bool {
-	u = strings.TrimSpace(strings.ToLower(u))
+	u = urlIgnored.Replace(strings.TrimSpace(strings.ToLower(u)))
+	// Browsers treat "\" like "/", so "/\host" is protocol-relative too.
+	if strings.HasPrefix(u, "//") || strings.HasPrefix(u, "/\\") {
+		return false
+	}
 	for _, p := range []string{"http://", "https://", "mailto:", "tel:", "/", "#"} {
 		if strings.HasPrefix(u, p) {
-			return !strings.HasPrefix(u, "//")
+			return true
 		}
 	}
 	return false
