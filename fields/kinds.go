@@ -1,5 +1,5 @@
 // Package fields provides baseplate's built-in field kinds, blocks and
-// content types (page, site settings), plus the standard SEO and LLM fields.
+// content types (page, site settings), plus the standard SEO fields.
 package fields
 
 import (

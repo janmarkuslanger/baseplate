@@ -43,25 +43,14 @@ func SEOField() content.Field {
 	}
 }
 
-// LLMField is the standard group for llms.txt and Markdown exports.
-func LLMField() content.Field {
-	return content.Field{
-		Name: "llm", Label: "LLM", Kind: Group, Tab: TabLLM,
-		Fields: []content.Field{
-			{Name: "summary", Label: "Zusammenfassung für KI", Kind: Textarea, Max: 500, Help: "Erscheint in llms.txt. Leer = Meta-Beschreibung."},
-			{Name: "exclude", Label: "Nicht in llms.txt aufnehmen", Kind: Bool},
-		},
-	}
-}
-
-// RoutableFields are prepended/appended to every routable type.
+// RoutableFields wraps the fields of a routable type with title, slug and SEO.
 func RoutableFields(fs ...content.Field) []content.Field {
 	out := []content.Field{
 		{Name: "title", Label: "Titel", Kind: Text, Required: true, Max: 200},
 		{Name: "slug", Label: "URL-Pfad", Kind: Slug, Required: true, Help: "„index“ ist die Startseite."},
 	}
 	out = append(out, fs...)
-	return append(out, SEOField(), LLMField())
+	return append(out, SEOField())
 }
 
 // Core registers the built-in kinds, blocks and types. The app registers it
@@ -109,6 +98,16 @@ func (Core) Register(r *plugin.Registry) error {
 			return md
 		}},
 	}
+	// The article container nests any blocks, including articles (unbounded).
+	blocks = append(blocks, content.Block{Name: "article", Label: "Artikel", Fields: []content.Field{
+		{Name: "title", Label: "Überschrift", Kind: Text},
+		{Name: "children", Label: "Inhalt", Kind: Blocks},
+	}, Markdown: func(d map[string]any) string {
+		if t := str(d["title"]); t != "" {
+			return "## " + t
+		}
+		return ""
+	}})
 	for _, b := range blocks {
 		if err := r.Block(b); err != nil {
 			return err
@@ -131,7 +130,8 @@ func (Core) Register(r *plugin.Registry) error {
 			{Name: "language", Label: "Sprache", Kind: Text, Help: "z. B. de"},
 			{Name: "serverURL", Label: "CMS-Server-URL", Kind: URL, Help: "Öffentliche URL dieses CMS. Formulare senden dorthin."},
 			{Name: "defaultOgImage", Label: "Standard-Social-Bild", Kind: Image},
-			{Name: "llmsIntro", Label: "Beschreibung für llms.txt", Kind: Textarea, Max: 1000, Help: "Kurz: Wer seid ihr, was bietet die Website?"},
+			{Name: "llmsTxt", Label: "llms.txt erzeugen", Kind: Bool, Tab: TabLLM, Help: "Stellt KI-Systemen unter /llms.txt eine Übersicht aller indexierbaren Seiten bereit."},
+			{Name: "llmsContent", Label: "Zusatzinhalt für llms.txt", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "Markdown, erscheint vor der Seitenliste – z. B. „> Kurzbeschreibung“, Leistungen, Kontakt."},
 		},
 	})
 }

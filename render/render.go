@@ -39,7 +39,7 @@ type Page struct {
 // Meta holds the computed SEO values for <head>.
 type Meta struct {
 	Title, Description, Canonical, Robots string
-	OGTitle, OGDescription, OGImage      string
+	OGTitle, OGDescription, OGImage       string
 }
 
 type Link struct {
@@ -152,19 +152,33 @@ func (r *Renderer) Markdown(p *Page) string {
 		b.WriteString("> " + p.Meta.Description + "\n\n")
 	}
 	for _, f := range p.Type.Fields {
-		if f.Kind != fields.Blocks {
-			continue
-		}
-		list, _ := p.Data[f.Name].([]any)
-		for _, it := range list {
-			m, _ := it.(map[string]any)
-			name, _ := m[fields.BlockTypeKey].(string)
-			if blk, ok := r.schema.Block(name); ok && blk.Markdown != nil {
-				if md := strings.TrimSpace(blk.Markdown(m)); md != "" {
-					b.WriteString(md + "\n\n")
-				}
-			}
+		if f.Kind == fields.Blocks {
+			r.markdownBlocks(&b, p.Data[f.Name])
 		}
 	}
 	return strings.TrimSpace(b.String()) + "\n"
+}
+
+// markdownBlocks writes each block's Markdown, then recurses into the
+// block's own blocks fields (containers such as articles).
+func (r *Renderer) markdownBlocks(b *strings.Builder, items any) {
+	list, _ := items.([]any)
+	for _, it := range list {
+		m, _ := it.(map[string]any)
+		name, _ := m[fields.BlockTypeKey].(string)
+		blk, ok := r.schema.Block(name)
+		if !ok {
+			continue
+		}
+		if blk.Markdown != nil {
+			if md := strings.TrimSpace(blk.Markdown(m)); md != "" {
+				b.WriteString(md + "\n\n")
+			}
+		}
+		for _, f := range blk.Fields {
+			if f.Kind == fields.Blocks {
+				r.markdownBlocks(b, m[f.Name])
+			}
+		}
+	}
 }

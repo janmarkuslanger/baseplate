@@ -71,6 +71,11 @@ func (a *Admin) funcs() template.FuncMap {
 				D: d + 1,
 			}
 		},
+		// blockField builds args for a field inside a block editor template.
+		"blockField": func(f content.Field) fieldArgs {
+			return fieldArgs{F: f, M: "item." + f.Name, E: "path+'." + f.Name + "'"}
+		},
+		"emptyField": func() content.Field { return content.Field{} },
 		"blocksFor":  func(f content.Field) []content.Block { return a.Reg.Schema.Blocks(f) },
 		"refOptions": a.refOptions,
 		"skeleton":   func(fs []content.Field) map[string]any { return skeleton(fs, nil) },

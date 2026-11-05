@@ -78,7 +78,11 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 			return Result{}, err
 		}
 	}
-	for _, step := range []func([]*render.Page) error{s.sitemap, s.robots, s.llms} {
+	steps := []func([]*render.Page) error{s.sitemap, s.robots}
+	if settings["llmsTxt"] == true {
+		steps = append(steps, s.llms)
+	}
+	for _, step := range steps {
 		if err := step(pages); err != nil {
 			return Result{}, err
 		}
@@ -312,17 +316,16 @@ func (s *site) robots(_ []*render.Page) error {
 func (s *site) llms(pages []*render.Page) error {
 	var b strings.Builder
 	b.WriteString("# " + firstNonEmpty(str(s.settings["siteName"]), "Website") + "\n\n")
-	if intro := strings.TrimSpace(str(s.settings["llmsIntro"])); intro != "" {
-		b.WriteString("> " + strings.ReplaceAll(intro, "\n", " ") + "\n\n")
+	if extra := strings.TrimSpace(str(s.settings["llmsContent"])); extra != "" {
+		b.WriteString(extra + "\n\n")
 	}
 	b.WriteString("## Seiten\n\n")
 	for _, p := range pages {
-		llm, _ := p.Data["llm"].(map[string]any)
-		if !indexable(p) || llm["exclude"] == true {
+		if !indexable(p) {
 			continue
 		}
 		line := "- [" + str(p.Data["title"]) + "](" + absolute(strings.TrimRight(str(s.settings["baseURL"]), "/"), p.MarkdownURL) + ")"
-		if sum := firstNonEmpty(str(llm["summary"]), p.Meta.Description); sum != "" {
+		if sum := p.Meta.Description; sum != "" {
 			line += ": " + strings.ReplaceAll(sum, "\n", " ")
 		}
 		b.WriteString(line + "\n")

@@ -234,3 +234,9 @@ textarea.input { resize: vertical; min-height: 80px; }
 .kv { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 12px 24px; margin: 0; }
 .kv dt { font-weight: 600; color: var(--c-muted); }
 .kv dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
+
+/* nested blocks */
+.card--block .card--block { box-shadow: none; }
+.card--block .blocks-field { padding-left: 12px; border-left: 2px solid var(--c-primary-soft); }
+.blocks-field__drop { border-radius: var(--radius); }
+.blocks-field__drop.is-drop-target { outline: 2px dashed var(--c-primary); outline-offset: 2px; }

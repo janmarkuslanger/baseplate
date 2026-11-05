@@ -63,6 +63,7 @@
     </div>
   </div>
 </form>
+{{template "block-templates"}}
 
 {{if and (not $p.IsNew) (not $t.Singleton)}}
 <form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm('Diesen Eintrag wirklich löschen?')) $event.preventDefault()">

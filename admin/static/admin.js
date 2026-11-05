@@ -26,6 +26,19 @@
 
   window.withKey = clone;
 
+  // containsList reports whether list is item itself or nested inside it.
+  function containsList(item, list) {
+    const target = Alpine.raw(list);
+    const walk = (v) => {
+      v = Alpine.raw(v);
+      if (v === target) return true;
+      if (Array.isArray(v)) return v.some(walk);
+      if (v && typeof v === 'object') return Object.values(v).some(walk);
+      return false;
+    };
+    return walk(item);
+  }
+
   window.slugify = function (s, keepTrailing) {
     s = String(s).toLowerCase()
       .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
@@ -88,6 +101,12 @@
       },
       duplicate(list, i) { list.splice(i + 1, 0, clone(list[i])); },
 
+      blockTemplate(name) {
+        const tpl = document.getElementById('bp-block-' + name);
+        return tpl ? tpl.innerHTML : '';
+      },
+
+      // Drag & drop works within a list and across nesting levels.
       dragStart(e, list, i) {
         this.dragList = list;
         this.dragIndex = i;
@@ -100,9 +119,19 @@
       dragLeave(e) { e.currentTarget.classList.remove('is-drop-target'); },
       drop(e, list, i) {
         e.currentTarget.classList.remove('is-drop-target');
-        if (list !== this.dragList || this.dragIndex === i) return;
-        const [it] = list.splice(this.dragIndex, 1);
-        list.splice(i, 0, it);
+        const from = this.dragList;
+        if (!from) return;
+        const item = from[this.dragIndex];
+        // An item cannot be dropped into itself or one of its descendants.
+        if (!item || containsList(item, list)) { this.dragEnd(); return; }
+        if (Alpine.raw(from) === Alpine.raw(list)) {
+          if (this.dragIndex === i) { this.dragEnd(); return; }
+          from.splice(this.dragIndex, 1);
+          list.splice(i > this.dragIndex ? i - 1 : i, 0, item);
+        } else {
+          from.splice(this.dragIndex, 1);
+          list.splice(i, 0, item);
+        }
         this.dragEnd();
       },
       dragEnd() { this.dragList = null; this.dragIndex = -1; },

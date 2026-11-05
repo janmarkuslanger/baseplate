@@ -20,4 +20,7 @@
 
 {{define "block/image"}}<figure class="bp-image"><img src="{{.Block.src}}" alt="{{.Block.alt}}" loading="lazy">{{with .Block.caption}}<figcaption>{{.}}</figcaption>{{end}}</figure>{{end}}
 
+{{define "block/article"}}<article class="bp-article">{{with .Block.title}}<h2>{{.}}</h2>{{end}}
+{{blocks .Block.children .Page}}</article>{{end}}
+
 {{define "block/cta"}}<div class="bp-cta">{{with .Block.text}}<p>{{.}}</p>{{end}}<a class="bp-button" href="{{.Block.href}}">{{.Block.label}}</a></div>{{end}}

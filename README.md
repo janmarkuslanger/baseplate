@@ -86,7 +86,7 @@ type News struct{}
 func (News) Name() string { return "news" }
 
 func (News) Register(r *plugin.Registry) error {
-	// A new content type with the standard title/slug/SEO/LLM fields.
+	// A new content type with the standard title/slug/SEO fields.
 	// It appears in the admin navigation automatically.
 	return r.ContentType(content.Type{
 		Name: "news", Label: "News", LabelPlural: "News", Routable: true,

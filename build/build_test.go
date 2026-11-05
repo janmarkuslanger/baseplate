@@ -63,7 +63,7 @@ func TestBuild(t *testing.T) {
 	}
 
 	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{
-		"siteName": "Acme", "baseURL": "https://acme.test/", "llmsIntro": "Acme baut Dinge.",
+		"siteName": "Acme", "baseURL": "https://acme.test/", "llmsTxt": true, "llmsContent": "> Acme baut Dinge.",
 	})
 	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{
 		"title": "Willkommen", "seo": map[string]any{"metaDescription": "Startseite von Acme"},
@@ -73,7 +73,7 @@ func TestBuild(t *testing.T) {
 		},
 	})
 	about := add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{
-		"title": "Über uns", "llm": map[string]any{"summary": "Team und Geschichte"},
+		"title": "Über uns", "seo": map[string]any{"metaDescription": "Team und Geschichte"},
 	})
 	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": float64(about)})
 	add(t, st, fields.PageType, "geheim", storage.StatusPublished, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
@@ -134,6 +134,19 @@ func TestBuild(t *testing.T) {
 	read(t, b, "assets/site.css")
 }
 
+func TestLLMsTxtDisabled(t *testing.T) {
+	b, st := setup(t)
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	if _, err := b.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(b.DistDir, "llms.txt")); !os.IsNotExist(err) {
+		t.Error("llms.txt built although disabled")
+	}
+	read(t, b, "index.md") // Markdown variants stay
+}
+
 func TestBuildFailureKeepsOldSite(t *testing.T) {
 	b, st := setup(t)
 	ctx := context.Background()
@@ -148,5 +161,34 @@ func TestBuildFailureKeepsOldSite(t *testing.T) {
 	}
 	if !strings.Contains(read(t, b, "index.html"), "<h1>A</h1>") {
 		t.Error("previous build was not kept")
+	}
+}
+
+func TestNestedArticles(t *testing.T) {
+	b, st := setup(t)
+	page, _ := b.Reg.Schema.Type(fields.PageType)
+	data, err := b.Reg.Schema.Validate(page.Fields, map[string]any{"title": "Blog", "slug": "index", "body": []any{
+		map[string]any{"_type": "article", "title": "Außen", "children": []any{
+			map[string]any{"_type": "richtext", "html": "<p>Text außen</p>"},
+			map[string]any{"_type": "article", "title": "Innen", "children": []any{
+				map[string]any{"_type": "heading", "text": "Tief"},
+			}},
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, data)
+	if _, err := b.Build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	html := strings.Join(strings.Fields(read(t, b, "index.html")), " ")
+	if !strings.Contains(html, `<article class="bp-article"><h2>Außen</h2> <div class="bp-richtext"><p>Text außen</p></div> <article class="bp-article"><h2>Innen</h2> <h2>Tief</h2> </article> </article>`) {
+		t.Errorf("nested html: %s", html)
+	}
+	md := read(t, b, "index.md")
+	if !strings.Contains(md, "## Außen\n\nText außen\n\n## Innen\n\n## Tief") {
+		t.Errorf("nested markdown: %q", md)
 	}
 }

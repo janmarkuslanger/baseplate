@@ -92,38 +92,41 @@
       <button type="button" class="btn btn--ghost btn--add" x-on:click="{{.M}}.push(withKey({{json (skeleton .F.Fields)}}))">+ Eintrag hinzufügen</button>
     </div>
   {{else if eq .F.Kind "blocks"}}
+    {{/* Block editors are rendered once per block type (see "block-templates")
+         and inserted per item, so nesting depth is unbounded. Each card opens
+         a scope with "item" (the block), "list" (the list holding it; captured
+         at init because "item" is shadowed inside) and "path" (error path). */}}
     <div class="blocks-field">
       <div class="field__label">{{.F.Label}}</div>
-      <p class="muted" x-show="{{.M}}.length === 0">Noch keine Inhalte. Füge unten das erste Element hinzu.</p>
-      <template x-for="(it{{.D}}, i{{.D}}) in {{.M}}" :key="it{{.D}}._key">
-        <div class="card card--block" x-data="{open: true}"
-             x-on:dragover.prevent="dragOver($event)"
-             x-on:dragleave="dragLeave($event)"
-             x-on:drop.prevent="drop($event, {{.M}}, i{{.D}})">
+      <template x-for="(child, ci) in {{.M}}" :key="child._key">
+        <div class="card card--block" x-data="{open: true, item: child, list: {{.M}}, path: {{.E}} + '.' + ci}"
+             x-on:dragover.prevent.stop="dragOver($event)"
+             x-on:dragleave.stop="dragLeave($event)"
+             x-on:drop.prevent.stop="drop($event, list, ci)">
           <div class="card__bar">
-            <span class="drag-handle" title="Ziehen zum Sortieren" draggable="true" x-on:dragstart="dragStart($event, {{.M}}, i{{.D}})" x-on:dragend="dragEnd()">⋮⋮</span>
-            <button type="button" class="card__title card__toggle" x-on:click="open = !open" x-text="blockLabel(it{{.D}}._type)"></button>
+            <span class="drag-handle" title="Ziehen zum Sortieren oder Verschieben" draggable="true" x-on:dragstart.stop="dragStart($event, list, ci)" x-on:dragend="dragEnd()">⋮⋮</span>
+            <button type="button" class="card__title card__toggle" x-on:click="open = !open" x-text="blockLabel(item._type) + (item.title ? ' – ' + item.title : '')"></button>
             <span class="card__tools">
-              <button type="button" class="icon-btn" title="nach oben" x-on:click="move({{.M}}, i{{.D}}, -1)">↑</button>
-              <button type="button" class="icon-btn" title="nach unten" x-on:click="move({{.M}}, i{{.D}}, 1)">↓</button>
-              <button type="button" class="icon-btn" title="duplizieren" x-on:click="duplicate({{.M}}, i{{.D}})">⧉</button>
-              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="{{.M}}.splice(i{{.D}}, 1)">✕</button>
+              <button type="button" class="icon-btn" title="nach oben" x-on:click="move(list, ci, -1)">↑</button>
+              <button type="button" class="icon-btn" title="nach unten" x-on:click="move(list, ci, 1)">↓</button>
+              <button type="button" class="icon-btn" title="duplizieren" x-on:click="duplicate(list, ci)">⧉</button>
+              <button type="button" class="icon-btn icon-btn--danger" title="entfernen" x-on:click="list.splice(ci, 1)">✕</button>
             </span>
           </div>
-          <p class="field__error" x-show="err({{.E}}+'.'+i{{.D}})" x-text="err({{.E}}+'.'+i{{.D}})"></p>
-          <div class="card__body" x-show="open">
-            {{range blocksFor .F}}{{$b := .}}
-            <template x-if="it{{$a.D}}._type === '{{$b.Name}}'">
-              <div>{{range $b.Fields}}{{template "field" (item $a .)}}{{end}}</div>
-            </template>
-            {{end}}
-          </div>
+          <p class="field__error" x-show="err(path)" x-text="err(path)"></p>
+          <div class="card__body" x-show="open" x-html="blockTemplate(item._type)"></div>
         </div>
       </template>
-      <div class="add-block" x-data="{menu: false}">
-        <button type="button" class="btn btn--ghost btn--add" x-on:click="menu = !menu">+ Element hinzufügen</button>
-        <div class="add-block__menu" x-show="menu" x-cloak x-on:click.outside="menu = false">
-          {{range blocksFor .F}}<button type="button" class="add-block__item" x-on:click="{{$a.M}}.push(newBlock('{{.Name}}')); menu = false">{{.Label}}</button>{{end}}
+      <div class="blocks-field__drop"
+           x-on:dragover.prevent.stop="dragOver($event)"
+           x-on:dragleave.stop="dragLeave($event)"
+           x-on:drop.prevent.stop="drop($event, {{.M}}, {{.M}}.length)">
+        <p class="muted" x-show="{{.M}}.length === 0">Noch keine Inhalte. Element hinzufügen oder hierher ziehen.</p>
+        <div class="add-block" x-data="{menu: false}">
+          <button type="button" class="btn btn--ghost btn--add" x-on:click="menu = !menu">+ Element hinzufügen</button>
+          <div class="add-block__menu" x-show="menu" x-cloak x-on:click.outside="menu = false">
+            {{range blocksFor .F}}<button type="button" class="add-block__item" x-on:click="{{$a.M}}.push(newBlock('{{.Name}}')); menu = false">{{.Label}}</button>{{end}}
+          </div>
         </div>
       </div>
     </div>
@@ -133,4 +136,11 @@
   {{if and .F.Max (not (isContainer .F.Kind))}}<p class="field__counter" x-bind:class="{'is-over': ({{.M}}||'').length > {{.F.Max}}}" x-text="({{.M}}||'').length + ' / {{.F.Max}}'"></p>{{end}}
   {{if not (isContainer .F.Kind)}}<p class="field__error" x-show="err({{.E}})" x-text="err({{.E}})"></p>{{end}}
 </div>
+{{end}}
+
+{{/* One editor template per block type; fields bind to "item" / "path". */}}
+{{define "block-templates"}}
+{{range blocksFor (emptyField)}}{{$b := .}}
+<template id="bp-block-{{$b.Name}}">{{range $b.Fields}}{{template "field" (blockField .)}}{{end}}</template>
+{{end}}
 {{end}}

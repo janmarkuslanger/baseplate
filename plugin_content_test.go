@@ -24,7 +24,7 @@ import (
 )
 
 // newsPlugin is what a customer project would write: a new content type
-// (routable, with the standard SEO/LLM fields) and a new block.
+// (routable, with the standard SEO fields) and a new block.
 type newsPlugin struct{}
 
 func (newsPlugin) Name() string { return "news" }
