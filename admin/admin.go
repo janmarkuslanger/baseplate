@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
 	"path"
 	"sort"
@@ -230,7 +229,7 @@ func (a *Admin) loginPage(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 	// Unauthenticated: bound the body before the form is parsed.
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	ses, err := a.Auth.Login(r.Context(), clientIP(r), r.FormValue("email"), r.FormValue("password"))
+	ses, err := a.Auth.Login(r.Context(), a.Reg.ClientIP(r), r.FormValue("email"), r.FormValue("password"))
 	if err != nil {
 		msg := err.Error()
 		if !errors.Is(err, auth.ErrInvalidLogin) && !errors.Is(err, auth.ErrRateLimited) {
@@ -247,14 +246,6 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) logout(w http.ResponseWriter, r *http.Request) {
 	a.Auth.Logout(w, r)
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // --- dashboard & build ---

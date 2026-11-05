@@ -199,3 +199,27 @@ func TestFormBlockInBuild(t *testing.T) {
 		}
 	}
 }
+
+func TestRateLimitBehindProxy(t *testing.T) {
+	reg, p, _, id := setup(t)
+	reg.ClientIP = plugin.ProxyIP("X-Forwarded-For")
+	p.Limit = 1
+	send := func(ip string) int {
+		mux := http.NewServeMux()
+		for _, rt := range reg.Routes() {
+			mux.Handle(rt.Pattern, rt.Handler)
+		}
+		r := httptest.NewRequest("POST", "/api/forms/"+itoa(id), strings.NewReader(url.Values{"name": {"A"}, "email": {"a@b.de"}, "dsgvo": {"1"}}.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.Header.Set("X-Forwarded-For", ip+", 10.0.0.1")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w.Code
+	}
+	if send("1.1.1.1") != 200 || send("2.2.2.2") != 200 {
+		t.Fatal("different clients behind the same proxy must not share a limit")
+	}
+	if send("1.1.1.1") != http.StatusTooManyRequests {
+		t.Fatal("same client must be limited")
+	}
+}

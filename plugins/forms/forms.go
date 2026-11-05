@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/mail"
 	"strconv"
@@ -241,7 +240,7 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 		success() // pretend success so bots learn nothing
 		return
 	}
-	if !p.allow(clientIP(r)) {
+	if !p.allow(p.reg.ClientIP(r)) {
 		p.respond(w, http.StatusTooManyRequests, response{Title: "Zu viele Anfragen", Message: "Bitte versuchen Sie es in einigen Minuten erneut.", Back: back})
 		return
 	}
@@ -305,14 +304,6 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 		p.reg.Store.DB().ExecContext(ctx, `UPDATE form_submissions SET mailed = 1 WHERE id = ?`, subID)
 	}
 	success()
-}
-
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func str(v any) string { s, _ := v.(string); return s }

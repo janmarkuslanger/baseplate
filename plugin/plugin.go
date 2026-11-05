@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/mail"
@@ -26,6 +28,33 @@ type Services struct {
 	Store  storage.Store
 	Mailer mail.Mailer
 	Logger *slog.Logger
+	// ClientIP returns the visitor's IP, honouring Config.TrustedProxyHeader.
+	// Use it for rate limits instead of r.RemoteAddr.
+	ClientIP func(r *http.Request) string
+}
+
+// RemoteIP returns the host part of r.RemoteAddr.
+func RemoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// ProxyIP returns a ClientIP func that reads the first address of header
+// (e.g. "X-Forwarded-For") and falls back to RemoteIP. Only use it behind a
+// proxy that overwrites the header; otherwise clients can spoof it.
+func ProxyIP(header string) func(r *http.Request) string {
+	return func(r *http.Request) string {
+		if v := r.Header.Get(header); v != "" {
+			first, _, _ := strings.Cut(v, ",")
+			if ip := strings.TrimSpace(first); ip != "" {
+				return ip
+			}
+		}
+		return RemoteIP(r)
+	}
 }
 
 // Event names for hooks.
@@ -99,6 +128,9 @@ type Registry struct {
 }
 
 func NewRegistry(svc Services) *Registry {
+	if svc.ClientIP == nil {
+		svc.ClientIP = RemoteIP
+	}
 	return &Registry{
 		Services: svc,
 		Schema:   content.NewSchema(),

@@ -57,6 +57,11 @@ type Config struct {
 	// SecureCookies sets the Secure flag on the admin session cookie; enable
 	// it behind an HTTPS proxy (BASEPLATE_SECURE_COOKIES=1).
 	SecureCookies bool
+	// TrustedProxyHeader names a header carrying the client IP, e.g.
+	// "X-Forwarded-For" (BASEPLATE_TRUSTED_PROXY_HEADER). Rate limits use it
+	// instead of the connection address. Only set it behind a proxy that
+	// overwrites the header. Default: off.
+	TrustedProxyHeader string
 	// Store overrides the storage adapter (e.g. MySQL). Default: SQLite in DataDir.
 	Store storage.Store
 	// Mailer overrides the mailer built from SMTP.
@@ -78,6 +83,7 @@ func (c *Config) LoadEnv() {
 	str("BASEPLATE_SMTP_USER", &c.SMTP.Username)
 	str("BASEPLATE_SMTP_PASSWORD", &c.SMTP.Password)
 	str("BASEPLATE_SMTP_FROM", &c.SMTP.From)
+	str("BASEPLATE_TRUSTED_PROXY_HEADER", &c.TrustedProxyHeader)
 	if v, err := strconv.Atoi(os.Getenv("BASEPLATE_SMTP_PORT")); err == nil {
 		c.SMTP.Port = v
 	}
@@ -198,7 +204,11 @@ func (a *App) Setup(ctx context.Context) error {
 			mailer = mail.LogMailer{Logger: c.Logger}
 		}
 	}
-	reg := plugin.NewRegistry(plugin.Services{Store: st, Mailer: mailer, Logger: c.Logger})
+	clientIP := plugin.RemoteIP
+	if c.TrustedProxyHeader != "" {
+		clientIP = plugin.ProxyIP(c.TrustedProxyHeader)
+	}
+	reg := plugin.NewRegistry(plugin.Services{Store: st, Mailer: mailer, Logger: c.Logger, ClientIP: clientIP})
 	if err := reg.Use(fields.Core{}); err != nil {
 		return err
 	}
