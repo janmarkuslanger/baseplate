@@ -118,7 +118,9 @@ func build(from string, m Message) []byte {
 	h("Content-Type", "text/plain; charset=utf-8")
 	h("Content-Transfer-Encoding", "8bit")
 	b.WriteString("\r\n")
-	b.WriteString(strings.ReplaceAll(m.Text, "\n", "\r\n"))
+	// Normalize to LF first: textarea input arrives with CRLF.
+	text := strings.ReplaceAll(strings.ReplaceAll(m.Text, "\r\n", "\n"), "\r", "\n")
+	b.WriteString(strings.ReplaceAll(text, "\n", "\r\n"))
 	return []byte(b.String())
 }
 

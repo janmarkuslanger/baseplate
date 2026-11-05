@@ -89,3 +89,11 @@ func TestSMTPTimeout(t *testing.T) {
 		t.Errorf("Send took %s, want ~200ms", d)
 	}
 }
+
+func TestBuildLineEndings(t *testing.T) {
+	msg := string(build("a@b.de", Message{To: []string{"x@y.de"}, Text: "eins\r\nzwei\nzwei\rdrei"}))
+	body := msg[strings.Index(msg, "\r\n\r\n")+4:]
+	if body != "eins\r\nzwei\r\nzwei\r\ndrei" {
+		t.Errorf("body = %q", body)
+	}
+}
