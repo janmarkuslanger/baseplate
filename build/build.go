@@ -10,25 +10,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/janmarkuslanger/baseplate/i18n"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
+// Builder renders the static site from published content into DistDir.
 type Builder struct {
 	Reg      *plugin.Registry
 	Theme    fs.FS // may be nil
@@ -50,6 +51,7 @@ const MsgPublicConflict = "build.publicConflict"
 // a core output with a template in templates/output/ instead.
 const MsgPathConflict = "build.pathConflict"
 
+// Result describes a successful build.
 type Result struct {
 	Pages    int
 	Duration time.Duration
@@ -212,9 +214,9 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 			return nil, err
 		}
 		if other, dup := seen[u]; dup {
-			return nil, fmt.Errorf("URL %s ist doppelt vergeben (%s und %q)", u, other, str(p.Data["title"]))
+			return nil, i18n.M("build.duplicateURL", u, other, str(p.Data["title"]))
 		}
-		seen[u] = fmt.Sprintf("%q", str(p.Data["title"]))
+		seen[u] = str(p.Data["title"])
 		p.URL, p.AbsURL = u, base+u
 		p.MarkdownURL = markdownURL(u)
 		p.Meta = meta(p, s.cfg, base)
@@ -236,8 +238,8 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 	if res.err != nil {
 		return nil, fmt.Errorf("resolve relations: %w", res.err)
 	}
-	sort.Slice(nav, func(i, j int) bool { return nav[i].URL < nav[j].URL })
-	sort.Slice(pages, func(i, j int) bool { return pages[i].URL < pages[j].URL })
+	slices.SortFunc(nav, func(a, b render.Link) int { return cmp.Compare(a.URL, b.URL) })
+	slices.SortFunc(pages, func(a, b *render.Page) int { return cmp.Compare(a.URL, b.URL) })
 	for _, p := range pages {
 		p.Nav = nav
 	}
@@ -257,7 +259,7 @@ func EntryURL(t *content.Type, e *storage.Entry, parent func(id int64) *storage.
 				break
 			}
 			if seen[pid] {
-				return "", fmt.Errorf("%q: zyklische Eltern-Beziehung", str(e.Data[t.Title()]))
+				return "", i18n.M("build.parentCycle", str(e.Data[t.Title()]))
 			}
 			seen[pid] = true
 			if cur = parent(pid); cur == nil {

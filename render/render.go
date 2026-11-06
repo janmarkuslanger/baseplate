@@ -59,6 +59,7 @@ type Meta struct {
 	OGTitle, OGDescription, OGImage       string
 }
 
+// Link is one page in the navigation (.Nav).
 type Link struct {
 	ID     int64
 	Parent int64
@@ -72,6 +73,8 @@ type BlockData struct {
 	Page  *Page
 }
 
+// Renderer holds the frontend templates of one build: core defaults,
+// plugin templates and the theme.
 type Renderer struct {
 	t       *template.Template
 	schema  *content.Schema
@@ -167,6 +170,7 @@ func parseAll(t *template.Template, fsys fs.FS) error {
 	})
 }
 
+// Has reports whether a template is defined.
 func (r *Renderer) Has(name string) bool { return r.t.Lookup(name) != nil }
 
 // DefaultLayout is the layout template used when a type names none.
@@ -202,6 +206,7 @@ func (r *Renderer) ExecutePage(w io.Writer, name, layout string, data any) error
 	return r.Execute(w, layout, Layout{Page: data, Content: template.HTML(buf.String())})
 }
 
+// Execute renders one template.
 func (r *Renderer) Execute(w io.Writer, name string, data any) error {
 	if !r.Has(name) {
 		return fmt.Errorf("render: template %q not defined (add it to your theme)", name)

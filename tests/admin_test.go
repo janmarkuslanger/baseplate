@@ -77,7 +77,7 @@ func (c *client) do(method, path string, form url.Values) (*http.Response, strin
 	return res, string(b)
 }
 
-var csrfRe = regexp.MustCompile(`data-csrf="([0-9a-f]+)"`)
+var csrfRe = regexp.MustCompile(`data-csrf="([0-9A-Za-z]+)"`)
 
 func (c *client) login() {
 	c.t.Helper()

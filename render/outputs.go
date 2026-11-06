@@ -6,7 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/fs"
-	"sort"
+	"slices"
 	"strings"
 	"text/template"
 )
@@ -86,7 +86,7 @@ func (r *Renderer) Outputs() []string {
 			out = append(out, rest)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

@@ -7,10 +7,8 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/janmarkuslanger/baseplate/i18n"
 	"net/http"
 	"strings"
 	"sync"
@@ -18,6 +16,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -74,7 +73,7 @@ func randomBytes(n int) []byte {
 	return b
 }
 
-func token() string { return hex.EncodeToString(randomBytes(32)) }
+func token() string { return rand.Text() }
 
 // Manager issues and checks sessions.
 type Manager struct {
@@ -118,6 +117,7 @@ func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Se
 	return s, nil
 }
 
+// SetCookie sends the session cookie.
 func (m *Manager) SetCookie(w http.ResponseWriter, r *http.Request, s *storage.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name: CookieName, Value: s.Token, Path: "/", Expires: s.ExpiresAt,
@@ -125,6 +125,7 @@ func (m *Manager) SetCookie(w http.ResponseWriter, r *http.Request, s *storage.S
 	})
 }
 
+// Logout deletes the current session and its cookie.
 func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(CookieName); err == nil {
 		m.Store.DeleteSession(r.Context(), c.Value)

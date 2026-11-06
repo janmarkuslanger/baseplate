@@ -12,9 +12,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/janmarkuslanger/baseplate/i18n"
-
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/i18n"
 )
 
 // ErrNotFound is returned when a requested record does not exist.
@@ -80,6 +79,7 @@ type Referrer struct {
 	Block  string
 }
 
+// User is an admin user.
 type User struct {
 	ID           int64
 	Email        string
@@ -88,6 +88,7 @@ type User struct {
 	CreatedAt    time.Time
 }
 
+// Session is a logged-in admin session.
 type Session struct {
 	Token     string
 	UserID    int64

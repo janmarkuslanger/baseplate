@@ -121,6 +121,8 @@ func (c *Config) defaults() {
 	}
 }
 
+// App is one customer site: configuration, plugins and, after Setup, the
+// wired registry, builder and admin.
 type App struct {
 	cfg     Config
 	plugins []plugin.Plugin
@@ -132,6 +134,7 @@ type App struct {
 	admin    *admin.Admin
 }
 
+// New returns an App for cfg; add plugins with Use, then call Main.
 func New(cfg Config) *App { return &App{cfg: cfg} }
 
 // Use adds plugins. They are registered in order after the core.
@@ -237,7 +240,6 @@ func (a *App) Setup(ctx context.Context) error {
 		return err
 	}
 	for _, m := range reg.DataMigrations() {
-		m := m
 		if err := st.RunOnce(ctx, m.Name, func(ctx context.Context) error { return m.Run(ctx, st) }); err != nil {
 			return err
 		}

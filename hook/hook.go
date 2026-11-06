@@ -20,9 +20,10 @@
 package hook
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -94,13 +95,14 @@ func All() []Info {
 	for _, i := range declared {
 		out = append(out, *i)
 	}
-	sort.Slice(out, func(a, b int) bool { return out[a].Name < out[b].Name })
+	slices.SortFunc(out, func(a, b Info) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
 // Action notifies plugins that something happened.
 type Action[T any] struct{ Info *Info }
 
+// NewAction declares an action hook; name must be unique.
 func NewAction[T any](name, doc string) *Action[T] {
 	var zero T
 	return &Action[T]{Info: declare(name, doc, KindAction, fmt.Sprintf("%T", zero))}
@@ -127,6 +129,7 @@ func (a *Action[T]) Run(ctx context.Context, h Host, v T) error {
 // of the previous one.
 type Filter[T any] struct{ Info *Info }
 
+// NewFilter declares a filter hook; name must be unique.
 func NewFilter[T any](name, doc string) *Filter[T] {
 	var zero T
 	return &Filter[T]{Info: declare(name, doc, KindFilter, fmt.Sprintf("%T", zero))}
@@ -153,6 +156,7 @@ func (f *Filter[T]) Apply(ctx context.Context, h Host, v T) (T, error) {
 // List collects contributions, e.g. field types, admin actions or widgets.
 type List[T any] struct{ Info *Info }
 
+// NewList declares a list hook; name must be unique.
 func NewList[T any](name, doc string) *List[T] {
 	var zero T
 	return &List[T]{Info: declare(name, doc, KindList, fmt.Sprintf("%T", zero))}

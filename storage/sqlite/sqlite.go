@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/janmarkuslanger/baseplate/storage"
 	_ "modernc.org/sqlite"
+
+	"github.com/janmarkuslanger/baseplate/storage"
 )
 
 // Open opens (or creates) the database file at path. Use ":memory:" for tests.

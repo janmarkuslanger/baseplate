@@ -102,6 +102,7 @@ type SQLStore struct {
 	layout  *layout
 }
 
+// NewSQLStore wraps an open connection; adapters call it with their dialect.
 func NewSQLStore(db *sql.DB, d Dialect) *SQLStore {
 	return &SQLStore{db: db, dialect: d, now: time.Now}
 }

@@ -78,7 +78,7 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	wasPublished := e.Status == storage.StatusPublished
 
 	clean, err := s.Schema.Validate(t.Fields, in.Data)
-	errs, isValidation := err.(content.Errors)
+	errs, isValidation := errors.AsType[content.Errors](err)
 	if err != nil && !isValidation {
 		return nil, err
 	}

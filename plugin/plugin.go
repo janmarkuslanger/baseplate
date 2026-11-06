@@ -150,6 +150,8 @@ type Registry struct {
 	hooks          hook.Set
 }
 
+// NewRegistry returns an empty registry with the given services; the
+// entries service is created when svc has none.
 func NewRegistry(svc Services) *Registry {
 	if svc.ClientIP == nil {
 		svc.ClientIP = RemoteIP
@@ -184,10 +186,17 @@ func (r *Registry) Use(ps ...Plugin) error {
 	return nil
 }
 
-func (r *Registry) Kind(k content.Kind) error                   { return r.Schema.AddKind(k) }
-func (r *Registry) ContentType(t content.Type) error            { return r.Schema.AddType(t) }
+// Kind adds a field kind.
+func (r *Registry) Kind(k content.Kind) error { return r.Schema.AddKind(k) }
+
+// ContentType adds a content type; it appears in the admin automatically.
+func (r *Registry) ContentType(t content.Type) error { return r.Schema.AddType(t) }
+
+// Extend adds fields to an existing type, also one of the core or another plugin.
 func (r *Registry) Extend(typ string, f ...content.Field) error { return r.Schema.Extend(typ, f...) }
-func (r *Registry) Block(b content.Block) error                 { return r.Schema.AddBlock(b) }
+
+// Block adds a content element for blocks fields.
+func (r *Registry) Block(b content.Block) error { return r.Schema.AddBlock(b) }
 
 // AllowBlocks restricts a blocks field of any type (also one defined by
 // another plugin or the core) to the named blocks; path uses dots for
@@ -196,9 +205,16 @@ func (r *Registry) AllowBlocks(typ, path string, blocks ...string) error {
 	return r.Schema.AllowBlocks(typ, path, blocks...)
 }
 
-func (r *Registry) Generator(g Generator)         { r.generators = append(r.generators, g) }
-func (r *Registry) AdminPage(p AdminPage)         { r.adminPages = append(r.adminPages, p) }
-func (r *Registry) PublicRoute(rt Route)          { r.routes = append(r.routes, rt) }
+// Generator adds a build step for extra pages (archives, 404, …).
+func (r *Registry) Generator(g Generator) { r.generators = append(r.generators, g) }
+
+// AdminPage adds a screen to the admin.
+func (r *Registry) AdminPage(p AdminPage) { r.adminPages = append(r.adminPages, p) }
+
+// PublicRoute adds an endpoint to the CMS server (not part of the static build).
+func (r *Registry) PublicRoute(rt Route) { r.routes = append(r.routes, rt) }
+
+// Migration adds a schema change for plugin-owned tables.
 func (r *Registry) Migration(m storage.Migration) { r.migrations = append(r.migrations, m) }
 
 // DataMigration changes stored content after a schema change, e.g. copying
@@ -235,6 +251,7 @@ func (r *Registry) Funcs(m TemplateFuncs) {
 
 // Accessors used by the core.
 
+// Plugins lists the registered plugin names in order.
 func (r *Registry) Plugins() []string               { return r.plugins }
 func (r *Registry) Generators() []Generator         { return r.generators }
 func (r *Registry) AdminPages() []AdminPage         { return r.adminPages }

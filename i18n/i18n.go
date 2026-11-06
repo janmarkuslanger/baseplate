@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"strconv"
 	"strings"
@@ -37,25 +38,42 @@ var Catalogs = hook.NewList[Catalog]("i18n.catalogs", "translations contributed 
 
 // Core returns baseplate's own catalogs.
 func Core() []Catalog {
-	entries, _ := coreFS.ReadDir("locales")
+	cs, err := Load(coreFS, "locales")
+	if err != nil {
+		panic(err) // embedded files; covered by tests
+	}
+	return cs
+}
+
+// Load reads one catalog per <lang>.json file in dir, e.g. a plugin's
+// embedded locales: i18n.Load(localesFS, "locales").
+func Load(fsys fs.FS, dir string) ([]Catalog, error) {
+	files, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return nil, err
+	}
 	var out []Catalog
-	for _, e := range entries {
-		b, err := coreFS.ReadFile(path.Join("locales", e.Name()))
-		if err != nil {
-			panic(err)
+	for _, f := range files {
+		if path.Ext(f.Name()) != ".json" {
+			continue
 		}
-		c := Catalog{Lang: strings.TrimSuffix(e.Name(), ".json")}
+		b, err := fs.ReadFile(fsys, path.Join(dir, f.Name()))
+		if err != nil {
+			return nil, err
+		}
+		c := Catalog{Lang: strings.TrimSuffix(f.Name(), ".json")}
 		if err := json.Unmarshal(b, &c.Messages); err != nil {
-			panic(fmt.Sprintf("i18n: %s: %v", e.Name(), err))
+			return nil, fmt.Errorf("i18n: %s: %w", f.Name(), err)
 		}
 		out = append(out, c)
 	}
-	return out
+	return out, nil
 }
 
 // Bundle merges catalogs; later catalogs override earlier keys.
 type Bundle struct{ langs map[string]map[string]string }
 
+// NewBundle merges catalogs in order.
 func NewBundle(cs ...Catalog) *Bundle {
 	b := &Bundle{langs: map[string]map[string]string{}}
 	for _, c := range cs {
@@ -64,6 +82,7 @@ func NewBundle(cs ...Catalog) *Bundle {
 	return b
 }
 
+// Add merges c; its keys override earlier ones.
 func (b *Bundle) Add(c Catalog) {
 	m := b.langs[c.Lang]
 	if m == nil {

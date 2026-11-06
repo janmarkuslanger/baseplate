@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -81,7 +80,7 @@ func TestPluginContentInAdmin(t *testing.T) {
 	}
 	c.PostForm(srv.URL+"/admin/login", url.Values{"email": {"a@b.de"}, "password": {"sehr-geheim-123"}})
 	dash := get("/admin/")
-	csrf := regexp.MustCompile(`data-csrf="([0-9a-f]+)"`).FindStringSubmatch(dash)[1]
+	csrf := csrfRe.FindStringSubmatch(dash)[1]
 
 	// Every plugin content type gets its own navigation entry.
 	for _, want := range []string{`href="/admin/c/page">Seiten`, `href="/admin/c/form">Formulare`, `href="/admin/c/news">News`, `href="/admin/p/forms/submissions">Anfragen`} {
