@@ -78,7 +78,10 @@ func token() string { return hex.EncodeToString(randomBytes(32)) }
 
 // Manager issues and checks sessions.
 type Manager struct {
-	Store storage.Store
+	Store interface {
+		storage.Users
+		storage.Sessions
+	}
 	// SecureCookies forces the Secure flag (set when served behind HTTPS).
 	SecureCookies bool
 

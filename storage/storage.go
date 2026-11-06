@@ -94,10 +94,20 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-// Store is implemented by every storage adapter.
+// Store is implemented by every storage adapter (SQLStore). Consumers that
+// need only part of it should depend on the smaller interfaces.
 type Store interface {
+	Tables
+	Entries
+	Users
+	Sessions
+}
+
+// Tables manages tables and the connection.
+type Tables interface {
 	Dialect() Dialect
-	// DB exposes the connection for plugins that own tables.
+	// DB exposes the connection, for plugins that own tables
+	// (see Registry.Migration). Content goes through Entries.
 	DB() *sql.DB
 	// Migrate applies all migrations that have not run yet, in order.
 	Migrate(ctx context.Context, ms []Migration) error
@@ -108,7 +118,11 @@ type Store interface {
 	// run is recorded only if fn succeeds. Used for data migrations.
 	RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error
 	Close() error
+}
 
+// Entries stores content. Plugins write through entries.Service, which
+// adds validation and hooks on top.
+type Entries interface {
 	CreateEntry(ctx context.Context, e *Entry) error
 	UpdateEntry(ctx context.Context, e *Entry) error
 	GetEntry(ctx context.Context, typ string, id int64) (*Entry, error)
@@ -120,13 +134,21 @@ type Store interface {
 	DeleteEntry(ctx context.Context, typ string, id int64) error
 	// Referrers lists entries with relations pointing at the given entry.
 	Referrers(ctx context.Context, typ string, id int64) ([]Referrer, error)
+}
 
+// Users stores admin users.
+type Users interface {
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, id int64) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	CountUsers(ctx context.Context) (int, error)
+}
 
+// Sessions stores admin sessions.
+type Sessions interface {
 	CreateSession(ctx context.Context, s *Session) error
 	GetSession(ctx context.Context, token string) (*Session, error)
 	DeleteSession(ctx context.Context, token string) error
 }
+
+var _ Store = (*SQLStore)(nil)

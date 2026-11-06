@@ -38,7 +38,7 @@ type Logger interface {
 
 // Service saves and deletes entries.
 type Service struct {
-	Store  storage.Store
+	Store  storage.Entries
 	Schema *content.Schema
 	Hooks  hook.Host
 	Logger Logger
