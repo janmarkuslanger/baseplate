@@ -1,4 +1,4 @@
-package fields
+package markup
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func SanitizeHTML(in string) string {
 			buf.WriteString("<" + t.DataAtom.String())
 			if t.DataAtom == atom.A {
 				for _, a := range t.Attr {
-					if a.Key == "href" && safeURL(a.Val) {
+					if a.Key == "href" && SafeURL(a.Val) {
 						buf.WriteString(` href="` + html.EscapeString(a.Val) + `"`)
 					}
 				}
@@ -94,7 +94,9 @@ func SanitizeHTML(in string) string {
 // urlIgnored are characters browsers strip from URLs before parsing.
 var urlIgnored = strings.NewReplacer("\t", "", "\n", "", "\r", "")
 
-func safeURL(u string) bool {
+// SafeURL reports whether a link target is allowed (http(s), mailto, tel,
+// site-relative, anchor) and not protocol-relative.
+func SafeURL(u string) bool {
 	u = urlIgnored.Replace(strings.TrimSpace(strings.ToLower(u)))
 	// Browsers treat "\" like "/", so "/\host" is protocol-relative too.
 	if strings.HasPrefix(u, "//") || strings.HasPrefix(u, "/\\") {

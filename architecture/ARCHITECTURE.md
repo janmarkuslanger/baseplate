@@ -11,4 +11,29 @@
 customer project ── main.go ── baseplate + plugins ──▶ one binary ──▶ dist/ (static)
 ```
 
-Details: [`docs/internals.md`](../docs/internals.md)
+## Packages
+
+Public API = every package outside `internal/`. Each package's contract is its package doc (`go doc <pkg>`).
+
+| Package | Purpose | Main API |
+|---|---|---|
+| `baseplate` | app: config, CLI, wiring | `New`, `Config`, `App.Use`, `App.Main`, `App.Setup` |
+| `plugin` | extension API | `Plugin`, `Registry`, `Services` |
+| `hook` | typed extension points | `NewAction`, `NewFilter`, `NewList` |
+| `content` | schema, validation, data conventions | `Type`, `Field`, `Kind`, `Block`, `Schema`, `Errors`, `RefID` |
+| `entries` | save/delete content with rules and hooks | `Service.Save`, `Service.Delete`, `BeforeSave`, `AfterSave` |
+| `settings` | typed site settings | `Settings`, `Load` |
+| `fields` | built-in kinds, core blocks, page/settings types | `Core`, `CoreBlocks`, kind names, `RoutableFields` |
+| `storage` | persistence port + SQL implementation | `Store`, `Entry`, `EntryTable`, `Column` |
+| `storage/sqlite` | SQLite adapter | `Open` |
+| `render` | theme data contract and rendering | `Page`, `Ref`, `Meta` |
+| `build` | static site build | `Builder.Build` |
+| `mail` | outgoing mail | `Mailer`, `SMTP`, `LogMailer` |
+| `i18n` | translations | `Bundle`, `Catalog`, `Catalogs`, `M` |
+| `plugins/forms` | forms plugin (reference plugin) | `New` |
+| `internal/admin` | admin UI | – |
+| `internal/auth` | users, sessions, CSRF | – |
+| `internal/media` | media library (plugins: `Services.Media`) | – |
+| `internal/markup` | HTML sanitizer, HTML → Markdown | – |
+
+Details: [`docs/internals.md`](../docs/internals.md), plugin API: [`docs/plugins.md`](../docs/plugins.md)

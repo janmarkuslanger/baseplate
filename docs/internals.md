@@ -27,20 +27,19 @@
 | Entries | `entries` | write use cases: validation, rules, hooks, persist |
 | Plugins | `plugin`, `plugins/*` | extension API, built-in plugins |
 | Storage | `storage`, `storage/sqlite` | persistence behind an interface |
-| Admin | `admin`, `auth`, `media` | editor UI, login, uploads |
+| Admin | `internal/admin`, `internal/auth`, `internal/media` | editor UI, login, uploads |
+| Settings | `settings` | typed site settings |
+| Markup | `internal/markup` | HTML sanitizer, HTML → Markdown |
 | Build | `build`, `render` | static site + SEO/LLM files |
 | Mail | `mail` | outgoing e-mail |
 
 ## Dependencies
 
 ```
-baseplate ─▶ admin ─▶ build ─▶ render ─▶ fields ─▶ plugin ─▶ content
-                                                        └─▶ storage, mail
-plugins/* ─▶ plugin, content, fields
+baseplate ─▶ internal/admin ─▶ build ─▶ render ─▶ plugin ─▶ entries ─▶ storage ─▶ content ─▶ i18n ─▶ hook
+                                             fields ─▶ settings          mail
+plugins/* ─▶ public packages only
 ```
-
-- core features register through the same registry as plugins
-- `plugin` knows no UI/build packages
 
 ## Runtime
 

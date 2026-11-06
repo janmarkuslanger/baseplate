@@ -28,12 +28,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/janmarkuslanger/baseplate/admin"
-	"github.com/janmarkuslanger/baseplate/auth"
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/internal/admin"
+	"github.com/janmarkuslanger/baseplate/internal/auth"
+	"github.com/janmarkuslanger/baseplate/internal/media"
 	"github.com/janmarkuslanger/baseplate/mail"
-	"github.com/janmarkuslanger/baseplate/media"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
 	"github.com/janmarkuslanger/baseplate/storage/sqlite"
@@ -218,7 +218,8 @@ func (a *App) Setup(ctx context.Context) error {
 	if c.TrustedProxyHeader != "" {
 		clientIP = plugin.ProxyIP(c.TrustedProxyHeader)
 	}
-	reg := plugin.NewRegistry(plugin.Services{Store: st, Mailer: mailer, Logger: c.Logger, ClientIP: clientIP})
+	mediaStore := media.Store{Dir: filepath.Join(c.DataDir, "media")}
+	reg := plugin.NewRegistry(plugin.Services{Store: st, Mailer: mailer, Logger: c.Logger, ClientIP: clientIP, Media: mediaStore})
 	if err := reg.Use(fields.Core{}); err != nil {
 		return err
 	}
@@ -240,7 +241,6 @@ func (a *App) Setup(ctx context.Context) error {
 			return err
 		}
 	}
-	mediaStore := media.Store{Dir: filepath.Join(c.DataDir, "media")}
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies}
