@@ -68,6 +68,7 @@ plugins/* ─▶ public packages only
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
 - delete removes components and all relations from/to the entry
 - build resolves relations one level deep (+ inverse fields)
+- template lists (`entries`) read the entries the build loaded once per type
 - URLs come from `Type.Path` (`build.EntryURL`); used by build, sitemap, relations, llms.txt, admin list
 
 ## Extension points
