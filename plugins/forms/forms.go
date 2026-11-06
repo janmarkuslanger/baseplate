@@ -4,6 +4,7 @@
 package forms
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
@@ -277,7 +278,7 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, u, http.StatusSeeOther)
 			return
 		}
-		p.respond(w, http.StatusOK, response{Lang: lang, Title: p.pt(lang, "forms.public.thanks"), Message: firstNonEmpty(str(def.Data["successMessage"]), p.pt(lang, "forms.public.sent")), Back: back})
+		p.respond(w, http.StatusOK, response{Lang: lang, Title: p.pt(lang, "forms.public.thanks"), Message: cmp.Or(str(def.Data["successMessage"]), p.pt(lang, "forms.public.sent")), Back: back})
 	}
 	if r.PostFormValue(HoneypotField) != "" {
 		success() // pretend success so bots learn nothing
@@ -336,7 +337,7 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 	msg := bpmail.Message{
 		To:      []string{str(def.Data["recipient"])},
 		ReplyTo: replyTo,
-		Subject: firstNonEmpty(str(def.Data["subject"]), p.pt(lang, "forms.public.mailSubject", str(def.Data["title"]))),
+		Subject: cmp.Or(str(def.Data["subject"]), p.pt(lang, "forms.public.mailSubject", str(def.Data["title"]))),
 		Text:    text.String(),
 	}
 	// The submission is stored either way; a mail failure is logged and
@@ -361,12 +362,3 @@ func (p *Plugin) siteLang(ctx context.Context) string {
 }
 
 func str(v any) string { s, _ := v.(string); return s }
-
-func firstNonEmpty(vs ...string) string {
-	for _, v := range vs {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
-	"github.com/janmarkuslanger/baseplate/fields"
 )
 
 func contextBackground() context.Context { return context.Background() }
@@ -95,7 +94,8 @@ func (a *Admin) funcs() template.FuncMap {
 		"refOptions": a.refOptions,
 		"skeleton":   func(fs []content.Field) map[string]any { return skeleton(fs, nil) },
 		"isContainer": func(kind string) bool {
-			return kind == fields.Group || kind == fields.List || kind == fields.Blocks
+			k, _ := a.Reg.Schema.Kind(kind)
+			return k.Storage.Container()
 		},
 		"tabFields": func(t *content.Type, tab string) []content.Field {
 			var out []content.Field

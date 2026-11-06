@@ -317,10 +317,8 @@ func (s *SQLStore) writeComponent(ctx context.Context, q querier, ownerTable str
 		var res sql.Result
 		var err error
 		switch {
-		case len(cols) == 0 && s.dialect == MySQL:
-			res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` () VALUES ()`)
 		case len(cols) == 0:
-			res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` DEFAULT VALUES`)
+			res, err = q.ExecContext(ctx, `INSERT INTO `+ct.Name+` `+dialects[s.dialect].insertDefault)
 		default:
 			res, err = q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, ct.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
 		}
@@ -678,7 +676,7 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 			continue
 		}
 		seen[key] = true
-		out = append(out, Referrer{Type: t.Type, ID: ownerID, Field: r.field, Nested: nested})
+		out = append(out, Referrer{Type: t.Type, ID: ownerID, Field: r.field, Nested: nested, Block: blockOf(r.table)})
 	}
 	return out, nil
 }
