@@ -120,7 +120,7 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 	}
 	tmpl, _ := fs.Sub(frontendFS, "templates/blocks")
 	r.Templates(tmpl)
-	r.Funcs(plugin.TemplateFuncs{
+	if err := r.Funcs(plugin.TemplateFuncs{
 		"formByID": p.formByID,
 		// formsT translates visitor-facing texts: {{formsT $.Page.Site.language "forms.public.submit"}}
 		"formsT": func(lang any, key string) string {
@@ -130,7 +130,9 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 			}
 			return p.pt(l, key)
 		},
-	})
+	}); err != nil {
+		return err
+	}
 	adm, _ := fs.Sub(adminFS, "admin")
 	r.AdminTemplates(adm)
 	r.AdminPage(plugin.AdminPage{Path: "forms/submissions", Label: "forms.submissions", Handler: p.adminSubmissions})

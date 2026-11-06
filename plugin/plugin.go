@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"strings"
@@ -234,11 +235,17 @@ func (r *Registry) Public(f fs.FS) { r.public = append(r.public, f) }
 // AdminTemplates adds templates used by AdminPage handlers.
 func (r *Registry) AdminTemplates(f fs.FS) { r.adminTemplates = append(r.adminTemplates, f) }
 
-// Funcs adds frontend template functions.
-func (r *Registry) Funcs(m TemplateFuncs) {
-	for k, v := range m {
-		r.funcs[k] = v
+// Funcs adds frontend template functions. A name that is already
+// registered is an error; names of the core functions are checked when the
+// templates are built.
+func (r *Registry) Funcs(m TemplateFuncs) error {
+	for k := range m {
+		if _, ok := r.funcs[k]; ok {
+			return fmt.Errorf("template func %q registered twice", k)
+		}
 	}
+	maps.Copy(r.funcs, m)
+	return nil
 }
 
 // Accessors used by the core.

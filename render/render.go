@@ -134,6 +134,9 @@ func New(reg *plugin.Registry, theme fs.FS, opts Options) (*Renderer, error) {
 		},
 	}
 	for k, v := range reg.TemplateFuncs() {
+		if _, ok := funcs[k]; ok {
+			return nil, fmt.Errorf("template func %q: name is taken by the core", k)
+		}
 		funcs[k] = v
 	}
 	r.t = template.New("").Funcs(funcs)
