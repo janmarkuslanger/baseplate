@@ -18,6 +18,7 @@ import (
 	"testing/fstest"
 
 	"github.com/janmarkuslanger/baseplate"
+	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/plugin"
 )
@@ -170,5 +171,36 @@ func TestLoginBodyLimit(t *testing.T) {
 	res, _ := c.do("POST", "/admin/login", url.Values{"email": {"admin@example.com"}, "password": {"sehr-geheim-123"}, "pad": {big}})
 	if res.StatusCode == http.StatusSeeOther {
 		t.Fatal("oversized login body must not be accepted")
+	}
+}
+
+type blogPlugin struct{}
+
+func (blogPlugin) Name() string { return "blog" }
+func (blogPlugin) Register(r *plugin.Registry) error {
+	return r.ContentType(content.Type{Name: "post", Label: "Post", LabelPlural: "Posts", Routable: true, Path: "/blog/{slug}/", Fields: fields.RoutableFields()})
+}
+
+func TestListShowsURL(t *testing.T) {
+	_, c := newTestApp(t, blogPlugin{})
+	c.login()
+	idOf := func(res *http.Response) string {
+		return strings.Split(strings.TrimPrefix(res.Header.Get("Location"), "/admin/c/page/"), "?")[0]
+	}
+	res, _ := c.save("page", "published", map[string]any{"title": "Über uns", "slug": "ueber-uns"})
+	parent := idOf(res)
+	c.save("page", "published", map[string]any{"title": "Team", "slug": "team", "parent": parent})
+	res, _ = c.save("page", "draft", map[string]any{"title": "Entwurf", "slug": "entwurf"})
+	c.save("page", "published", map[string]any{"title": "Kind", "slug": "kind", "parent": idOf(res)})
+	c.save("post", "published", map[string]any{"title": "Hallo", "slug": "hallo"})
+
+	_, pages := c.do("GET", "/admin/c/page", nil)
+	for _, want := range []string{">/ueber-uns/<", ">/ueber-uns/team/<", ">/kind/<"} {
+		if !strings.Contains(pages, want) {
+			t.Errorf("page list: missing %s", want)
+		}
+	}
+	if _, posts := c.do("GET", "/admin/c/post", nil); !strings.Contains(posts, ">/blog/hallo/<") {
+		t.Error("post list: missing /blog/hallo/")
 	}
 }

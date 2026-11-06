@@ -180,7 +180,7 @@ func (s *site) WriteFile(p string, data []byte) error {
 // and SEO metadata.
 func (s *site) collect(base string) ([]*render.Page, error) {
 	var pages []*render.Page
-	byID := map[int64]*storage.Entry{}
+	byID := map[refKey]*storage.Entry{}
 	for _, t := range s.b.Reg.Schema.Types() {
 		if !t.Routable {
 			continue
@@ -191,16 +191,14 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		}
 		for i := range list {
 			e := &list[i]
-			if t.Name == fields.PageType {
-				byID[e.ID] = e // parent chains only link pages; IDs are per type
-			}
+			byID[refKey{t.Name, e.ID}] = e
 			pages = append(pages, &render.Page{Site: s.settings, Entry: *e, Data: e.Data, Type: t})
 		}
 	}
 	seen := map[string]string{}
 	var nav []render.Link
 	for _, p := range pages {
-		u, err := entryURL(&p.Entry, p.Type, byID)
+		u, err := EntryURL(p.Type, &p.Entry, func(id int64) *storage.Entry { return byID[refKey{p.Type.Name, id}] })
 		if err != nil {
 			return nil, err
 		}
@@ -236,32 +234,29 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 	return pages, nil
 }
 
-// entryURL builds "/parent/child/" for pages (slug "index" is "/") and
-// "/<type>/<slug>/" for other routable types.
-func entryURL(e *storage.Entry, t *content.Type, byID map[int64]*storage.Entry) (string, error) {
-	if t.Name != fields.PageType {
-		return "/" + t.Name + "/" + e.Slug + "/", nil
-	}
-	var parts []string
-	cur := e
-	for depth := 0; cur != nil; depth++ {
-		if depth > 20 {
-			return "", fmt.Errorf("Seite %q: zyklische Eltern-Beziehung", str(e.Data["title"]))
+// EntryURL builds an entry's URL from its type's path pattern. parent
+// returns a published entry of the same type by ID, or nil; an unpublished
+// or missing parent ends the {parents} chain.
+func EntryURL(t *content.Type, e *storage.Entry, parent func(id int64) *storage.Entry) (string, error) {
+	var parents []string
+	if strings.Contains(t.PathPattern(), "{parents}") {
+		seen := map[int64]bool{e.ID: true}
+		for cur := e; ; {
+			pid, _ := content.RefID(cur.Data["parent"])
+			if pid == 0 {
+				break
+			}
+			if seen[pid] {
+				return "", fmt.Errorf("%q: zyklische Eltern-Beziehung", str(e.Data[t.Title()]))
+			}
+			seen[pid] = true
+			if cur = parent(pid); cur == nil {
+				break
+			}
+			parents = append([]string{cur.Slug}, parents...)
 		}
-		if !(cur == e && cur.Slug == "index") {
-			parts = append([]string{cur.Slug}, parts...)
-		}
-		pid, _ := content.RefID(cur.Data["parent"])
-		if pid == 0 {
-			break
-		}
-		// An unpublished parent leaves the child at its own level.
-		cur = byID[pid]
 	}
-	if len(parts) == 0 {
-		return "/", nil
-	}
-	return "/" + strings.Join(parts, "/") + "/", nil
+	return t.URL(e.Slug, parents), nil
 }
 
 func markdownURL(u string) string {

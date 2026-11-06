@@ -359,3 +359,54 @@ func TestNoPublicDir(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTypePath(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "post", Routable: true, Path: "/blog/{slug}/", Fields: fields.RoutableFields()})
+	b.Reg.ContentType(content.Type{Name: "doc", Routable: true, Path: "/docs/{parents}/{slug}/", Fields: fields.RoutableFields(
+		content.Field{Name: "parent", Kind: fields.Relation, Ref: "doc"},
+	)})
+	b.Reg.Extend(fields.PageType, content.Field{Name: "featured", Kind: fields.Relation, Ref: "post"})
+	if err := st.UseSchema(ctx, b.Reg.Schema); err != nil {
+		t.Fatal(err)
+	}
+	tmpl := []byte(`{{define "x"}}{{with .Data.featured}}{{.URL}}{{end}}{{end}}`)
+	b.Theme = fstest.MapFS{
+		"templates/page.html": {Data: []byte(`{{define "page"}}{{with .Data.featured}}{{.URL}}{{end}}{{end}}`)},
+		"templates/post.html": {Data: tmpl},
+		"templates/doc.html":  {Data: tmpl},
+	}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	post := add(t, st, "post", "hallo", storage.StatusPublished, map[string]any{"title": "Hallo"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Start", "featured": post})
+	guide := add(t, st, "doc", "guide", storage.StatusPublished, map[string]any{"title": "Guide"})
+	draft := add(t, st, "doc", "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf", "parent": guide})
+	add(t, st, "doc", "install", storage.StatusPublished, map[string]any{"title": "Install", "parent": guide})
+	add(t, st, "doc", "linux", storage.StatusPublished, map[string]any{"title": "Linux", "parent": draft})
+
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"blog/hallo/index.html", "blog/hallo.md", "docs/guide/install/index.html", "docs/linux/index.html"} {
+		read(t, b, p)
+	}
+	if got := read(t, b, "index.html"); got != "/blog/hallo/" {
+		t.Errorf("relation URL: %q", got)
+	}
+	if sm := read(t, b, "sitemap.xml"); !strings.Contains(sm, "https://a.test/blog/hallo/") || !strings.Contains(sm, "https://a.test/docs/guide/install/") {
+		t.Errorf("sitemap: %s", sm)
+	}
+
+	// A parent cycle fails the build.
+	a := add(t, st, "doc", "a", storage.StatusPublished, map[string]any{"title": "A"})
+	c := add(t, st, "doc", "c", storage.StatusPublished, map[string]any{"title": "C", "parent": a})
+	e, _ := st.GetEntry(ctx, "doc", a)
+	e.Data["parent"] = c
+	if err := st.UpdateEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "zyklisch") {
+		t.Fatalf("want cycle error, got %v", err)
+	}
+}
