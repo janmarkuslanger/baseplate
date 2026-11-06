@@ -114,7 +114,7 @@ func TestHooksRunForEveryCaller(t *testing.T) {
 		e.Entry.Data["title"] = "geprüft"
 		return nil
 	})
-	plugin.EntryAfterSave.On(reg, func(_ context.Context, e *plugin.EntryEvent) error { // alias works
+	entries.AfterSave.On(reg, func(_ context.Context, e *entries.Event) error {
 		after = append(after, e.Entry.ID)
 		return nil
 	})

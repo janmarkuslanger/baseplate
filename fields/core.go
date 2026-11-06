@@ -1,12 +1,9 @@
 package fields
 
 import (
-	"context"
-
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/settings"
-	"github.com/janmarkuslanger/baseplate/storage"
 )
 
 // Built-in content type names.
@@ -91,11 +88,3 @@ func (Core) Register(r *plugin.Registry) error {
 }
 
 func str(v any) string { s, _ := v.(string); return s }
-
-// LoadSettings returns the settings data.
-//
-// Deprecated: use settings.Load for typed access.
-func LoadSettings(ctx context.Context, st storage.Entries) (map[string]any, error) {
-	s, err := settings.Load(ctx, st)
-	return s.Data, err
-}

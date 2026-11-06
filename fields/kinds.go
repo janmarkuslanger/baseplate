@@ -14,6 +14,7 @@ import (
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/i18n"
+	"github.com/janmarkuslanger/baseplate/internal/markup"
 )
 
 // Kind names.
@@ -40,19 +41,13 @@ const (
 	Timezone = "timezone"
 )
 
-// BlockTypeKey and ItemKey are aliases of the content conventions, kept for
-// plugins that import them from here.
-const BlockTypeKey = content.BlockTypeKey
-
-const ItemKey = content.ItemKey
-
 var itemKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[0-9]+$`)
 
 // keepKey copies a valid item key from raw to out.
 func keepKey(out map[string]any, raw any) map[string]any {
 	if m, ok := raw.(map[string]any); ok {
-		if k, ok := m[ItemKey].(string); ok && itemKeyRe.MatchString(k) {
-			out[ItemKey] = k
+		if k, ok := m[content.ItemKey].(string); ok && itemKeyRe.MatchString(k) {
+			out[content.ItemKey] = k
 		}
 	}
 	return out
@@ -107,7 +102,7 @@ func Kinds() []content.Kind {
 		stringKind(Text, content.StoreText, nil),
 		stringKind(Textarea, content.StoreLongText, nil),
 		stringKind(RichText, content.StoreLongText, func(_ content.Field, s string) (string, error) {
-			return SanitizeHTML(s), nil
+			return markup.SanitizeHTML(s), nil
 		}),
 		stringKind(Slug, content.StoreText, func(_ content.Field, s string) (string, error) {
 			s = strings.ToLower(s)
@@ -138,7 +133,7 @@ func Kinds() []content.Kind {
 			return s, nil
 		}),
 		stringKind(URL, content.StoreText, func(_ content.Field, s string) (string, error) {
-			if !safeURL(s) {
+			if !markup.SafeURL(s) {
 				return "", i18n.M("validation.url")
 			}
 			return s, nil
@@ -276,7 +271,7 @@ func Kinds() []content.Kind {
 				errs := content.Errors{}
 				for i, it := range items {
 					m, _ := it.(map[string]any)
-					name, _ := m[BlockTypeKey].(string)
+					name, _ := m[content.BlockTypeKey].(string)
 					b, ok := s.Block(name)
 					if !ok || !allowed[name] {
 						errs[strconv.Itoa(i)] = i18n.M("validation.unknownBlock", name)
@@ -284,7 +279,7 @@ func Kinds() []content.Kind {
 					}
 					v, err := s.ValidateNested(b.Fields, m)
 					collect(errs, i, err)
-					v[BlockTypeKey] = name
+					v[content.BlockTypeKey] = name
 					keepKey(v, m)
 					out = append(out, v)
 				}

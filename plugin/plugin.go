@@ -71,23 +71,15 @@ func ProxyIP(header string) func(r *http.Request) string {
 	}
 }
 
-// EntryEvent is the payload of the entry hooks (see package entries).
-type EntryEvent = entries.Event
-
 // BuildEvent is the payload of BuildAfter.
 type BuildEvent struct {
 	DistDir string
 	Pages   int
 }
 
-var (
-	// EntryBeforeSave and EntryAfterSave are the hooks of entries.Service
-	// (aliases of entries.BeforeSave / entries.AfterSave).
-	EntryBeforeSave = entries.BeforeSave
-	EntryAfterSave  = entries.AfterSave
-	// BuildAfter runs after a successful build. Errors are logged.
-	BuildAfter = hook.NewAction[*BuildEvent]("build.after", "after a successful static build; errors are logged")
-)
+// BuildAfter runs after a successful build. Errors are logged. The entry
+// hooks are entries.BeforeSave and entries.AfterSave.
+var BuildAfter = hook.NewAction[*BuildEvent]("build.after", "after a successful static build; errors are logged")
 
 // AdminUI lets plugin admin pages render inside the admin layout.
 type AdminUI interface {
