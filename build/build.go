@@ -66,74 +66,40 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	defer b.mu.Unlock()
 	start := time.Now()
 
-	r, err := render.New(b.Reg, b.Theme)
-	if err != nil {
-		return Result{}, err
-	}
 	cfg, err := settings.Load(ctx, b.Reg.Store)
 	if err != nil {
 		return Result{}, err
 	}
-	base := cfg.BaseURL
-	if base == "" {
+	if cfg.BaseURL == "" {
 		return Result{}, ErrBaseURLMissing
 	}
 
 	// Clean first: with "dist/" the .tmp/.old paths would land inside dist.
 	dist := filepath.Clean(b.DistDir)
 	tmp := dist + ".tmp"
-	os.RemoveAll(tmp)
+	if err := os.RemoveAll(tmp); err != nil {
+		return Result{}, err
+	}
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		return Result{}, err
 	}
 	defer os.RemoveAll(tmp)
 
-	s := &site{ctx: ctx, b: b, r: r, out: tmp, cfg: cfg, settings: cfg.Data}
-	pages, err := s.collect(base)
+	s := &site{ctx: ctx, b: b, out: tmp, cfg: cfg}
+	pages, err := s.collect()
 	if err != nil {
 		return Result{}, err
 	}
-	r.SetEntries(s.entries)
-	r.SetLocale(cmp.Or(cfg.Language, i18n.Default), cfg.Location)
-	for _, p := range pages {
-		if err := s.renderPage(p); err != nil {
-			return Result{}, err
-		}
-	}
-	if err := s.outputs(pages); err != nil {
+	s.r, err = render.New(b.Reg, b.Theme, render.Options{Entries: s.entries, Lang: cfg.Language, Location: cfg.Location})
+	if err != nil {
 		return Result{}, err
 	}
-	if b.Theme != nil {
-		if sub, err := fs.Sub(b.Theme, "assets"); err == nil {
-			if err := copyFS(sub, filepath.Join(tmp, "assets")); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return Result{}, err
-			}
-		}
-	}
-	if b.MediaDir != "" {
-		if err := copyFS(os.DirFS(b.MediaDir), filepath.Join(tmp, "media")); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return Result{}, err
-		}
-	}
-	for _, g := range b.Reg.Generators() {
-		if err := g(s); err != nil {
-			return Result{}, fmt.Errorf("generator: %w", err)
-		}
-	}
-	if err := b.copyPublic(tmp); err != nil {
+	if err := s.write(pages); err != nil {
 		return Result{}, err
 	}
-
-	old := dist + ".old"
-	os.RemoveAll(old)
-	if err := os.Rename(dist, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := swap(tmp, dist); err != nil {
 		return Result{}, err
 	}
-	if err := os.Rename(tmp, dist); err != nil {
-		os.Rename(old, dist)
-		return Result{}, err
-	}
-	os.RemoveAll(old)
 
 	if err := plugin.BuildAfter.Run(ctx, b.Reg, &plugin.BuildEvent{DistDir: dist, Pages: len(pages)}); err != nil && b.Reg.Logger != nil {
 		b.Reg.Logger.Error("build hook", "err", err)
@@ -141,19 +107,76 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	return Result{Pages: len(pages), Duration: time.Since(start), Finished: time.Now()}, nil
 }
 
+// write renders the site into s.out. The order matters: public files come
+// last, so any path written before is detected as a conflict.
+func (s *site) write(pages []*render.Page) error {
+	for _, p := range pages {
+		if err := s.renderPage(p); err != nil {
+			return err
+		}
+	}
+	if err := s.outputs(pages); err != nil {
+		return err
+	}
+	if err := s.b.copyAssets(s.out); err != nil {
+		return err
+	}
+	for _, g := range s.b.Reg.Generators() {
+		if err := g(s); err != nil {
+			return fmt.Errorf("generator: %w", err)
+		}
+	}
+	return s.b.copyPublic(s.out)
+}
+
+// copyAssets copies the theme's "assets/" and the media library.
+func (b *Builder) copyAssets(out string) error {
+	if b.Theme != nil {
+		if sub, err := fs.Sub(b.Theme, "assets"); err == nil {
+			if err := copyFS(sub, filepath.Join(out, "assets")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		}
+	}
+	if b.MediaDir != "" {
+		if err := copyFS(os.DirFS(b.MediaDir), filepath.Join(out, "media")); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+// swap replaces dist with tmp. If that fails, the previous site is put back.
+func swap(tmp, dist string) error {
+	old := dist + ".old"
+	if err := os.RemoveAll(old); err != nil {
+		return err
+	}
+	if err := os.Rename(dist, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(tmp, dist); err != nil {
+		if rerr := os.Rename(old, dist); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+			return errors.Join(err, fmt.Errorf("restore previous site: %w", rerr))
+		}
+		return err
+	}
+	os.RemoveAll(old) // the new site is live; a leftover is removed by the next build
+	return nil
+}
+
 // site implements plugin.Site.
 type site struct {
-	ctx      context.Context
-	b        *Builder
-	r        *render.Renderer
-	out      string
-	cfg      settings.Settings
-	settings map[string]any
-	res      *resolver // set by collect
+	ctx context.Context
+	b   *Builder
+	r   *render.Renderer
+	out string
+	cfg settings.Settings
+	res *resolver // set by collect
 }
 
 func (s *site) Context() context.Context { return s.ctx }
-func (s *site) Settings() map[string]any { return s.settings }
+func (s *site) Settings() map[string]any { return s.cfg.Data }
 
 func (s *site) Published(typ string) ([]storage.Entry, error) {
 	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Status: storage.StatusPublished})
@@ -189,7 +212,8 @@ func (s *site) WriteFile(p string, data []byte) error {
 
 // collect loads all published routable entries and computes their URLs
 // and SEO metadata.
-func (s *site) collect(base string) ([]*render.Page, error) {
+func (s *site) collect() ([]*render.Page, error) {
+	base := s.cfg.BaseURL
 	var pages []*render.Page
 	byID := map[refKey]*storage.Entry{}
 	for _, t := range s.b.Reg.Schema.Types() {
@@ -203,7 +227,7 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		for i := range list {
 			e := &list[i]
 			byID[refKey{t.Name, e.ID}] = e
-			pages = append(pages, &render.Page{Site: s.settings, Entry: *e, Data: e.Data, Type: t})
+			pages = append(pages, &render.Page{Site: s.cfg.Data, Entry: *e, Data: e.Data, Type: t})
 		}
 	}
 	seen := map[string]string{}
@@ -219,7 +243,7 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		seen[u] = str(p.Data["title"])
 		p.URL, p.AbsURL = u, base+u
 		p.MarkdownURL = markdownURL(u)
-		p.Meta = meta(p, s.cfg, base)
+		p.Meta = meta(p, s.cfg)
 		if p.Type.Name == fields.PageType {
 			parent, _ := content.RefID(p.Data["parent"])
 			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
@@ -278,7 +302,7 @@ func markdownURL(u string) string {
 	return strings.TrimSuffix(u, "/") + ".md"
 }
 
-func meta(p *render.Page, cfg settings.Settings, base string) render.Meta {
+func meta(p *render.Page, cfg settings.Settings) render.Meta {
 	seo, _ := p.Data["seo"].(map[string]any)
 	title := str(p.Data["title"])
 	m := render.Meta{
@@ -299,7 +323,7 @@ func meta(p *render.Page, cfg settings.Settings, base string) render.Meta {
 	m.Robots = strings.Join(robots, ", ")
 	m.OGTitle = cmp.Or(str(seo["ogTitle"]), m.Title)
 	m.OGDescription = cmp.Or(str(seo["ogDescription"]), m.Description)
-	m.OGImage = absolute(base, cmp.Or(str(seo["ogImage"]), cfg.DefaultOGImage))
+	m.OGImage = absolute(cfg.BaseURL, cmp.Or(str(seo["ogImage"]), cfg.DefaultOGImage))
 	return m
 }
 
@@ -321,7 +345,7 @@ func (s *site) renderPage(p *render.Page) error {
 // outputs renders the root output templates (robots.txt, sitemap.xml,
 // llms.txt and the theme's own) into the site root.
 func (s *site) outputs(pages []*render.Page) error {
-	data := render.Output{Site: s.settings, BaseURL: s.cfg.BaseURL, Pages: pages}
+	data := render.Output{Site: s.cfg.Data, BaseURL: s.cfg.BaseURL, Pages: pages}
 	for _, p := range pages {
 		if !indexable(p) {
 			continue

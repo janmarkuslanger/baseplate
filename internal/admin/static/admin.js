@@ -44,6 +44,12 @@
     };
   })();
 
+  let refs = null;
+  const refOptions = () => {
+    if (!refs) refs = JSON.parse(document.getElementById('editor')?.dataset.refs || '{}');
+    return refs;
+  };
+
   // New items get "n…" keys; stored items keep the server's "<table>:<id>".
   const uid = () => 'n' + Math.random().toString(36).slice(2, 10);
 
@@ -212,10 +218,11 @@
       },
     }));
 
-    // relationField edits one target ID (or a list of IDs when many).
-    Alpine.data('relationField', (options, many) => ({
+    // relationField edits one target ID (or a list of IDs when many); the
+    // choices per target type come from the editor's data-refs.
+    Alpine.data('relationField', (ref, many) => ({
       value: many ? [] : null,
-      options,
+      options: refOptions()[ref] || [],
       many,
       q: '',
       open: false,

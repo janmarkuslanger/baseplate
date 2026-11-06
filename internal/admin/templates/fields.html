@@ -68,7 +68,7 @@
       </div>
     </div>
   {{else if eq .F.Kind "relation"}}
-    <div class="rel" x-data="relationField({{json (refOptions .F.Ref)}}, {{.F.Many}})" x-modelable="value" x-model="{{.M}}" x-on:click.outside="open = false">
+    <div class="rel" x-data="relationField({{json .F.Ref}}, {{.F.Many}})" x-modelable="value" x-model="{{.M}}" x-on:click.outside="open = false">
       <template x-if="many">
         <ul class="rel__list">
           <template x-for="(id, i) in value" :key="id">

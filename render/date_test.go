@@ -22,11 +22,14 @@ func TestDate(t *testing.T) {
 	if err := reg.Use(catalogPlugin{}); err != nil {
 		t.Fatal(err)
 	}
-	r, err := New(reg, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 	berlin, _ := time.LoadLocation("Europe/Berlin")
+	renderer := func(lang string) *Renderer {
+		r, err := New(reg, nil, Options{Lang: lang, Location: berlin})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
 	// 2024-05-01 00:30 in Berlin = 2024-04-30 22:30 UTC, a Wednesday.
 	const ts = int64(1714516200)
 	for _, c := range []struct {
@@ -50,14 +53,13 @@ func TestDate(t *testing.T) {
 		{"de", ts, "short", []string{"UTC"}, "30.04.2024"},
 		{"de", nil, "long", nil, ""},
 	} {
-		r.SetLocale(c.lang, berlin)
-		got, err := r.date(c.v, c.format, c.zone...)
+		got, err := renderer(c.lang).date(c.v, c.format, c.zone...)
 		if err != nil || got != c.want {
 			t.Errorf("%s %s %v: %q (%v), want %q", c.lang, c.format, c.zone, got, err, c.want)
 		}
 	}
 
-	r.SetLocale("de", berlin)
+	r := renderer("de")
 	r.i18n.Add(i18n.Catalog{Lang: "de", Messages: map[string]string{"date.format.weekday": "Monday, 2. January"}})
 	if got, _ := r.date(ts, "weekday"); got != "Mittwoch, 1. Mai" {
 		t.Errorf("weekday: %q", got)

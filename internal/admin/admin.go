@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/i18n"
@@ -42,17 +42,15 @@ type Admin struct {
 	// content changes (publish, update, unpublish, delete).
 	BuildOnPublish bool
 
-	autoMu      sync.Mutex
-	autoRunning bool
-	autoPending bool
+	// rebuild holds one pending background build request (BuildOnPublish).
+	rebuild chan struct{}
 
 	i18n    *i18n.Bundle
 	base    *template.Template
 	pages   map[string]*template.Template
 	plugins map[string]*template.Template
 
-	buildMu   sync.Mutex
-	lastBuild *buildStatus
+	lastBuild atomic.Pointer[buildStatus]
 }
 
 func (a *Admin) store() storage.Store { return a.Reg.Store }
@@ -69,6 +67,10 @@ func (a *Admin) Init() error {
 		a.Lang = i18n.Default
 	}
 	a.i18n = i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(a.Reg)...)...)
+	if a.BuildOnPublish {
+		a.rebuild = make(chan struct{}, 1)
+		go a.autoBuild()
+	}
 	base, err := template.New("").Funcs(a.funcs()).ParseFS(templateFS, "templates/layout.html", "templates/fields.html")
 	if err != nil {
 		return err
