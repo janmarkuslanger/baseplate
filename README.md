@@ -120,6 +120,23 @@ A theme is an `fs.FS` containing:
 
 Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`.
 
+Lists of other entries (e.g. in a listing block) come from `entries`:
+
+```html
+{{range entries "blog" "sort" "-publishedDate" "limit" .Block.limit "has" "categories" .Block.categories}}
+  <a href="{{.URL}}">{{.Data.title}}</a>
+{{end}}
+```
+
+| Option | |
+|---|---|
+| `"sort" "field"` / `"-field"` | ascending / descending, empty values last; default: last updated first |
+| `"limit" n`, `"offset" n` | 0 or empty = no limit |
+| `"where" "field" value` | field equals value (repeatable) |
+| `"has" "relation" refs` | relation contains one of refs; empty refs = no filter (repeatable) |
+
+Published entries only; each result has `.URL` (routable types), `.Data` with relations resolved one level deep. Unknown types, fields or options fail the build.
+
 ```html
 <head>{{template "baseplate/head" .}}</head>   <!-- all SEO / Open Graph tags -->
 {{blocks .Data.body .}}                        <!-- renders content blocks -->

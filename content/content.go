@@ -137,7 +137,7 @@ func (t Type) checkPath() error {
 		return fmt.Errorf("content: path of %s has an unknown placeholder: %q", t.Name, p)
 	}
 	if strings.Contains(p, "{parents}") {
-		if f := t.field("parent"); f == nil || f.Ref != t.Name {
+		if f := t.Field("parent"); f == nil || f.Ref != t.Name {
 			return fmt.Errorf("content: path of %s uses {parents} but has no field \"parent\" relating to %s", t.Name, t.Name)
 		}
 	}
@@ -256,7 +256,7 @@ func (s *Schema) Extend(typeName string, fields ...Field) error {
 		return fmt.Errorf("content: cannot extend unknown type %q", typeName)
 	}
 	for _, f := range fields {
-		if t.field(f.Name) != nil {
+		if t.Field(f.Name) != nil {
 			return fmt.Errorf("content: type %q already has field %q", typeName, f.Name)
 		}
 		t.Fields = append(t.Fields, f)
@@ -486,7 +486,8 @@ func (s *Schema) ValidateNested(fields []Field, raw any) (map[string]any, error)
 	return out, nil
 }
 
-func (t *Type) field(name string) *Field {
+// Field returns the top-level field with the given name, or nil.
+func (t *Type) Field(name string) *Field {
 	for i := range t.Fields {
 		if t.Fields[i].Name == name {
 			return &t.Fields[i]

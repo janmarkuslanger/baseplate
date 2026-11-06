@@ -86,6 +86,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	r.SetEntries(s.entries)
 	for _, p := range pages {
 		if err := s.renderPage(p); err != nil {
 			return Result{}, err
@@ -146,6 +147,7 @@ type site struct {
 	out      string
 	cfg      settings.Settings
 	settings map[string]any
+	res      *resolver // set by collect
 }
 
 func (s *site) Context() context.Context { return s.ctx }
@@ -216,6 +218,7 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 	}
 	// Resolve relations once all URLs are known.
 	res := &resolver{s: s, urls: map[refKey]string{}, cache: map[refKey]*render.Ref{}, lists: map[string][]storage.Entry{}}
+	s.res = res
 	for _, p := range pages {
 		res.urls[refKey{p.Type.Name, p.Entry.ID}] = p.URL
 	}

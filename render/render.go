@@ -69,16 +69,32 @@ type BlockData struct {
 }
 
 type Renderer struct {
-	t      *template.Template
-	schema *content.Schema
+	t       *template.Template
+	schema  *content.Schema
+	entries EntriesFunc
 }
+
+// EntriesFunc implements the "entries" template function:
+//
+//	{{range entries "blog" "sort" "-publishedDate" "limit" 3}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}
+type EntriesFunc func(typ string, opts ...any) ([]*Ref, error)
+
+// SetEntries sets the data source of the "entries" template function.
+// The build sets it once all URLs are known; without it, "entries" fails.
+func (r *Renderer) SetEntries(f EntriesFunc) { r.entries = f }
 
 // New builds the template set from the defaults, all plugin template FSs
 // and the theme's "templates" directory (if theme is non-nil).
 func New(reg *plugin.Registry, theme fs.FS) (*Renderer, error) {
 	r := &Renderer{schema: reg.Schema}
 	funcs := template.FuncMap{
-		"blocks":   r.blocks,
+		"blocks": r.blocks,
+		"entries": func(typ string, opts ...any) ([]*Ref, error) {
+			if r.entries == nil {
+				return nil, fmt.Errorf("entries %q: only available in the build", typ)
+			}
+			return r.entries(typ, opts...)
+		},
 		"richtext": func(s any) template.HTML { return template.HTML(markup.SanitizeHTML(fmt.Sprint(s))) },
 		"json": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
