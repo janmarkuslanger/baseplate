@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -167,4 +168,31 @@ func TestPluginKindAdminTemplate(t *testing.T) {
 	if !strings.Contains(string(b), `<input type="color" class="color-input" x-model="data.accent">`) || !strings.Contains(string(b), "Akzentfarbe") {
 		t.Errorf("plugin kind input missing")
 	}
+}
+
+func TestPluginMediaService(t *testing.T) {
+	dir := t.TempDir()
+	var saved string
+	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	app.Use(mediaPlugin{url: &saved})
+	if err := app.Setup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+	if !strings.HasPrefix(saved, "/media/logo-") || !strings.HasSuffix(saved, ".png") {
+		t.Errorf("url = %q", saved)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "data", "media", strings.TrimPrefix(saved, "/media/"))); err != nil {
+		t.Errorf("file not in the media library: %v", err)
+	}
+}
+
+// mediaPlugin uploads a file through Services.Media while registering.
+type mediaPlugin struct{ url *string }
+
+func (mediaPlugin) Name() string { return "media-user" }
+func (p mediaPlugin) Register(r *plugin.Registry) error {
+	u, err := r.Media.Save(strings.NewReader("\x89PNG\r\n\x1a\nrest"), "Logo.png")
+	*p.url = u
+	return err
 }

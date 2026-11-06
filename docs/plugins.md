@@ -32,7 +32,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `PublicRoute` | endpoints on the CMS server |
 | `Migration`, `DataMigration` | own tables, content changes after schema changes |
 | `Use` | sub-plugins |
-| `Services` | `Entries` (save/delete content with the admin's rules and hooks), `Store`, `Mailer`, `Logger`, `ClientIP` |
+| `Services` | `Entries` (save/delete content with the admin's rules and hooks), `Media` (uploads), `Store`, `Mailer`, `Logger`, `ClientIP` |
 
 ## Blocks
 

@@ -5,6 +5,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -30,12 +31,20 @@ type Services struct {
 	Store  storage.Store
 	Mailer mail.Mailer
 	Logger *slog.Logger
+	// Media stores uploads in the media library (the admin's uploads).
+	Media Media
 	// Entries saves and deletes content with the same rules and hooks as the
 	// admin. Use it instead of Store.CreateEntry/UpdateEntry.
 	Entries *entries.Service
 	// ClientIP returns the visitor's IP, honouring Config.TrustedProxyHeader.
 	// Use it for rate limits instead of r.RemoteAddr.
 	ClientIP func(r *http.Request) string
+}
+
+// Media is the media library as seen by plugins.
+type Media interface {
+	// Save stores a file and returns its URL (/media/…).
+	Save(r io.Reader, filename string) (string, error)
 }
 
 // RemoteIP returns the host part of r.RemoteAddr.

@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
-	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/internal/markup"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -79,7 +79,7 @@ func New(reg *plugin.Registry, theme fs.FS) (*Renderer, error) {
 	r := &Renderer{schema: reg.Schema}
 	funcs := template.FuncMap{
 		"blocks":   r.blocks,
-		"richtext": func(s any) template.HTML { return template.HTML(fields.SanitizeHTML(fmt.Sprint(s))) },
+		"richtext": func(s any) template.HTML { return template.HTML(markup.SanitizeHTML(fmt.Sprint(s))) },
 		"json": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			return template.JS(b), err
