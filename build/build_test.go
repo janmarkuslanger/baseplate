@@ -14,6 +14,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/storage"
 	"github.com/janmarkuslanger/baseplate/storage/sqlite"
 )
@@ -489,5 +490,52 @@ func TestGeneratorsDoNotOverwrite(t *testing.T) {
 	var m i18n.Msg
 	if !errors.As(err, &m) || m.Key != MsgPathConflict || m.Args[0] != "/robots.txt" {
 		t.Fatalf("want path conflict for /robots.txt, got %v", err)
+	}
+}
+
+func TestLayouts(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "landing", Routable: true, Layout: "bare", Fields: fields.RoutableFields()})
+	b.Reg.ContentType(content.Type{Name: "raw", Routable: true, Layout: "-", Fields: fields.RoutableFields()})
+	b.Reg.ContentType(content.Type{Name: "broken", Routable: true, Layout: "nope", Fields: fields.RoutableFields()})
+	st.UseSchema(ctx, b.Reg.Schema)
+	b.Theme = fstest.MapFS{
+		"templates/layout.html":  {Data: []byte(`{{define "layout"}}<title>{{.Page.Meta.Title}}</title><main>{{.Content}}</main>{{end}}`)},
+		"templates/bare.html":    {Data: []byte(`{{define "bare"}}<body class="bare">{{.Content}}</body>{{end}}`)},
+		"templates/page.html":    {Data: []byte(`{{define "page"}}<h1>{{.Data.title}}</h1>{{end}}`)},
+		"templates/landing.html": {Data: []byte(`{{define "landing"}}<h1>{{.Data.title}}</h1>{{end}}`)},
+		"templates/raw.html":     {Data: []byte(`{{define "raw"}}raw{{end}}`)},
+		"templates/broken.html":  {Data: []byte(`{{define "broken"}}x{{end}}`)},
+		"templates/404.html":     {Data: []byte(`{{define "404"}}<p>{{.Data.text}}</p>{{end}}`)},
+	}
+	b.Reg.Generator(func(s plugin.Site) error {
+		return s.RenderPage("404.html", "404", "", &render.Page{Meta: render.Meta{Title: "Weg"}, Data: map[string]any{"text": "weg"}})
+	})
+	b.Reg.Generator(func(s plugin.Site) error {
+		return s.Render("plain.html", "404", &render.Page{Data: map[string]any{"text": "ohne"}})
+	})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"siteName": "Acme", "baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A & B"})
+	add(t, st, "landing", "l", storage.StatusPublished, map[string]any{"title": "L"})
+	add(t, st, "raw", "r", storage.StatusPublished, map[string]any{"title": "R"})
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{
+		"index.html":           "<title>A &amp; B | Acme</title><main><h1>A &amp; B</h1></main>", // content not escaped twice
+		"landing/l/index.html": `<body class="bare"><h1>L</h1></body>`,
+		"raw/r/index.html":     "raw",
+		"404.html":             "<title>Weg</title><main><p>weg</p></main>",
+		"plain.html":           "<p>ohne</p>",
+	} {
+		if got := read(t, b, p); got != want {
+			t.Errorf("%s = %q, want %q", p, got, want)
+		}
+	}
+
+	add(t, st, "broken", "x", storage.StatusPublished, map[string]any{"title": "X"})
+	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), `layout "nope" not defined`) {
+		t.Fatalf("want missing layout error, got %v", err)
 	}
 }

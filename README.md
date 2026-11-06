@@ -115,6 +115,7 @@ Database migrations run automatically on the next start.
 A theme is an `fs.FS` containing:
 
 - `templates/*.html` — one template per routable content type (`{{define "page"}}…{{end}}`). A theme can override any default, such as `baseplate/head` or `block/<name>`.
+- `layout` (optional) — wraps every page: `{{define "layout"}}<html><head>{{template "baseplate/head" .Page}}</head><body>{{.Content}}</body></html>{{end}}`. `Type.Layout` picks another layout template, `"-"` none; generators use `s.RenderPage(path, tmpl, "", data)`. Without a `layout`, type templates render the whole document as before.
 - `assets/` — copied to `dist/assets/`.
 - `templates/output/<path>` — generated files of the site root (text templates). The core ships `robots.txt`, `sitemap.xml` and `llms.txt` (`{{if .Site.llmsTxt}}`); the same path in the theme replaces it, an empty template means no file, new paths add files (`feed.xml`, `sitemap-index.xml`, …). Data: `.Site`, `.BaseURL`, `.Pages`, `.Indexable`, `.Sitemap`; functions as in page templates plus `xml` (escape) and `replace`.
 - `templates/markdown.md` — the Markdown variant of each page (default `{{markdown .}}`; empty = no `.md` file).

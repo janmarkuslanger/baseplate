@@ -62,6 +62,9 @@ type Type struct {
 	// Template is the frontend template used to render routable entries;
 	// defaults to the type name.
 	Template string
+	// Layout wraps the rendered template (see render.Layout); defaults to
+	// the theme's "layout" if it defines one, "-" means none.
+	Layout string
 	// Path is the URL pattern of routable entries; defaults to
 	// "/<name>/{slug}/". Placeholders: {slug}, and {parents} for the slugs
 	// of the "parent" chain (a relation of the type to itself). Empty

@@ -169,6 +169,39 @@ func parseAll(t *template.Template, fsys fs.FS) error {
 
 func (r *Renderer) Has(name string) bool { return r.t.Lookup(name) != nil }
 
+// DefaultLayout is the layout template used when a type names none.
+const DefaultLayout = "layout"
+
+// Layout is the data of layout templates:
+//
+//	{{define "layout"}}<html><head>{{template "baseplate/head" .Page}}</head><body>{{.Content}}</body></html>{{end}}
+//
+// Page is the *Page of entry pages, or the data a generator passes.
+type Layout struct {
+	Page    any
+	Content template.HTML
+}
+
+// ExecutePage renders template name with data and wraps the result in
+// layout ("" = DefaultLayout if defined, "-" = none). A named layout that
+// does not exist is an error.
+func (r *Renderer) ExecutePage(w io.Writer, name, layout string, data any) error {
+	switch {
+	case layout == "-", layout == "" && !r.Has(DefaultLayout):
+		return r.Execute(w, name, data)
+	case layout == "":
+		layout = DefaultLayout
+	}
+	if !r.Has(layout) {
+		return fmt.Errorf("render: layout %q not defined (add it to your theme)", layout)
+	}
+	var buf bytes.Buffer
+	if err := r.Execute(&buf, name, data); err != nil {
+		return err
+	}
+	return r.Execute(w, layout, Layout{Page: data, Content: template.HTML(buf.String())})
+}
+
 func (r *Renderer) Execute(w io.Writer, name string, data any) error {
 	if !r.Has(name) {
 		return fmt.Errorf("render: template %q not defined (add it to your theme)", name)

@@ -119,6 +119,10 @@ type Site interface {
 	Published(typ string) ([]storage.Entry, error)
 	// Render executes a frontend template and writes it to path in dist/.
 	Render(path, template string, data any) error
+	// RenderPage is Render wrapped in a layout like entry pages: layout ""
+	// is the theme's "layout" (if defined), "-" none. The layout gets
+	// render.Layout{Page: data, Content: …}.
+	RenderPage(path, template, layout string, data any) error
 	WriteFile(path string, data []byte) error
 }
 
