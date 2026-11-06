@@ -159,8 +159,12 @@ func (s *site) Published(typ string) ([]storage.Entry, error) {
 }
 
 func (s *site) Render(p, tmpl string, data any) error {
+	return s.RenderPage(p, tmpl, "-", data)
+}
+
+func (s *site) RenderPage(p, tmpl, layout string, data any) error {
 	var buf bytes.Buffer
-	if err := s.r.Execute(&buf, tmpl, data); err != nil {
+	if err := s.r.ExecutePage(&buf, tmpl, layout, data); err != nil {
 		return err
 	}
 	return s.WriteFile(p, buf.Bytes())
@@ -302,7 +306,7 @@ func (s *site) renderPage(p *render.Page) error {
 	if !s.r.Has(name) && s.r.Has(name+".html") {
 		name += ".html"
 	}
-	if err := s.Render(p.URL, name, p); err != nil {
+	if err := s.RenderPage(p.URL, name, p.Type.Layout, p); err != nil {
 		return fmt.Errorf("%s: %w", p.URL, err)
 	}
 	md, err := s.r.ExecuteOutput(render.PageOutput, p)

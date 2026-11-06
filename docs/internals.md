@@ -69,6 +69,7 @@ plugins/* ─▶ public packages only
 - delete removes components and all relations from/to the entry
 - build resolves relations one level deep (+ inverse fields)
 - date fields = Unix seconds; the admin converts in the site time zone (browser `Intl`), the build formats in it
+- pages = type template → `.Content` of the layout (`Type.Layout`, default `layout` if defined)
 - generated root files (`robots.txt`, sitemap, `llms.txt`, `.md` variants) are templates (`render/outputs`), replaceable per path; every path is written once
 - template lists (`entries`) read the entries the build loaded once per type
 - URLs come from `Type.Path` (`build.EntryURL`); used by build, sitemap, relations, llms.txt, admin list
