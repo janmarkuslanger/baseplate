@@ -7,7 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"io"
 	"net/http"
 	"os"
@@ -23,8 +23,10 @@ const MaxSize = 20 << 20
 // scripts.
 var allowed = map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".avif": true, ".pdf": true}
 
-var ErrType = errors.New("Dateityp nicht erlaubt (jpg, png, gif, webp, avif, pdf)")
-var ErrContent = errors.New("Dateiinhalt passt nicht zur Dateiendung")
+var (
+	ErrType    = i18n.Key("media.error.type")
+	ErrContent = i18n.Key("media.error.content")
+)
 
 // sniffed maps extensions to the content type http.DetectContentType
 // reports for them. AVIF is not detected by Go and checked by signature.
@@ -41,7 +43,7 @@ func matchesExt(ext string, head []byte) bool {
 	return http.DetectContentType(head) == sniffed[ext]
 }
 
-var ErrSize = fmt.Errorf("Datei größer als %d MB", MaxSize>>20)
+var ErrSize = i18n.Key("media.error.size")
 
 type Store struct{ Dir string }
 

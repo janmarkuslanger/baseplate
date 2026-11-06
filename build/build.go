@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"io"
 	"io/fs"
 	"os"
@@ -35,6 +36,9 @@ type Builder struct {
 	mu sync.Mutex
 }
 
+// ErrBaseURLMissing means the settings have no base URL yet.
+var ErrBaseURLMissing = i18n.Key("build.baseURLMissing")
+
 type Result struct {
 	Pages    int
 	Duration time.Duration
@@ -59,7 +63,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	}
 	base := cfg.BaseURL
 	if base == "" {
-		return Result{}, errors.New("Basis-URL fehlt – bitte in den Einstellungen eintragen")
+		return Result{}, ErrBaseURLMissing
 	}
 
 	// Clean first: with "dist/" the .tmp/.old paths would land inside dist.
