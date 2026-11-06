@@ -60,13 +60,20 @@ func (r *Renderer) parseOutputs(layers []fs.FS, funcs map[string]any) error {
 			return err
 		}
 	}
-	funcs["xml"] = func(v any) (string, error) {
-		var b strings.Builder
-		err := xml.EscapeText(&b, []byte(fmt.Sprint(v)))
-		return b.String(), err
+	for k, v := range map[string]any{
+		"xml": func(v any) (string, error) {
+			var b strings.Builder
+			err := xml.EscapeText(&b, []byte(fmt.Sprint(v)))
+			return b.String(), err
+		},
+		"markdown": r.Markdown,
+		"replace":  strings.ReplaceAll,
+	} {
+		if _, ok := funcs[k]; ok {
+			return fmt.Errorf("template func %q: name is taken by the core output templates", k)
+		}
+		funcs[k] = v
 	}
-	funcs["markdown"] = r.Markdown
-	funcs["replace"] = strings.ReplaceAll
 	r.outputs = map[string]*template.Template{}
 	for p, s := range src {
 		t, err := template.New(p).Funcs(funcs).Parse(s)
