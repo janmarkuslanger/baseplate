@@ -259,7 +259,9 @@ go test ./...
 go run ./examples/site serve
 ```
 
-Issues and pull requests are welcome. Please run `go test ./...` before opening a PR.
+CI (`.github/workflows/ci.yml`) runs gofmt, `go vet`, `go test -race` and a cgo-free Linux build on every pull request and push to `main`.
+
+Issues and pull requests are welcome.
 
 ## License
 
