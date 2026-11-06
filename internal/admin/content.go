@@ -2,6 +2,7 @@ package admin
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/fields"
@@ -28,6 +30,7 @@ func (a *Admin) contentType(w http.ResponseWriter, r *http.Request) (*content.Ty
 type row struct {
 	Entry storage.Entry
 	Title string
+	URL   string // routable types only
 }
 
 func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +56,25 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 	rows := make([]row, len(entries))
 	for i, e := range entries {
 		rows[i] = row{Entry: e, Title: fmt.Sprint(a.orDash(e.Data[t.Title()]))}
+		if t.Routable {
+			rows[i].URL, _ = build.EntryURL(t, &e, a.publishedParent(r.Context(), t.Name))
+		}
 	}
 	a.render(w, r, http.StatusOK, a.pages["list"], view{Title: a.t(t.LabelPlural), Active: "c/" + t.Name, Flash: a.flash(r), Page: map[string]any{
 		"Type": t, "Rows": rows, "Total": total, "Query": q, "PageNo": pageNo,
 		"HasNext": pageNo*perPage < total, "HasPrev": pageNo > 1, "Prev": pageNo - 1, "Next": pageNo + 1,
 	}})
+}
+
+// publishedParent looks up parents like the build does: published only.
+func (a *Admin) publishedParent(ctx context.Context, typ string) func(int64) *storage.Entry {
+	return func(id int64) *storage.Entry {
+		e, err := a.store().GetEntry(ctx, typ, id)
+		if err != nil || e.Status != storage.StatusPublished {
+			return nil
+		}
+		return e
+	}
 }
 
 func (a *Admin) orDash(v any) any {

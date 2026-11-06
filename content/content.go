@@ -62,6 +62,12 @@ type Type struct {
 	// Template is the frontend template used to render routable entries;
 	// defaults to the type name.
 	Template string
+	// Path is the URL pattern of routable entries; defaults to
+	// "/<name>/{slug}/". Placeholders: {slug}, and {parents} for the slugs
+	// of the "parent" chain (a relation of the type to itself). Empty
+	// segments are dropped and the slug "index" is empty, so the core page
+	// type's "/{parents}/{slug}/" makes "index" the home page.
+	Path string
 }
 
 // Block is a content element that can be placed in a "blocks" field.
@@ -88,6 +94,54 @@ func (t Type) Title() string {
 		return t.TitleField
 	}
 	return "title"
+}
+
+// PathPattern returns Path or its default.
+func (t Type) PathPattern() string {
+	if t.Path != "" {
+		return t.Path
+	}
+	return "/" + t.Name + "/{slug}/"
+}
+
+// URL builds an entry's URL from its slug and its parents' slugs
+// (outermost first).
+func (t Type) URL(slug string, parents []string) string {
+	if slug == "index" {
+		slug = ""
+	}
+	p := strings.NewReplacer("{slug}", slug, "{parents}", strings.Join(parents, "/")).Replace(t.PathPattern())
+	var parts []string
+	for _, s := range strings.Split(p, "/") {
+		if s != "" {
+			parts = append(parts, s)
+		}
+	}
+	if len(parts) == 0 {
+		return "/"
+	}
+	return "/" + strings.Join(parts, "/") + "/"
+}
+
+// checkPath validates the URL pattern of a routable type.
+func (t Type) checkPath() error {
+	p := t.PathPattern()
+	if !strings.HasPrefix(p, "/") || !strings.HasSuffix(p, "/") {
+		return fmt.Errorf("content: path of %s must start and end with \"/\": %q", t.Name, p)
+	}
+	if !strings.Contains(p, "{slug}") {
+		return fmt.Errorf("content: path of %s needs {slug}: %q", t.Name, p)
+	}
+	rest := strings.NewReplacer("{slug}", "", "{parents}", "").Replace(p)
+	if strings.ContainsAny(rest, "{}") {
+		return fmt.Errorf("content: path of %s has an unknown placeholder: %q", t.Name, p)
+	}
+	if strings.Contains(p, "{parents}") {
+		if f := t.field("parent"); f == nil || f.Ref != t.Name {
+			return fmt.Errorf("content: path of %s uses {parents} but has no field \"parent\" relating to %s", t.Name, t.Name)
+		}
+	}
+	return nil
 }
 
 func (t Type) TemplateName() string {
@@ -349,6 +403,11 @@ func (s *Schema) Check() error {
 	for _, t := range s.Types() {
 		if err := walk(t.Name, t.Fields); err != nil {
 			return err
+		}
+		if t.Routable {
+			if err := t.checkPath(); err != nil {
+				return err
+			}
 		}
 	}
 	for _, b := range s.blocks {

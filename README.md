@@ -150,6 +150,15 @@ func (News) Register(r *plugin.Registry) error {
 
 Enable it with `app.Use(News{})`.
 
+| URL (`Type.Path`) | Result |
+|---|---|
+| empty (default) | `/news/<slug>/` |
+| `"/aktuelles/{slug}/"` | `/aktuelles/<slug>/` |
+| `"/{slug}/"` | `/<slug>/` |
+| `"/{parents}/{slug}/"` (core `page`) | `/ueber-uns/team/`; needs a field `parent` relating to the type itself; slug `index` = empty |
+
+Patterns are checked on start; duplicate URLs fail the build.
+
 | Registry method | Purpose |
 |---|---|
 | `ContentType`, `Extend` | new content types, extra fields on existing ones (e.g. `page`) |

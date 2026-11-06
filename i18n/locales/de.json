@@ -82,6 +82,7 @@
   "list.col.status": "Status",
   "list.col.title": "Titel",
   "list.col.updated": "Geändert",
+  "list.col.url": "URL",
   "list.empty": "Noch nichts hier.",
   "list.empty.hint": "Lege den ersten Eintrag an.",
   "list.new": "+ {0} anlegen",

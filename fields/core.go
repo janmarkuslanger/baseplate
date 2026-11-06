@@ -67,7 +67,7 @@ func (Core) Register(r *plugin.Registry) error {
 		}
 	}
 	if err := r.ContentType(content.Type{
-		Name: PageType, Label: "type.page", LabelPlural: "type.page.plural", Routable: true,
+		Name: PageType, Label: "type.page", LabelPlural: "type.page.plural", Routable: true, Path: "/{parents}/{slug}/",
 		Fields: RoutableFields(
 			content.Field{Name: "parent", Label: "page.parent", Kind: Relation, Ref: PageType, Inverse: "children"},
 			content.Field{Name: "body", Label: "page.body", Kind: Blocks},
