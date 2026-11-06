@@ -10,8 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/janmarkuslanger/baseplate/i18n"
 	"time"
+
+	"github.com/janmarkuslanger/baseplate/i18n"
 
 	"github.com/janmarkuslanger/baseplate/content"
 )
