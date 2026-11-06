@@ -28,20 +28,6 @@ CREATE TABLE sessions (
 	csrf TEXT NOT NULL,
 	expires_at INTEGER NOT NULL
 );`,
-			MySQL: `
-CREATE TABLE users (
-	id BIGINT AUTO_INCREMENT PRIMARY KEY,
-	email VARCHAR(255) NOT NULL UNIQUE,
-	name VARCHAR(255) NOT NULL DEFAULT '',
-	password_hash VARCHAR(255) NOT NULL,
-	created_at BIGINT NOT NULL
-);
-CREATE TABLE sessions (
-	token VARCHAR(64) PRIMARY KEY,
-	user_id BIGINT NOT NULL,
-	csrf VARCHAR(64) NOT NULL,
-	expires_at BIGINT NOT NULL
-);`,
 		},
 	},
 	{
@@ -68,33 +54,12 @@ CREATE TABLE relations (
 );
 CREATE INDEX relations_owner ON relations(owner_table, owner_id);
 CREATE INDEX relations_target ON relations(target_type, target_id)`,
-			MySQL: `
-CREATE TABLE components (
-	owner_table VARCHAR(64) NOT NULL,
-	owner_id BIGINT NOT NULL,
-	field VARCHAR(64) NOT NULL,
-	component_table VARCHAR(64) NOT NULL,
-	component_id BIGINT NOT NULL,
-	position INT NOT NULL,
-	INDEX components_owner (owner_table, owner_id),
-	INDEX components_child (component_table, component_id)
-);
-CREATE TABLE relations (
-	owner_table VARCHAR(64) NOT NULL,
-	owner_id BIGINT NOT NULL,
-	field VARCHAR(64) NOT NULL,
-	target_type VARCHAR(64) NOT NULL,
-	target_id BIGINT NOT NULL,
-	position INT NOT NULL,
-	INDEX relations_owner (owner_table, owner_id),
-	INDEX relations_target (target_type, target_id)
-)`,
 		},
 	},
 }
 
-// SQLStore implements Store on top of database/sql. Adapters (sqlite, mysql)
-// only open the connection and pick the dialect; queries are shared.
+// SQLStore implements Store on top of database/sql. Adapters only open
+// the connection and pick the dialect; queries are shared.
 type SQLStore struct {
 	db      *sql.DB
 	dialect Dialect

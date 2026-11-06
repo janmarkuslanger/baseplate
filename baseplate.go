@@ -69,7 +69,7 @@ type Config struct {
 	// instead of the connection address. Only set it behind a proxy that
 	// overwrites the header. Default: off.
 	TrustedProxyHeader string
-	// Store overrides the storage adapter (e.g. MySQL). Default: SQLite in DataDir.
+	// Store overrides the storage adapter. Default: SQLite in DataDir.
 	Store storage.Store
 	// Mailer overrides the mailer built from SMTP.
 	Mailer mail.Mailer

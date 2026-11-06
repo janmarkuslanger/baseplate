@@ -53,4 +53,11 @@ Public API = every package outside `internal/`. Each package's contract is its p
 | `internal/media` | media library (plugins: `Services.Media`) | – |
 | `internal/markup` | HTML sanitizer, HTML → Markdown | – |
 
+## Databases
+
+baseplate ships SQLite only. The rest of the system depends on the
+`storage.Store` interface, so MySQL, Postgres or another database can be
+added later as an adapter; plugins with their own tables then add SQL for
+that database.
+
 Details: [`docs/internals.md`](../docs/internals.md), plugin API: [`docs/plugins.md`](../docs/plugins.md)

@@ -146,14 +146,6 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 				created_at INTEGER NOT NULL
 			);
 			CREATE INDEX form_submissions_form ON form_submissions(form_id, created_at)`,
-			storage.MySQL: `CREATE TABLE form_submissions (
-				id BIGINT AUTO_INCREMENT PRIMARY KEY,
-				form_id BIGINT NOT NULL,
-				data JSON NOT NULL,
-				mailed TINYINT NOT NULL DEFAULT 0,
-				created_at BIGINT NOT NULL,
-				INDEX form_submissions_form (form_id, created_at)
-			)`,
 		},
 	})
 	return nil
