@@ -94,7 +94,7 @@ func str(v any) string { s, _ := v.(string); return s }
 // LoadSettings returns the settings data.
 //
 // Deprecated: use settings.Load for typed access.
-func LoadSettings(ctx context.Context, st storage.Store) (map[string]any, error) {
+func LoadSettings(ctx context.Context, st storage.Entries) (map[string]any, error) {
 	s, err := settings.Load(ctx, st)
 	return s.Data, err
 }
