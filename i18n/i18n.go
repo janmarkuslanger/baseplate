@@ -9,6 +9,7 @@ package i18n
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"strconv"
@@ -130,10 +131,24 @@ var core = NewBundle(Core()...)
 // Error returns the text in the Default language, for logs.
 func (m Msg) Error() string { return core.T(Default, m.Key, m.Args...) }
 
-// Tr translates an error: a Msg by its key, other errors as they are.
+// Key is a translatable sentinel error: comparable, so errors.Is works.
+//
+//	var ErrInvalidLogin = i18n.Key("login.invalid")
+type Key string
+
+// Error returns the text in the Default language, for logs.
+func (k Key) Error() string { return core.T(Default, string(k)) }
+
+// Tr translates an error for display: the first Msg or Key in its chain
+// (also when wrapped), otherwise the error text.
 func (b *Bundle) Tr(lang string, err error) string {
-	if m, ok := err.(Msg); ok {
+	var m Msg
+	if errors.As(err, &m) {
 		return b.T(lang, m.Key, m.Args...)
+	}
+	var k Key
+	if errors.As(err, &k) {
+		return b.T(lang, string(k))
 	}
 	return err.Error()
 }

@@ -74,25 +74,8 @@ func (a *Admin) store() storage.Store { return a.Reg.Store }
 // t translates a key (or returns a plain text unchanged).
 func (a *Admin) t(key string, args ...any) string { return a.i18n.T(a.Lang, key, args...) }
 
-// errorKeys maps sentinel errors to translation keys.
-var errorKeys = map[error]string{
-	auth.ErrInvalidLogin:       "login.invalid",
-	auth.ErrRateLimited:        "login.rateLimited",
-	storage.ErrInvalidRelation: "validation.relationTarget",
-	media.ErrType:              "media.error.type",
-	media.ErrSize:              "media.error.size",
-	media.ErrContent:           "media.error.content",
-}
-
 // tr translates an error for display.
-func (a *Admin) tr(err error) string {
-	for target, key := range errorKeys {
-		if errors.Is(err, target) {
-			return a.t(key)
-		}
-	}
-	return a.i18n.Tr(a.Lang, err)
-}
+func (a *Admin) tr(err error) string { return a.i18n.Tr(a.Lang, err) }
 
 // Init parses the admin templates. Call after all plugins are registered.
 func (a *Admin) Init() error {

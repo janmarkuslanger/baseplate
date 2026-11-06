@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"net/http"
 	"strings"
 	"sync"
@@ -32,8 +33,10 @@ const (
 	argonKeyLen = 32
 )
 
-var ErrInvalidLogin = errors.New("E-Mail oder Passwort falsch")
-var ErrRateLimited = errors.New("zu viele Versuche, bitte später erneut versuchen")
+var (
+	ErrInvalidLogin = i18n.Key("login.invalid")
+	ErrRateLimited  = i18n.Key("login.rateLimited")
+)
 
 // HashPassword returns an encoded argon2id hash.
 func HashPassword(pw string) string {
@@ -162,7 +165,7 @@ func (m *Manager) Require(loginPath string, next http.Handler) http.Handler {
 				tok = r.FormValue("csrf")
 			}
 			if subtle.ConstantTimeCompare([]byte(tok), []byte(cur.Session.CSRF)) != 1 {
-				http.Error(w, "ungültiges CSRF-Token – bitte Seite neu laden", http.StatusForbidden)
+				http.Error(w, i18n.Key("auth.csrf").Error(), http.StatusForbidden)
 				return
 			}
 		}

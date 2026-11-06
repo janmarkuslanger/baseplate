@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -19,7 +20,7 @@ import (
 var ErrNotFound = errors.New("storage: not found")
 
 // ErrInvalidRelation is returned when a relation points to a missing entry.
-var ErrInvalidRelation = errors.New("Verknüpfung zeigt auf einen nicht vorhandenen Eintrag")
+var ErrInvalidRelation = i18n.Key("validation.relationTarget")
 
 // Dialect identifies the SQL flavour of a store.
 type Dialect string
