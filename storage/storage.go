@@ -22,13 +22,12 @@ var ErrNotFound = errors.New("storage: not found")
 // ErrInvalidRelation is returned when a relation points to a missing entry.
 var ErrInvalidRelation = i18n.Key("validation.relationTarget")
 
-// Dialect identifies the SQL flavour of a store.
+// Dialect identifies the SQL flavour of a store. baseplate ships SQLite; an
+// adapter for another database adds its own value (see ARCHITECTURE.md,
+// "Databases").
 type Dialect string
 
-const (
-	SQLite Dialect = "sqlite"
-	MySQL  Dialect = "mysql"
-)
+const SQLite Dialect = "sqlite"
 
 // Migration is a named schema change. SQL holds one script per dialect;
 // a store runs the script matching its own dialect.

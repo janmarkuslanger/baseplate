@@ -47,26 +47,6 @@ var dialects = map[Dialect]dialectSQL{
 			return scanNames(q.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`))
 		},
 	},
-	MySQL: {
-		idPK:          "BIGINT AUTO_INCREMENT PRIMARY KEY",
-		slugType:      "VARCHAR(255)",
-		quote:         func(n string) string { return "`" + n + "`" },
-		insertDefault: "() VALUES ()",
-		types: map[content.Storage]string{
-			content.StoreText: "TEXT", content.StoreLongText: "LONGTEXT",
-			content.StoreNumber: "DOUBLE", content.StoreBool: "TINYINT(1)",
-		},
-		columns: func(ctx context.Context, q querier, table string) (map[string]string, error) {
-			rows, err := q.QueryContext(ctx, `SELECT column_name, column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?`, table)
-			if err != nil {
-				return nil, err
-			}
-			return scanColumns(rows)
-		},
-		tables: func(ctx context.Context, q querier) ([]string, error) {
-			return scanNames(q.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()`))
-		},
-	},
 }
 
 func scanNames(rows *sql.Rows, err error) ([]string, error) {
@@ -153,13 +133,7 @@ func createTableSQL(d dialectSQL, t *table) string {
 }
 
 func sameType(have, want string) bool {
-	norm := func(s string) string {
-		s = strings.ToUpper(strings.TrimSpace(s))
-		if s == "TINYINT" {
-			return "TINYINT(1)"
-		}
-		return s
-	}
+	norm := func(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 	return norm(have) == norm(want)
 }
 

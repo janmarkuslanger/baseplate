@@ -31,7 +31,7 @@ func TestMigrateIsIdempotent(t *testing.T) {
 
 func TestMigrationMissingDialect(t *testing.T) {
 	s := openTest(t)
-	err := s.Migrate(context.Background(), []storage.Migration{{Name: "x", SQL: map[storage.Dialect]string{storage.MySQL: "SELECT 1"}}})
+	err := s.Migrate(context.Background(), []storage.Migration{{Name: "x", SQL: map[storage.Dialect]string{"postgres": "SELECT 1"}}})
 	if err == nil {
 		t.Fatal("expected error for missing dialect")
 	}
