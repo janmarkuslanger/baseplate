@@ -152,6 +152,22 @@ func TestSubmitMailFailureStillStores(t *testing.T) {
 	}
 }
 
+func TestSubmitMarkMailedFailureIsLogged(t *testing.T) {
+	reg, _, m, id := setup(t)
+	var logs strings.Builder
+	reg.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	if _, err := reg.Store.DB().Exec(`CREATE TRIGGER no_update BEFORE UPDATE ON form_submissions BEGIN SELECT RAISE(FAIL, 'read-only'); END`); err != nil {
+		t.Fatal(err)
+	}
+	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
+	if w.Code != 200 || len(m.sent) != 1 {
+		t.Fatalf("submit: %d, mails sent = %d", w.Code, len(m.sent))
+	}
+	if !strings.Contains(logs.String(), "forms: mark submission as mailed") || !strings.Contains(logs.String(), "read-only") {
+		t.Errorf("update failure not logged: %q", logs.String())
+	}
+}
+
 func TestRateLimit(t *testing.T) {
 	reg, p, _, id := setup(t)
 	p.Limit = 2
