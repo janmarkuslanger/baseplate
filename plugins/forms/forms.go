@@ -318,8 +318,8 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 	// visible in the admin (not mailed), but not shown to the visitor.
 	if err := p.reg.Mailer.Send(ctx, msg); err != nil {
 		p.reg.Logger.Error("forms: send mail", "err", err, "submission", subID)
-	} else {
-		p.reg.Store.DB().ExecContext(ctx, `UPDATE form_submissions SET mailed = 1 WHERE id = ?`, subID)
+	} else if _, err := p.reg.Store.DB().ExecContext(ctx, `UPDATE form_submissions SET mailed = 1 WHERE id = ?`, subID); err != nil {
+		p.reg.Logger.Error("forms: mark submission as mailed", "err", err, "submission", subID)
 	}
 	success()
 }
