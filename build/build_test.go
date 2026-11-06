@@ -428,3 +428,66 @@ func TestDatesUseSiteTimezone(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestOutputTemplates(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Theme = fstest.MapFS{
+		"templates/page.html":              theme["templates/page.html"],
+		"templates/output/robots.txt":      {Data: []byte("User-agent: *\nDisallow: /\n")},
+		"templates/output/sitemap.xml":     {Data: []byte("  \n")}, // empty: no file
+		"templates/output/feed/titles.txt": {Data: []byte(`{{range entries "page" "sort" "slug"}}{{.Data.title}};{{end}}`)},
+		"templates/output/plugin.txt":      {Data: []byte("theme")},
+		"templates/markdown.md":            {Data: []byte(`{{if ne .URL "/intern/"}}# {{.Data.title}}{{end}}`)},
+	}
+	b.Reg.Templates(fstest.MapFS{
+		"output/plugin.txt": {Data: []byte("plugin")},
+		"output/extra.txt":  {Data: []byte("from {{.Site.siteName}}")},
+	})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"siteName": "A & B", "baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Start & Ziel"})
+	add(t, st, fields.PageType, "intern", storage.StatusPublished, map[string]any{"title": "Intern"})
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{
+		"robots.txt":      "User-agent: *\nDisallow: /\n",
+		"feed/titles.txt": "Start & Ziel;Intern;", // text, not HTML-escaped
+		"plugin.txt":      "theme",
+		"extra.txt":       "from A & B",
+		"index.md":        "# Start & Ziel",
+	} {
+		if got := read(t, b, p); got != want {
+			t.Errorf("%s = %q, want %q", p, got, want)
+		}
+	}
+	for _, p := range []string{"sitemap.xml", "intern.md", "llms.txt"} {
+		if _, err := os.Stat(filepath.Join(b.DistDir, p)); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("%s must not be written", p)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(b.DistDir, "intern/index.html")); err != nil {
+		t.Error("an empty Markdown variant must not drop the page")
+	}
+}
+
+func TestOutputTemplateError(t *testing.T) {
+	b, st := setup(t)
+	b.Theme = fstest.MapFS{"templates/page.html": theme["templates/page.html"], "templates/output/x.txt": {Data: []byte(`{{entries "nope"}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	if _, err := b.Build(context.Background()); err == nil || !strings.Contains(err.Error(), "output x.txt") {
+		t.Fatalf("want output error, got %v", err)
+	}
+}
+
+func TestGeneratorsDoNotOverwrite(t *testing.T) {
+	b, st := setup(t)
+	b.Reg.Generator(func(s plugin.Site) error { return s.WriteFile("feed.xml", []byte("ok")) })
+	b.Reg.Generator(func(s plugin.Site) error { return s.WriteFile("robots.txt", []byte("mine")) })
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	_, err := b.Build(context.Background())
+	var m i18n.Msg
+	if !errors.As(err, &m) || m.Key != MsgPathConflict || m.Args[0] != "/robots.txt" {
+		t.Fatalf("want path conflict for /robots.txt, got %v", err)
+	}
+}

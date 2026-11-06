@@ -116,6 +116,8 @@ A theme is an `fs.FS` containing:
 
 - `templates/*.html` — one template per routable content type (`{{define "page"}}…{{end}}`). A theme can override any default, such as `baseplate/head` or `block/<name>`.
 - `assets/` — copied to `dist/assets/`.
+- `templates/output/<path>` — generated files of the site root (text templates). The core ships `robots.txt`, `sitemap.xml` and `llms.txt` (`{{if .Site.llmsTxt}}`); the same path in the theme replaces it, an empty template means no file, new paths add files (`feed.xml`, `sitemap-index.xml`, …). Data: `.Site`, `.BaseURL`, `.Pages`, `.Indexable`, `.Sitemap`; functions as in page templates plus `xml` (escape) and `replace`.
+- `templates/markdown.md` — the Markdown variant of each page (default `{{markdown .}}`; empty = no `.md` file).
 - `public/` — copied 1:1 to the site root (`favicon.ico`, `.well-known/…`, verification files). A path the build already uses (a page, `robots.txt`, `sitemap.xml`, …) fails the build.
 
 Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`.
@@ -195,7 +197,7 @@ Patterns are checked on start; duplicate URLs fail the build.
 | `ContentType`, `Extend` | new content types, extra fields on existing ones (e.g. `page`) |
 | `Kind` | new field kinds (`Storage` = column type, `AdminTemplate` = admin input) |
 | `Block` (+ `Templates`) | new content elements; frontend template `block/<name>` |
-| `Generator` | extra build output (archives, feeds, …) |
+| `Generator` | extra pages in the build (archives, 404, …); root files like `robots.txt` are templates (`templates/output/`) |
 | `AdminPage` (+ `AdminTemplates`) | custom admin screens |
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |

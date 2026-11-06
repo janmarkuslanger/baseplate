@@ -1,0 +1,10 @@
+{{- if .Site.llmsTxt -}}
+# {{or .Site.siteName "Website"}}
+
+{{with .Site.llmsContent}}{{.}}
+
+{{end}}## Seiten
+
+{{range .Indexable}}- [{{.Data.title}}]({{$.BaseURL}}{{.MarkdownURL}}){{with .Meta.Description}}: {{replace . "\n" " "}}{{end}}
+{{end}}
+{{- end -}}
