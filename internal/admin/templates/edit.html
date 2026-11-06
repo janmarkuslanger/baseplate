@@ -6,6 +6,7 @@
       data-errors="{{json $p.Errors}}"
       data-blocks="{{json $p.Blocks}}"
       data-labels="{{json $p.Labels}}"
+      data-refs="{{json $p.RefOptions}}"
       x-on:submit="serialize()">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <input type="hidden" name="id" value="{{if not $p.IsNew}}{{$p.Entry.ID}}{{end}}">

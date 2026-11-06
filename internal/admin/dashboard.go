@@ -37,61 +37,49 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 		counts = append(counts, typeCount{Type: t, Total: total, Published: pub})
 	}
 	cfg, _ := settings.Load(r.Context(), a.store())
-	a.buildMu.Lock()
-	last := a.lastBuild
-	a.buildMu.Unlock()
+	last := a.lastBuild.Load()
 	a.render(w, r, http.StatusOK, a.pages["dashboard"], view{Title: a.t("nav.dashboard"), Active: "dashboard", Page: map[string]any{
 		"Counts": counts, "Build": last, "SettingsMissing": cfg.BaseURL == "",
 	}})
 }
 
-// contentChanged starts a background build if BuildOnPublish is set.
-// Changes during a running build cause exactly one more build afterwards.
+// contentChanged requests a background build if BuildOnPublish is set.
+// Requests during a running build result in exactly one more build.
 func (a *Admin) contentChanged() {
-	if !a.BuildOnPublish {
+	if a.rebuild == nil {
 		return
 	}
-	a.autoMu.Lock()
-	if a.autoRunning {
-		a.autoPending = true
-		a.autoMu.Unlock()
-		return
+	select {
+	case a.rebuild <- struct{}{}:
+	default: // a build is already pending
 	}
-	a.autoRunning = true
-	a.autoMu.Unlock()
-	go func() {
-		for {
-			res, err := a.Builder.Build(context.Background())
-			st := &buildStatus{Result: res, At: time.Now()}
-			if err != nil {
-				st.Err = err.Error()
-				a.Logger.Error("auto build", "err", err)
-			}
-			a.buildMu.Lock()
-			a.lastBuild = st
-			a.buildMu.Unlock()
-			a.autoMu.Lock()
-			if !a.autoPending {
-				a.autoRunning = false
-				a.autoMu.Unlock()
-				return
-			}
-			a.autoPending = false
-			a.autoMu.Unlock()
+}
+
+// autoBuild runs one build per pending request, for the app's lifetime.
+func (a *Admin) autoBuild() {
+	for range a.rebuild {
+		res, err := a.Builder.Build(context.Background())
+		if err != nil {
+			a.Logger.Error("auto build", "err", err)
 		}
-	}()
+		a.recordBuild(res, err)
+	}
 }
 
 func (a *Admin) build(w http.ResponseWriter, r *http.Request) {
 	res, err := a.Builder.Build(r.Context())
+	st := a.recordBuild(res, err)
+	if err := a.pages["dashboard"].ExecuteTemplate(w, "build-status", st); err != nil {
+		a.Logger.Error("build status", "err", err)
+	}
+}
+
+// recordBuild stores the outcome shown on the dashboard.
+func (a *Admin) recordBuild(res build.Result, err error) *buildStatus {
 	st := &buildStatus{Result: res, At: time.Now()}
 	if err != nil {
 		st.Err = err.Error()
 	}
-	a.buildMu.Lock()
-	a.lastBuild = st
-	a.buildMu.Unlock()
-	if err := a.pages["dashboard"].ExecuteTemplate(w, "build-status", st); err != nil {
-		a.Logger.Error("build status", "err", err)
-	}
+	a.lastBuild.Store(st)
+	return st
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stdhtml "html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -218,4 +219,47 @@ func TestTimezoneSetting(t *testing.T) {
 	if _, html := c.do("GET", "/admin/", nil); !strings.Contains(html, `data-tz="America/New_York"`) {
 		t.Error("saved time zone not passed to date inputs")
 	}
+}
+
+type tagPlugin struct{}
+
+func (tagPlugin) Name() string { return "tags" }
+func (tagPlugin) Register(r *plugin.Registry) error {
+	if err := r.ContentType(content.Type{Name: "tag", Fields: []content.Field{{Name: "title", Kind: fields.Text}}}); err != nil {
+		return err
+	}
+	if err := r.ContentType(content.Type{Name: "author", Fields: []content.Field{{Name: "title", Kind: fields.Text}}}); err != nil {
+		return err
+	}
+	return r.Block(content.Block{Name: "teaser", Fields: []content.Field{{Name: "author", Kind: fields.Relation, Ref: "author"}}})
+}
+
+// The editor gets the choices of all relation pickers, also inside blocks.
+func TestRelationOptions(t *testing.T) {
+	_, c := newTestApp(t, tagPlugin{}, extendPage{content.Field{Name: "tags", Kind: fields.Relation, Ref: "tag", Many: true}})
+	c.login()
+	c.save("tag", "published", map[string]any{"title": "Yoga"})
+	c.save("author", "published", map[string]any{"title": "Julia"})
+	_, html := c.do("GET", "/admin/c/page/new", nil)
+	m := regexp.MustCompile(`data-refs="([^"]*)"`).FindStringSubmatch(html)
+	if m == nil {
+		t.Fatal("no data-refs on the editor")
+	}
+	var refs map[string][]struct{ Value, Label string }
+	if err := json.Unmarshal([]byte(stdhtml.UnescapeString(m[1])), &refs); err != nil {
+		t.Fatal(err)
+	}
+	if len(refs["tag"]) != 1 || refs["tag"][0].Label != "Yoga" || len(refs["author"]) != 1 || refs["author"][0].Label != "Julia" {
+		t.Errorf("refs: %+v", refs)
+	}
+	if _, ok := refs["page"]; !ok {
+		t.Error("core relation (parent page) missing")
+	}
+}
+
+type extendPage []content.Field
+
+func (extendPage) Name() string { return "extend-page" }
+func (e extendPage) Register(r *plugin.Registry) error {
+	return r.Extend(fields.PageType, e...)
 }

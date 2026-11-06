@@ -539,3 +539,29 @@ func TestLayouts(t *testing.T) {
 		t.Fatalf("want missing layout error, got %v", err)
 	}
 }
+
+func TestSwapRestoresOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	dist := filepath.Join(dir, "dist")
+	os.MkdirAll(dist, 0o755)
+	os.WriteFile(filepath.Join(dist, "index.html"), []byte("old"), 0o644)
+	if err := swap(filepath.Join(dir, "missing.tmp"), dist); err == nil {
+		t.Fatal("want error for a missing build")
+	}
+	if b, err := os.ReadFile(filepath.Join(dist, "index.html")); err != nil || string(b) != "old" {
+		t.Errorf("previous site not restored: %q %v", b, err)
+	}
+
+	tmp := filepath.Join(dir, "new.tmp")
+	os.MkdirAll(tmp, 0o755)
+	os.WriteFile(filepath.Join(tmp, "index.html"), []byte("new"), 0o644)
+	if err := swap(tmp, dist); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dist, "index.html")); string(b) != "new" {
+		t.Errorf("swap: %q", b)
+	}
+	if _, err := os.Stat(dist + ".old"); !errors.Is(err, fs.ErrNotExist) {
+		t.Error("old site left behind")
+	}
+}

@@ -5,6 +5,7 @@ package render
 
 import (
 	"bytes"
+	"cmp"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -85,30 +86,38 @@ type Renderer struct {
 	outputs map[string]*ttemplate.Template
 }
 
-// SetLocale sets the site language and time zone used by "date".
-func (r *Renderer) SetLocale(lang string, loc *time.Location) {
-	r.lang, r.loc = lang, loc
-}
-
 // EntriesFunc implements the "entries" template function:
 //
 //	{{range entries "blog" "sort" "-publishedDate" "limit" 3}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}
 type EntriesFunc func(typ string, opts ...any) ([]*Ref, error)
 
-// SetEntries sets the data source of the "entries" template function.
-// The build sets it once all URLs are known; without it, "entries" fails.
-func (r *Renderer) SetEntries(f EntriesFunc) { r.entries = f }
+// Options are the site data a Renderer needs besides templates.
+type Options struct {
+	// Entries is the data source of the "entries" template function; nil
+	// makes "entries" fail.
+	Entries EntriesFunc
+	// Lang and Location are the site language and time zone used by
+	// "date" (defaults: i18n.Default, UTC).
+	Lang     string
+	Location *time.Location
+}
 
 // New builds the template set from the defaults, all plugin template FSs
 // and the theme's "templates" directory (if theme is non-nil).
-func New(reg *plugin.Registry, theme fs.FS) (*Renderer, error) {
-	r := &Renderer{schema: reg.Schema, i18n: i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(reg)...)...), lang: i18n.Default, loc: time.UTC}
+func New(reg *plugin.Registry, theme fs.FS, opts Options) (*Renderer, error) {
+	r := &Renderer{
+		schema:  reg.Schema,
+		i18n:    i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(reg)...)...),
+		entries: opts.Entries,
+		lang:    cmp.Or(opts.Lang, i18n.Default),
+		loc:     cmp.Or(opts.Location, time.UTC),
+	}
 	funcs := template.FuncMap{
 		"blocks": r.blocks,
 		"date":   r.date,
 		"entries": func(typ string, opts ...any) ([]*Ref, error) {
 			if r.entries == nil {
-				return nil, fmt.Errorf("entries %q: only available in the build", typ)
+				return nil, fmt.Errorf("entries %q: no data source", typ)
 			}
 			return r.entries(typ, opts...)
 		},

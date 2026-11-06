@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,8 +13,6 @@ import (
 
 	"github.com/janmarkuslanger/baseplate/content"
 )
-
-func contextBackground() context.Context { return context.Background() }
 
 func urlQueryEscape(s string) string { return url.QueryEscape(s) }
 
@@ -90,9 +87,8 @@ func (a *Admin) funcs() template.FuncMap {
 			}
 			return template.HTML(buf.String()), nil
 		},
-		"blocksFor":  func(f content.Field) []content.Block { return a.Reg.Schema.Blocks(f) },
-		"refOptions": a.refOptions,
-		"skeleton":   func(fs []content.Field) map[string]any { return skeleton(fs, nil) },
+		"blocksFor": func(f content.Field) []content.Block { return a.Reg.Schema.Blocks(f) },
+		"skeleton":  func(fs []content.Field) map[string]any { return skeleton(fs, nil) },
 		"isContainer": func(kind string) bool {
 			k, _ := a.Reg.Schema.Kind(kind)
 			return k.Storage.Container()
