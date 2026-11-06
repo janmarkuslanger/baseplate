@@ -49,7 +49,8 @@ type Config struct {
 	DataDir string
 	// DistDir receives the static build (BASEPLATE_DIST_DIR, default "./dist").
 	DistDir string
-	// Theme contains "templates/" and optionally "assets/".
+	// Theme contains "templates/" and optionally "assets/" and "public/"
+	// (copied 1:1 to the site root).
 	Theme fs.FS
 	// SMTP configures outgoing mail (BASEPLATE_SMTP_HOST, _PORT, _USER,
 	// _PASSWORD, _FROM). Without a host, mails are only logged.

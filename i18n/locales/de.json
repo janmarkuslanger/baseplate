@@ -23,6 +23,7 @@
   "blocks.add": "+ Element hinzufügen",
   "blocks.empty": "Noch keine Inhalte. Element hinzufügen oder hierher ziehen.",
   "build.baseURLMissing": "Basis-URL fehlt – bitte in den Einstellungen eintragen",
+  "build.publicConflict": "{0} gibt es im Build schon – Datei in public/ umbenennen oder entfernen",
   "common.close": "Schließen",
   "common.loading": "lädt…",
   "common.noMatch": "Keine Treffer",

@@ -139,6 +139,7 @@ type Registry struct {
 	routes         []Route
 	templates      []fs.FS
 	adminTemplates []fs.FS
+	public         []fs.FS
 	funcs          TemplateFuncs
 	migrations     []storage.Migration
 	dataMigrations []DataMigration
@@ -213,6 +214,11 @@ func (r *Registry) DataMigration(m DataMigration) { r.dataMigrations = append(r.
 // ones with the same name, so the customer theme (registered last) wins.
 func (r *Registry) Templates(f fs.FS) { r.templates = append(r.templates, f) }
 
+// Public adds files copied 1:1 to the root of the static site (favicon,
+// verification files, …). A path that another file of the build already
+// uses fails the build.
+func (r *Registry) Public(f fs.FS) { r.public = append(r.public, f) }
+
 // AdminTemplates adds templates used by AdminPage handlers.
 func (r *Registry) AdminTemplates(f fs.FS) { r.adminTemplates = append(r.adminTemplates, f) }
 
@@ -231,6 +237,7 @@ func (r *Registry) AdminPages() []AdminPage         { return r.adminPages }
 func (r *Registry) Routes() []Route                 { return r.routes }
 func (r *Registry) TemplateFS() []fs.FS             { return r.templates }
 func (r *Registry) AdminTemplateFS() []fs.FS        { return r.adminTemplates }
+func (r *Registry) PublicFS() []fs.FS               { return r.public }
 func (r *Registry) TemplateFuncs() TemplateFuncs    { return r.funcs }
 func (r *Registry) Migrations() []storage.Migration { return r.migrations }
 func (r *Registry) DataMigrations() []DataMigration { return r.dataMigrations }

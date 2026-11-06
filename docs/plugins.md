@@ -28,6 +28,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `Block`, `Templates`, `Funcs` | content elements, frontend templates, template funcs |
 | `AllowBlocks` | restrict a blocks field (also of the core or other plugins) to named blocks |
 | `Generator` | extra build output |
+| `Public` | files copied 1:1 to the site root; a path already in use fails the build |
 | `AdminPage`, `AdminTemplates` | admin screens |
 | `PublicRoute` | endpoints on the CMS server |
 | `Migration`, `DataMigration` | own tables, content changes after schema changes |

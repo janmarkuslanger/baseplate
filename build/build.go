@@ -1,5 +1,6 @@
 // Package build generates the static site: one HTML file per published
-// routable entry, Markdown variants, sitemap.xml, robots.txt and llms.txt.
+// routable entry, Markdown variants, sitemap.xml, robots.txt, llms.txt and
+// the public files (theme "public/", plugin.Registry.Public).
 package build
 
 import (
@@ -39,6 +40,10 @@ type Builder struct {
 
 // ErrBaseURLMissing means the settings have no base URL yet.
 var ErrBaseURLMissing = i18n.Key("build.baseURLMissing")
+
+// MsgPublicConflict is the key of the error for a public file whose path the
+// build already uses (argument: the path).
+const MsgPublicConflict = "build.publicConflict"
 
 type Result struct {
 	Pages    int
@@ -111,6 +116,9 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		if err := g(s); err != nil {
 			return Result{}, fmt.Errorf("generator: %w", err)
 		}
+	}
+	if err := b.copyPublic(tmp); err != nil {
+		return Result{}, err
 	}
 
 	old := dist + ".old"
@@ -365,21 +373,59 @@ func copyFS(src fs.FS, dst string) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
-		in, err := src.Open(p)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := os.Create(target)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
-			return err
-		}
-		return out.Close()
+		return copyFile(src, p, target)
 	})
+}
+
+// copyPublic copies the theme's "public/" and the plugins' public files 1:1
+// to the site root. It runs after everything else, so a path that another
+// file already uses is caught instead of being overwritten.
+func (b *Builder) copyPublic(out string) error {
+	srcs := b.Reg.PublicFS()
+	if b.Theme != nil {
+		if sub, err := fs.Sub(b.Theme, "public"); err == nil {
+			srcs = append(srcs, sub)
+		}
+	}
+	for _, src := range srcs {
+		if _, err := fs.Stat(src, "."); errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		err := fs.WalkDir(src, ".", func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			target := filepath.Join(out, filepath.FromSlash(p))
+			if _, err := os.Lstat(target); err == nil {
+				return i18n.M(MsgPublicConflict, "/"+p)
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			return copyFile(src, p, target)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFile(src fs.FS, p, target string) error {
+	in, err := src.Open(p)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func absolute(base, u string) string {
