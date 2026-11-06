@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/plugin"
 )
 
@@ -17,7 +18,7 @@ type auditPlugin struct{ saved *[]string }
 
 func (auditPlugin) Name() string { return "audit" }
 func (p auditPlugin) Register(r *plugin.Registry) error {
-	plugin.EntryBeforeSave.On(r, func(_ context.Context, e *plugin.EntryEvent) error {
+	entries.BeforeSave.On(r, func(_ context.Context, e *entries.Event) error {
 		title, _ := e.Entry.Data["title"].(string)
 		if title == "verboten" {
 			return errors.New("Titel nicht erlaubt")
@@ -25,7 +26,7 @@ func (p auditPlugin) Register(r *plugin.Registry) error {
 		e.Entry.Data["title"] = strings.ToUpper(title)
 		return nil
 	})
-	plugin.EntryAfterSave.On(r, func(_ context.Context, e *plugin.EntryEvent) error {
+	entries.AfterSave.On(r, func(_ context.Context, e *entries.Event) error {
 		*p.saved = append(*p.saved, e.Type.Name+":"+e.Entry.Data["title"].(string))
 		if e.UserID == 0 {
 			return errors.New("user missing")

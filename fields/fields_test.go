@@ -48,7 +48,7 @@ func TestValidatePage(t *testing.T) {
 	if body[1].(map[string]any)["html"] != "<p>Text</p>" {
 		t.Errorf("richtext not sanitized: %v", body[1])
 	}
-	if body[0].(map[string]any)[BlockTypeKey] != "heading" {
+	if body[0].(map[string]any)[content.BlockTypeKey] != "heading" {
 		t.Error("block type lost")
 	}
 	seo := out["seo"].(map[string]any)

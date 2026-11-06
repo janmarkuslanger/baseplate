@@ -12,7 +12,7 @@ func (p Plugin) Register(r *plugin.Registry) error {
 	r.Block(content.Block{Name: "booking", Label: "Terminbuchung"})    // website
 	r.PublicRoute(plugin.Route{Pattern: "POST /api/bookings", Handler: p.book})
 	r.AdminPage(plugin.AdminPage{Path: "booking", Label: "Termine", Handler: p.list}) // admin
-	plugin.EntryAfterSave.On(r, p.onSave)                              // hook into others
+	entries.AfterSave.On(r, p.onSave)                                  // hook into others
 	return nil
 }
 ```
@@ -84,8 +84,8 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 
 | Hook | Kind | Payload | Error |
 |---|---|---|---|
-| `plugin.EntryBeforeSave` (= `entries.BeforeSave`) | action | `*plugin.EntryEvent` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
-| `plugin.EntryAfterSave` | action | `*plugin.EntryEvent` | logged |
+| `entries.BeforeSave` | action | `*entries.Event` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
+| `entries.AfterSave` | action | `*entries.Event` | logged |
 | `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages) | logged |
 
 New hooks are added where they are needed (e.g. admin actions, dashboard widgets, form field types); adding one never breaks existing plugins.

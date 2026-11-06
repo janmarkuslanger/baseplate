@@ -204,7 +204,7 @@ Patterns are checked on start; duplicate URLs fail the build.
 | `Migration` | plugin-owned tables (SQL per dialect) |
 | `DataMigration` | one-time content changes after schema changes |
 | `Funcs` | frontend template functions |
-| `hook` package | typed hooks, e.g. `plugin.EntryBeforeSave.On(r, fn)` — see [docs/plugins.md](docs/plugins.md) |
+| `hook` package | typed hooks, e.g. `entries.BeforeSave.On(r, fn)` — see [docs/plugins.md](docs/plugins.md) |
 
 [`plugins/forms`](plugins/forms) is a complete example that uses most of these.
 

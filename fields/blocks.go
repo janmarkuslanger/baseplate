@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/internal/markup"
 	"github.com/janmarkuslanger/baseplate/plugin"
 )
 
@@ -53,7 +54,7 @@ func coreBlocks() []content.Block {
 		}},
 		{Name: "richtext", Label: "block.richtext", Fields: []content.Field{
 			{Name: "html", Label: "block.richtext.html", Kind: RichText, Required: true},
-		}, Markdown: func(d map[string]any) string { return HTMLToMarkdown(str(d["html"])) }},
+		}, Markdown: func(d map[string]any) string { return markup.HTMLToMarkdown(str(d["html"])) }},
 		{Name: "image", Label: "block.image", Fields: []content.Field{
 			{Name: "src", Label: "block.image.src", Kind: Image, Required: true},
 			{Name: "alt", Label: "block.image.alt", Kind: Text, Help: "block.image.alt.help"},
