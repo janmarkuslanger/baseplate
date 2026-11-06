@@ -29,6 +29,7 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
+// Admin serves the editor interface under /admin/.
 type Admin struct {
 	Reg     *plugin.Registry
 	Auth    *auth.Manager
@@ -133,7 +134,6 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	authed.HandleFunc("POST /admin/media", a.upload)
 	authed.HandleFunc("POST /admin/build", a.build)
 	for _, p := range a.Reg.AdminPages() {
-		p := p
 		authed.HandleFunc("/admin/p/"+strings.Trim(p.Path, "/"), func(w http.ResponseWriter, r *http.Request) {
 			p.Handler(w, r, ui{a: a, active: "p/" + p.Path})
 		})

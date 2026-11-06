@@ -4,11 +4,13 @@
 package content
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/janmarkuslanger/baseplate/i18n"
-	"sort"
-	"strings"
 )
 
 // Field is one field of a content type, block or nested group.
@@ -40,6 +42,7 @@ type Field struct {
 	RenamedFrom string
 }
 
+// Option is one choice of a select field.
 type Option struct {
 	Value string
 	Label string
@@ -85,6 +88,7 @@ type Block struct {
 	Markdown func(data map[string]any) string
 }
 
+// TemplateName returns Template or its default "block/<name>".
 func (b Block) TemplateName() string {
 	if b.Template != "" {
 		return b.Template
@@ -92,6 +96,7 @@ func (b Block) TemplateName() string {
 	return "block/" + b.Name
 }
 
+// Title returns the field shown as the entry title in admin lists.
 func (t Type) Title() string {
 	if t.TitleField != "" {
 		return t.TitleField
@@ -147,6 +152,7 @@ func (t Type) checkPath() error {
 	return nil
 }
 
+// TemplateName returns Template or its default, the type name.
 func (t Type) TemplateName() string {
 	if t.Template != "" {
 		return t.Template
@@ -219,10 +225,12 @@ type Schema struct {
 	blocks map[string]Block
 }
 
+// NewSchema returns an empty schema.
 func NewSchema() *Schema {
 	return &Schema{kinds: map[string]Kind{}, types: map[string]*Type{}, blocks: map[string]Block{}}
 }
 
+// AddKind registers a field kind; names are unique.
 func (s *Schema) AddKind(k Kind) error {
 	if k.Name == "" || k.Normalize == nil {
 		return fmt.Errorf("content: kind needs a name and Normalize")
@@ -234,6 +242,7 @@ func (s *Schema) AddKind(k Kind) error {
 	return nil
 }
 
+// AddType registers a content type; names are unique.
 func (s *Schema) AddType(t Type) error {
 	if t.Name == "" {
 		return fmt.Errorf("content: type needs a name")
@@ -299,6 +308,7 @@ func (s *Schema) AllowBlocks(typeName, path string, blocks ...string) error {
 	return nil
 }
 
+// AddBlock registers a block; names are unique.
 func (s *Schema) AddBlock(b Block) error {
 	if b.Name == "" {
 		return fmt.Errorf("content: block needs a name")
@@ -319,7 +329,7 @@ func (s *Schema) Kinds() []Kind {
 	for _, k := range s.kinds {
 		out = append(out, k)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Kind) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -335,10 +345,11 @@ func (s *Schema) AllBlocks() []Block {
 	for _, b := range s.blocks {
 		out = append(out, b)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	slices.SortFunc(out, func(a, b Block) int { return cmp.Compare(a.Name, b.Name) })
 	return out
 }
 
+// Type returns a registered content type.
 func (s *Schema) Type(name string) (*Type, bool) {
 	t, ok := s.types[name]
 	return t, ok
@@ -353,6 +364,7 @@ func (s *Schema) Types() []*Type {
 	return out
 }
 
+// Block returns a registered block.
 func (s *Schema) Block(name string) (Block, bool) {
 	b, ok := s.blocks[name]
 	return b, ok
@@ -373,7 +385,7 @@ func (s *Schema) Blocks(f Field) []Block {
 	for _, b := range s.blocks {
 		out = append(out, b)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	slices.SortFunc(out, func(a, b Block) int { return cmp.Compare(a.Label, b.Label) })
 	return out
 }
 
@@ -430,7 +442,7 @@ func (e Errors) Error() string {
 	for k := range e {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	parts := make([]string, len(keys))
 	for i, k := range keys {
 		parts[i] = k + ": " + e[k].Error()
@@ -456,7 +468,7 @@ func (s *Schema) validateFields(prefix string, fields []Field, data map[string]a
 		k := s.kinds[f.Kind]
 		v, err := k.Normalize(NormalizeArgs{Schema: s, Field: f, Raw: data[f.Name]})
 		if err != nil {
-			if nested, ok := err.(Errors); ok {
+			if nested, ok := errors.AsType[Errors](err); ok {
 				for p, m := range nested {
 					errs[path+"."+p] = m
 				}

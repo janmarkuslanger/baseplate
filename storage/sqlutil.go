@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -55,13 +56,8 @@ func (s *SQLStore) entryTable(typ string) (*table, error) {
 // --- write ---
 
 func (s *SQLStore) inChunks(ids []any, fn func([]any) error) error {
-	const size = 500
-	for i := 0; i < len(ids); i += size {
-		end := i + size
-		if end > len(ids) {
-			end = len(ids)
-		}
-		if err := fn(ids[i:end]); err != nil {
+	for chunk := range slices.Chunk(ids, 500) {
+		if err := fn(chunk); err != nil {
 			return err
 		}
 	}

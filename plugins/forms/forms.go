@@ -38,26 +38,6 @@ var adminFS embed.FS
 //go:embed locales/*.json
 var localesFS embed.FS
 
-func catalogs() ([]i18n.Catalog, error) {
-	entries, err := localesFS.ReadDir("locales")
-	if err != nil {
-		return nil, err
-	}
-	var out []i18n.Catalog
-	for _, e := range entries {
-		b, err := localesFS.ReadFile("locales/" + e.Name())
-		if err != nil {
-			return nil, err
-		}
-		c := i18n.Catalog{Lang: strings.TrimSuffix(e.Name(), ".json")}
-		if err := json.Unmarshal(b, &c.Messages); err != nil {
-			return nil, fmt.Errorf("forms: locale %s: %w", e.Name(), err)
-		}
-		out = append(out, c)
-	}
-	return out, nil
-}
-
 const (
 	TypeName  = "form"
 	BlockName = "form"
@@ -76,6 +56,7 @@ var fieldTypes = []content.Option{
 	{Value: "checkbox", Label: "forms.ft.checkbox"},
 }
 
+// Plugin is the forms plugin; create it with New.
 type Plugin struct {
 	// Limit is the number of submissions per IP per Window (default 5 / 10 min).
 	Limit  int
@@ -89,13 +70,14 @@ type Plugin struct {
 	nowFunc func() time.Time
 }
 
+// New returns the plugin with the default rate limit.
 func New() *Plugin { return &Plugin{Limit: 5, Window: 10 * time.Minute} }
 
 func (p *Plugin) Name() string { return "forms" }
 
 func (p *Plugin) Register(r *plugin.Registry) error {
 	p.reg = r
-	cats, err := catalogs()
+	cats, err := i18n.Load(localesFS, "locales")
 	if err != nil {
 		return err
 	}

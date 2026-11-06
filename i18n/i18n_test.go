@@ -3,7 +3,9 @@ package i18n
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestTr(t *testing.T) {
@@ -40,5 +42,22 @@ func TestCoreKeysHaveGermanTexts(t *testing.T) {
 		if k.Error() == string(k) {
 			t.Errorf("%s has no German text", k)
 		}
+	}
+}
+
+func TestLoad(t *testing.T) {
+	cs, err := Load(fstest.MapFS{
+		"l/de.json": {Data: []byte(`{"a": "A"}`)},
+		"l/en.json": {Data: []byte(`{"a": "a"}`)},
+		"l/README":  {Data: []byte("not a catalog")},
+	}, "l")
+	if err != nil || len(cs) != 2 || cs[0].Lang != "de" || cs[0].Messages["a"] != "A" {
+		t.Fatalf("%v %+v", err, cs)
+	}
+	if _, err := Load(fstest.MapFS{"l/de.json": {Data: []byte(`{`)}}, "l"); err == nil || !strings.Contains(err.Error(), "de.json") {
+		t.Errorf("broken file: %v", err)
+	}
+	if _, err := Load(fstest.MapFS{}, "missing"); err == nil {
+		t.Error("missing dir must fail")
 	}
 }

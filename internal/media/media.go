@@ -7,14 +7,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"github.com/janmarkuslanger/baseplate/i18n"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/janmarkuslanger/baseplate/i18n"
 )
 
 const MaxSize = 20 << 20
@@ -45,8 +46,10 @@ func matchesExt(ext string, head []byte) bool {
 
 var ErrSize = i18n.Key("media.error.size")
 
+// Store keeps uploads as files in Dir.
 type Store struct{ Dir string }
 
+// File is one upload in the media library.
 type File struct {
 	Name     string
 	URL      string
@@ -118,7 +121,7 @@ func (s Store) List() ([]File, error) {
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		out = append(out, File{Name: e.Name(), URL: "/media/" + e.Name(), Size: info.Size(), Modified: info.ModTime(), IsImage: ext != ".pdf"})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Modified.After(out[j].Modified) })
+	slices.SortFunc(out, func(a, b File) int { return b.Modified.Compare(a.Modified) }) // newest first
 	return out, nil
 }
 

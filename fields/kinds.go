@@ -3,6 +3,7 @@
 package fields
 
 import (
+	"errors"
 	"net/mail"
 	"regexp"
 	"strconv"
@@ -327,7 +328,7 @@ func collect(errs content.Errors, i int, err error) {
 	if err == nil {
 		return
 	}
-	if nested, ok := err.(content.Errors); ok {
+	if nested, ok := errors.AsType[content.Errors](err); ok {
 		for p, m := range nested {
 			errs[strconv.Itoa(i)+"."+p] = m
 		}

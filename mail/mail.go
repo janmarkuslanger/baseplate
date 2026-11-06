@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// Message is one outgoing e-mail.
 type Message struct {
 	To      []string
 	ReplyTo string
@@ -21,10 +22,12 @@ type Message struct {
 	Text    string
 }
 
+// Mailer sends e-mails.
 type Mailer interface {
 	Send(ctx context.Context, m Message) error
 }
 
+// SMTPConfig is the connection of the SMTP mailer.
 type SMTPConfig struct {
 	Host     string
 	Port     int

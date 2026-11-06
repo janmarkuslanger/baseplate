@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 
 	"github.com/janmarkuslanger/baseplate/build"
@@ -329,6 +329,6 @@ func (a *Admin) refOptions(typ string) []content.Option {
 	for _, e := range list {
 		out = append(out, content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(a.orDash(e.Data[t.Title()]))})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	slices.SortFunc(out, func(a, b content.Option) int { return cmp.Compare(a.Label, b.Label) })
 	return out
 }
