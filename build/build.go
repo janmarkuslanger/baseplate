@@ -1,13 +1,13 @@
 // Package build generates the static site: one HTML file per published
-// routable entry, Markdown variants, sitemap.xml, robots.txt, llms.txt and
-// the public files (theme "public/", plugin.Registry.Public).
+// routable entry, the output templates (Markdown variants, sitemap.xml,
+// robots.txt, llms.txt, see render.Output) and the public files (theme
+// "public/", plugin.Registry.Public).
 package build
 
 import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/janmarkuslanger/baseplate/i18n"
@@ -44,6 +44,11 @@ var ErrBaseURLMissing = i18n.Key("build.baseURLMissing")
 // MsgPublicConflict is the key of the error for a public file whose path the
 // build already uses (argument: the path).
 const MsgPublicConflict = "build.publicConflict"
+
+// MsgPathConflict is the key of the error for a file the build writes
+// twice, e.g. a generator writing robots.txt (argument: the path). Replace
+// a core output with a template in templates/output/ instead.
+const MsgPathConflict = "build.pathConflict"
 
 type Result struct {
 	Pages    int
@@ -93,14 +98,8 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 			return Result{}, err
 		}
 	}
-	steps := []func([]*render.Page) error{s.sitemap, s.robots}
-	if cfg.LLMSTxt {
-		steps = append(steps, s.llms)
-	}
-	for _, step := range steps {
-		if err := step(pages); err != nil {
-			return Result{}, err
-		}
+	if err := s.outputs(pages); err != nil {
+		return Result{}, err
 	}
 	if b.Theme != nil {
 		if sub, err := fs.Sub(b.Theme, "assets"); err == nil {
@@ -173,6 +172,9 @@ func (s *site) WriteFile(p string, data []byte) error {
 		clean += "/index.html"
 	}
 	full := filepath.Join(s.out, filepath.FromSlash(clean))
+	if _, err := os.Lstat(full); err == nil {
+		return i18n.M(MsgPathConflict, clean)
+	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return err
 	}
@@ -303,64 +305,44 @@ func (s *site) renderPage(p *render.Page) error {
 	if err := s.Render(p.URL, name, p); err != nil {
 		return fmt.Errorf("%s: %w", p.URL, err)
 	}
-	return s.WriteFile(p.MarkdownURL, []byte(s.r.Markdown(p)))
+	md, err := s.r.ExecuteOutput(render.PageOutput, p)
+	if err != nil || md == nil {
+		return err
+	}
+	return s.WriteFile(p.MarkdownURL, md)
+}
+
+// outputs renders the root output templates (robots.txt, sitemap.xml,
+// llms.txt and the theme's own) into the site root.
+func (s *site) outputs(pages []*render.Page) error {
+	data := render.Output{Site: s.settings, BaseURL: s.cfg.BaseURL, Pages: pages}
+	for _, p := range pages {
+		if !indexable(p) {
+			continue
+		}
+		data.Indexable = append(data.Indexable, p)
+		if seo, _ := p.Data["seo"].(map[string]any); seo["sitemapExclude"] != true && str(seo["canonical"]) == "" {
+			data.Sitemap = append(data.Sitemap, p)
+		}
+	}
+	for _, name := range s.r.Outputs() {
+		b, err := s.r.ExecuteOutput(name, data)
+		if err != nil {
+			return fmt.Errorf("output %s: %w", name, err)
+		}
+		if b == nil {
+			continue
+		}
+		if err := s.WriteFile(name, b); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func indexable(p *render.Page) bool {
 	seo, _ := p.Data["seo"].(map[string]any)
 	return seo["noindex"] != true
-}
-
-func (s *site) sitemap(pages []*render.Page) error {
-	type url struct {
-		Loc      string `xml:"loc"`
-		LastMod  string `xml:"lastmod"`
-		Priority string `xml:"priority,omitempty"`
-	}
-	type urlset struct {
-		XMLName xml.Name `xml:"urlset"`
-		NS      string   `xml:"xmlns,attr"`
-		URLs    []url    `xml:"url"`
-	}
-	set := urlset{NS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
-	for _, p := range pages {
-		seo, _ := p.Data["seo"].(map[string]any)
-		if !indexable(p) || seo["sitemapExclude"] == true || str(seo["canonical"]) != "" {
-			continue
-		}
-		set.URLs = append(set.URLs, url{Loc: p.AbsURL, LastMod: p.Entry.UpdatedAt.UTC().Format("2006-01-02"), Priority: str(seo["sitemapPriority"])})
-	}
-	out, err := xml.MarshalIndent(set, "", "  ")
-	if err != nil {
-		return err
-	}
-	return s.WriteFile("sitemap.xml", append([]byte(xml.Header), out...))
-}
-
-func (s *site) robots(_ []*render.Page) error {
-	base := s.cfg.BaseURL
-	return s.WriteFile("robots.txt", []byte("User-agent: *\nAllow: /\n\nSitemap: "+base+"/sitemap.xml\n"))
-}
-
-// llms writes /llms.txt following https://llmstxt.org.
-func (s *site) llms(pages []*render.Page) error {
-	var b strings.Builder
-	b.WriteString("# " + cmp.Or(s.cfg.SiteName, "Website") + "\n\n")
-	if extra := s.cfg.LLMSContent; extra != "" {
-		b.WriteString(extra + "\n\n")
-	}
-	b.WriteString("## Seiten\n\n")
-	for _, p := range pages {
-		if !indexable(p) {
-			continue
-		}
-		line := "- [" + str(p.Data["title"]) + "](" + absolute(s.cfg.BaseURL, p.MarkdownURL) + ")"
-		if sum := p.Meta.Description; sum != "" {
-			line += ": " + strings.ReplaceAll(sum, "\n", " ")
-		}
-		b.WriteString(line + "\n")
-	}
-	return s.WriteFile("llms.txt", []byte(b.String()))
 }
 
 func copyFS(src fs.FS, dst string) error {

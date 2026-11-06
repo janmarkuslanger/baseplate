@@ -11,8 +11,10 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"maps"
 	"path"
 	"strings"
+	ttemplate "text/template"
 	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -77,6 +79,7 @@ type Renderer struct {
 	i18n    *i18n.Bundle
 	lang    string
 	loc     *time.Location
+	outputs map[string]*ttemplate.Template
 }
 
 // SetLocale sets the site language and time zone used by "date".
@@ -136,12 +139,20 @@ func New(reg *plugin.Registry, theme fs.FS) (*Renderer, error) {
 			return nil, err
 		}
 	}
+	outputs, _ := fs.Sub(outputDefaults, "outputs")
+	if err := r.parseOutputs(append([]fs.FS{outputs}, layers...), maps.Clone(funcs)); err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 
-// parseAll parses every .html file of fsys, recursively.
+// parseAll parses every .html file of fsys, recursively, except the
+// output templates.
 func parseAll(t *template.Template, fsys fs.FS) error {
 	return fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && p == "output" {
+			return fs.SkipDir
+		}
 		if err != nil || d.IsDir() || path.Ext(p) != ".html" {
 			return err
 		}

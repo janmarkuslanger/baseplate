@@ -27,7 +27,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `Kind` | field kinds (`Storage`, `Normalize`, `AdminTemplate`) |
 | `Block`, `Templates`, `Funcs` | content elements, frontend templates, template funcs |
 | `AllowBlocks` | restrict a blocks field (also of the core or other plugins) to named blocks |
-| `Generator` | extra build output |
+| `Generator` | extra pages in the build (archives, 404); replace core files like `robots.txt` with `templates/output/<path>` instead — a path written twice fails the build |
 | `Public` | files copied 1:1 to the site root; a path already in use fails the build |
 | `AdminPage`, `AdminTemplates` | admin screens |
 | `PublicRoute` | endpoints on the CMS server |
