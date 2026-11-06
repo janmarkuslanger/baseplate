@@ -1,6 +1,8 @@
 package build
 
 import (
+	"errors"
+
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -12,18 +14,30 @@ type refKey struct {
 }
 
 // resolver turns relation IDs into render.Ref values, one level deep.
+// The first storage error is kept in err and fails the build; a missing
+// target is not an error (the relation simply resolves to nothing).
 type resolver struct {
 	s     *site
 	urls  map[refKey]string // published routable entries
 	cache map[refKey]*render.Ref
 	lists map[string][]storage.Entry
+	err   error
+}
+
+func (r *resolver) fail(err error) {
+	if r.err == nil {
+		r.err = err
+	}
 }
 
 func (r *resolver) published(typ string) []storage.Entry {
 	if l, ok := r.lists[typ]; ok {
 		return l
 	}
-	l, _ := r.s.Published(typ)
+	l, err := r.s.Published(typ)
+	if err != nil {
+		r.fail(err)
+	}
 	r.lists[typ] = l
 	return l
 }
@@ -37,14 +51,23 @@ func (r *resolver) ref(typ string, id int64) *render.Ref {
 	t, _ := r.s.b.Reg.Schema.Type(typ)
 	if t != nil && t.Routable {
 		// Routable targets only resolve when published, so templates never
-		// link to pages missing from the build.
+		// link to pages missing from the build. They are already loaded.
 		if u, ok := r.urls[k]; ok {
-			if e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id); err == nil {
-				ref = &render.Ref{ID: id, Type: typ, URL: u, Data: e.Data}
+			for _, e := range r.published(typ) {
+				if e.ID == id {
+					ref = &render.Ref{ID: id, Type: typ, URL: u, Data: e.Data}
+					break
+				}
 			}
 		}
-	} else if e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id); err == nil {
-		ref = &render.Ref{ID: id, Type: typ, Data: e.Data}
+	} else {
+		e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id)
+		switch {
+		case err == nil:
+			ref = &render.Ref{ID: id, Type: typ, Data: e.Data}
+		case !errors.Is(err, storage.ErrNotFound):
+			r.fail(err)
+		}
 	}
 	r.cache[k] = ref
 	return ref

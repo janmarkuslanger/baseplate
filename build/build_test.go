@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,5 +248,56 @@ func TestMarkdownBlocksInGroupsAndLists(t *testing.T) {
 	md := read(t, b, "landing/start.md")
 	if !strings.Contains(md, "## Im Hero") || !strings.Contains(md, "## In Liste") {
 		t.Errorf("markdown: %q", md)
+	}
+}
+
+// failingStore fails reads of one type, to simulate a broken database.
+type failingStore struct {
+	storage.Store
+	typ string
+}
+
+func (f failingStore) GetEntry(ctx context.Context, typ string, id int64) (*storage.Entry, error) {
+	if typ == f.typ {
+		return nil, errors.New("disk on fire")
+	}
+	return f.Store.GetEntry(ctx, typ, id)
+}
+
+func TestRelationErrorsFailTheBuild(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "author", Fields: []content.Field{{Name: "name", Kind: fields.Text}}})
+	b.Reg.Extend(fields.PageType, content.Field{Name: "author", Kind: fields.Relation, Ref: "author"})
+	st.UseSchema(ctx, b.Reg.Schema)
+	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.author}}{{.Data.name}}{{end}}]{{end}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	ada := add(t, st, "author", "", storage.StatusPublished, map[string]any{"name": "Ada"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A", "author": ada})
+
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, b, "index.html"); got != "[Ada]" {
+		t.Errorf("resolved: %q", got)
+	}
+
+	// A deleted target is not an error.
+	if err := st.DeleteEntry(ctx, "author", ada); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatalf("deleted target: %v", err)
+	}
+
+	// A storage error is.
+	ada2 := add(t, st, "author", "", storage.StatusPublished, map[string]any{"name": "Ada"})
+	add(t, st, fields.PageType, "zwei", storage.StatusPublished, map[string]any{"title": "B", "author": ada2})
+	b.Reg.Store = failingStore{Store: st, typ: "author"}
+	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "disk on fire") {
+		t.Fatalf("want storage error, got %v", err)
+	}
+	if read(t, b, "index.html") != "[]" {
+		t.Error("a failed build must keep the previous site")
 	}
 }
