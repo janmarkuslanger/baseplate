@@ -33,6 +33,10 @@
     </div>
   {{else if eq .F.Kind "number"}}
     <input class="input input--short" type="number" step="any" x-model.number="{{.M}}">
+  {{else if eq .F.Kind "date"}}
+    <input class="input input--short" type="date" x-bind:value="bpDate.toInput({{.M}}, false)" x-on:change="{{.M}} = bpDate.fromInput($event.target.value)">
+  {{else if eq .F.Kind "datetime"}}
+    <input class="input input--short" type="datetime-local" x-bind:value="bpDate.toInput({{.M}}, true)" x-on:change="{{.M}} = bpDate.fromInput($event.target.value)">
   {{else if eq .F.Kind "bool"}}
     <label class="switch"><input type="checkbox" x-model="{{.M}}"><span class="switch__track"></span>{{t .F.Label}}</label>
   {{else if eq .F.Kind "select"}}

@@ -19,6 +19,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/internal/auth"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -159,7 +160,9 @@ type view struct {
 	User   *storage.User
 	CSRF   string
 	Flash  string
-	Page   any
+	// TZ is the site's time zone; date inputs convert with it.
+	TZ   string
+	Page any
 }
 
 func (a *Admin) nav() []navItem {
@@ -188,6 +191,9 @@ func (a *Admin) render(w http.ResponseWriter, r *http.Request, status int, tmpl 
 	if cur := auth.FromContext(r.Context()); cur != nil {
 		v.User, v.CSRF = cur.User, cur.Session.CSRF
 		v.Nav = a.nav()
+		if cfg, err := settings.Load(r.Context(), a.store()); err == nil {
+			v.TZ = cfg.Location.String()
+		}
 	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", v); err != nil {

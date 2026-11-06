@@ -87,6 +87,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	r.SetEntries(s.entries)
+	r.SetLocale(cmp.Or(cfg.Language, i18n.Default), cfg.Location)
 	for _, p := range pages {
 		if err := s.renderPage(p); err != nil {
 			return Result{}, err

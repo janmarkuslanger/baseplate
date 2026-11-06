@@ -137,6 +137,20 @@ Lists of other entries (e.g. in a listing block) come from `entries`:
 
 Published entries only; each result has `.URL` (routable types), `.Data` with relations resolved one level deep. Unknown types, fields or options fail the build.
 
+Date fields (`fields.Date`, `fields.DateTime`) store Unix seconds. The admin converts input in the site's time zone (**Settings → Zeitzone**, default `Europe/Berlin`); templates format with `date`:
+
+```html
+<time datetime="{{date .Data.publishedDate "iso"}}">{{date .Data.publishedDate "long"}}</time>   <!-- 1. Mai 2024 -->
+```
+
+| Format | `de` | other languages |
+|---|---|---|
+| `short`, `long`, `time`, `datetime` | `01.05.2024`, `1. Mai 2024`, `09:30`, `1. Mai 2024, 09:30` | English (`05/01/2024`, `May 1, 2024`, …) |
+| `iso`, `isodate` | `2024-05-01T09:30:00+02:00`, `2024-05-01` | same |
+| own | catalog key `date.format.<name>` (Go layout; month/weekday names are translated) | |
+
+Language = **Settings → Sprache**; a third argument overrides the zone: `{{date .Data.x "time" "UTC"}}`.
+
 ```html
 <head>{{template "baseplate/head" .}}</head>   <!-- all SEO / Open Graph tags -->
 {{blocks .Data.body .}}                        <!-- renders content blocks -->

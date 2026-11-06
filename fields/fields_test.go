@@ -174,3 +174,40 @@ func TestAllowBlocks(t *testing.T) {
 		t.Error("Check must report unknown allowed blocks")
 	}
 }
+
+func TestDateKinds(t *testing.T) {
+	r := registry(t)
+	for _, kind := range []string{Date, DateTime} {
+		fs := []content.Field{{Name: "d", Kind: kind}}
+		for _, c := range []struct {
+			in   any
+			want any // nil = empty; error = invalid
+		}{
+			{nil, nil},
+			{"", nil},
+			{float64(1714514400), int64(1714514400)}, // JSON from the admin
+			{int64(1714514400), int64(1714514400)},   // store
+			{"2024-05-01T00:00:00+02:00", int64(1714514400)},
+			{"2024-05-01", errors.New("")}, // no zone: ambiguous
+			{"morgen", errors.New("")},
+			{true, errors.New("")},
+		} {
+			out, err := r.Schema.Validate(fs, map[string]any{"d": c.in})
+			if _, invalid := c.want.(error); invalid {
+				if err == nil {
+					t.Errorf("%s %v: want error, got %v", kind, c.in, out["d"])
+				}
+				continue
+			}
+			if err != nil || out["d"] != c.want {
+				t.Errorf("%s %v: got %v (%v), want %v", kind, c.in, out["d"], err, c.want)
+			}
+		}
+	}
+	tz := []content.Field{{Name: "tz", Kind: Timezone}}
+	for in, ok := range map[string]bool{"Europe/Berlin": true, "UTC": true, "Mars/Olympus": false, "Local": false} {
+		if _, err := r.Schema.Validate(tz, map[string]any{"tz": in}); (err == nil) != ok {
+			t.Errorf("timezone %q: %v", in, err)
+		}
+	}
+}
