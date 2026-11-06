@@ -212,6 +212,9 @@ func (s *site) collect(base string) ([]*render.Page, error) {
 		p.Data = res.populate(p.Type.Fields, p.Entry.Data)
 		res.inverse(p)
 	}
+	if res.err != nil {
+		return nil, fmt.Errorf("resolve relations: %w", res.err)
+	}
 	sort.Slice(nav, func(i, j int) bool { return nav[i].URL < nav[j].URL })
 	sort.Slice(pages, func(i, j int) bool { return pages[i].URL < pages[j].URL })
 	for _, p := range pages {
