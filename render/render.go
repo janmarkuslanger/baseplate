@@ -13,8 +13,10 @@ import (
 	"io/fs"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/markup"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -72,6 +74,14 @@ type Renderer struct {
 	t       *template.Template
 	schema  *content.Schema
 	entries EntriesFunc
+	i18n    *i18n.Bundle
+	lang    string
+	loc     *time.Location
+}
+
+// SetLocale sets the site language and time zone used by "date".
+func (r *Renderer) SetLocale(lang string, loc *time.Location) {
+	r.lang, r.loc = lang, loc
 }
 
 // EntriesFunc implements the "entries" template function:
@@ -86,9 +96,10 @@ func (r *Renderer) SetEntries(f EntriesFunc) { r.entries = f }
 // New builds the template set from the defaults, all plugin template FSs
 // and the theme's "templates" directory (if theme is non-nil).
 func New(reg *plugin.Registry, theme fs.FS) (*Renderer, error) {
-	r := &Renderer{schema: reg.Schema}
+	r := &Renderer{schema: reg.Schema, i18n: i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(reg)...)...), lang: i18n.Default, loc: time.UTC}
 	funcs := template.FuncMap{
 		"blocks": r.blocks,
+		"date":   r.date,
 		"entries": func(typ string, opts ...any) ([]*Ref, error) {
 			if r.entries == nil {
 				return nil, fmt.Errorf("entries %q: only available in the build", typ)

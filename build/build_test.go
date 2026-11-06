@@ -410,3 +410,21 @@ func TestTypePath(t *testing.T) {
 		t.Fatalf("want cycle error, got %v", err)
 	}
 }
+
+func TestDatesUseSiteTimezone(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "event", Fields: []content.Field{{Name: "name", Kind: fields.Text}, {Name: "when", Kind: fields.DateTime}}})
+	st.UseSchema(ctx, b.Reg.Schema)
+	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}{{range entries "event" "sort" "when"}}{{.Data.name}} {{date .Data.when "datetime"}};{{end}}{{end}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test", "language": "de", "timezone": "America/New_York"})
+	add(t, st, "event", "", storage.StatusPublished, map[string]any{"name": "B", "when": int64(1714600800)}) // 2024-05-01 22:00 UTC
+	add(t, st, "event", "", storage.StatusPublished, map[string]any{"name": "A", "when": int64(1714514400)}) // 2024-04-30 22:00 UTC
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S"})
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, b, "index.html"); got != "A 30. April 2024, 18:00;B 1. Mai 2024, 18:00;" {
+		t.Errorf("got %q", got)
+	}
+}

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	_ "time/tzdata" // time zones also on hosts without zoneinfo
 	"unicode/utf8"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -29,6 +31,12 @@ const (
 	Group    = "group"
 	List     = "list"
 	Blocks   = "blocks"
+	// Date and DateTime store Unix seconds; the admin converts input in the
+	// site's time zone, templates format with {{date v "long"}}.
+	Date     = "date"
+	DateTime = "datetime"
+	// Timezone is an IANA zone name ("Europe/Berlin").
+	Timezone = "timezone"
 )
 
 // BlockTypeKey and ItemKey are aliases of the content conventions, kept for
@@ -157,6 +165,14 @@ func Kinds() []content.Kind {
 				return nil, i18n.M("validation.number")
 			},
 		},
+		timeKind(Date),
+		timeKind(DateTime),
+		stringKind(Timezone, content.StoreText, func(_ content.Field, s string) (string, error) {
+			if _, err := time.LoadLocation(s); err != nil || s == "Local" {
+				return "", i18n.M("validation.timezone")
+			}
+			return s, nil
+		}),
 		{
 			Name:    Bool,
 			Storage: content.StoreBool,
@@ -318,4 +334,35 @@ func collect(errs content.Errors, i int, err error) {
 		return
 	}
 	errs[strconv.Itoa(i)] = err
+}
+
+// timeKind stores a point in time as Unix seconds. Input: a number (the
+// admin sends seconds) or an RFC 3339 string with offset (imports, APIs).
+func timeKind(name string) content.Kind {
+	return content.Kind{
+		Name:    name,
+		Storage: content.StoreNumber,
+		Normalize: func(a content.NormalizeArgs) (any, error) {
+			switch v := a.Raw.(type) {
+			case nil:
+				return nil, nil
+			case float64:
+				return int64(v), nil
+			case int64:
+				return v, nil
+			case int:
+				return int64(v), nil
+			case string:
+				if strings.TrimSpace(v) == "" {
+					return nil, nil
+				}
+				t, err := time.Parse(time.RFC3339, strings.TrimSpace(v))
+				if err != nil {
+					return nil, i18n.M("validation.date")
+				}
+				return t.Unix(), nil
+			}
+			return nil, i18n.M("validation.date")
+		},
+	}
 }

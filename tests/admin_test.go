@@ -204,3 +204,18 @@ func TestListShowsURL(t *testing.T) {
 		t.Error("post list: missing /blog/hallo/")
 	}
 }
+
+func TestTimezoneSetting(t *testing.T) {
+	_, c := newTestApp(t)
+	c.login()
+	if _, html := c.do("GET", "/admin/", nil); !strings.Contains(html, `data-tz="Europe/Berlin"`) {
+		t.Error("default time zone missing in the admin")
+	}
+	if res, _ := c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "Mars/Olympus"}); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid time zone saved: %d", res.StatusCode)
+	}
+	c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "America/New_York"})
+	if _, html := c.do("GET", "/admin/", nil); !strings.Contains(html, `data-tz="America/New_York"`) {
+		t.Error("saved time zone not passed to date inputs")
+	}
+}

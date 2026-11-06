@@ -22,7 +22,7 @@ func TestKeysMatchSettingsType(t *testing.T) {
 	for _, f := range typ.Fields {
 		have[f.Name] = true
 	}
-	for _, k := range []string{settings.SiteName, settings.BaseURL, settings.Language, settings.ServerURL, settings.DefaultOGImage, settings.LLMSTxt, settings.LLMSContent} {
+	for _, k := range []string{settings.SiteName, settings.BaseURL, settings.Language, settings.ServerURL, settings.DefaultOGImage, settings.LLMSTxt, settings.LLMSContent, settings.Timezone} {
 		if !have[k] {
 			t.Errorf("key %q is not a field of the settings type", k)
 		}
@@ -36,5 +36,13 @@ func TestFromData(t *testing.T) {
 	}
 	if z := settings.FromData(nil); z.Data == nil || z.BaseURL != "" {
 		t.Errorf("zero: %+v", z)
+	}
+}
+
+func TestLocation(t *testing.T) {
+	for in, want := range map[string]string{"": "Europe/Berlin", "America/New_York": "America/New_York", "Mars/Olympus": "Europe/Berlin"} {
+		if got := settings.FromData(map[string]any{"timezone": in}).Location.String(); got != want {
+			t.Errorf("%q: %s, want %s", in, got, want)
+		}
 	}
 }

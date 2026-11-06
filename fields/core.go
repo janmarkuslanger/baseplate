@@ -82,6 +82,7 @@ func (Core) Register(r *plugin.Registry) error {
 			{Name: settings.BaseURL, Label: "settings.baseURL", Kind: URL, Required: true, Help: "settings.baseURL.help"},
 			{Name: settings.Language, Label: "settings.language", Kind: Text, Help: "settings.language.help"},
 			{Name: settings.ServerURL, Label: "settings.serverURL", Kind: URL, Help: "settings.serverURL.help"},
+			{Name: settings.Timezone, Label: "settings.timezone", Kind: Timezone, Help: "settings.timezone.help"},
 			{Name: settings.DefaultOGImage, Label: "settings.defaultOgImage", Kind: Image},
 			{Name: settings.LLMSTxt, Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
 			{Name: settings.LLMSContent, Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},

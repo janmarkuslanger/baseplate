@@ -4,9 +4,12 @@
 package settings
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"strings"
+	"time"
+	_ "time/tzdata" // time zones also on hosts without zoneinfo
 
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -23,7 +26,11 @@ const (
 	DefaultOGImage = "defaultOgImage"
 	LLMSTxt        = "llmsTxt"
 	LLMSContent    = "llmsContent"
+	Timezone       = "timezone"
 )
+
+// DefaultTimezone is used when the settings name none.
+const DefaultTimezone = "Europe/Berlin"
 
 // Settings of the site. Data holds all fields, including ones plugins add
 // with Extend.
@@ -35,7 +42,10 @@ type Settings struct {
 	DefaultOGImage string
 	LLMSTxt        bool
 	LLMSContent    string
-	Data           map[string]any
+	// Location is the site's time zone: the admin converts date input with
+	// it and templates format dates in it.
+	Location *time.Location
+	Data     map[string]any
 }
 
 // FromData reads settings from entry data.
@@ -45,6 +55,10 @@ func FromData(d map[string]any) Settings {
 	}
 	str := func(k string) string { s, _ := d[k].(string); return strings.TrimSpace(s) }
 	llms, _ := d[LLMSTxt].(bool)
+	loc, err := time.LoadLocation(cmp.Or(str(Timezone), DefaultTimezone))
+	if err != nil {
+		loc, _ = time.LoadLocation(DefaultTimezone)
+	}
 	return Settings{
 		SiteName:       str(SiteName),
 		BaseURL:        strings.TrimRight(str(BaseURL), "/"),
@@ -53,6 +67,7 @@ func FromData(d map[string]any) Settings {
 		DefaultOGImage: str(DefaultOGImage),
 		LLMSTxt:        llms,
 		LLMSContent:    str(LLMSContent),
+		Location:       loc,
 		Data:           d,
 	}
 }

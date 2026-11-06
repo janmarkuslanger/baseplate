@@ -1,0 +1,80 @@
+package render
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/janmarkuslanger/baseplate/i18n"
+	"github.com/janmarkuslanger/baseplate/plugin"
+)
+
+type catalogPlugin struct{}
+
+func (catalogPlugin) Name() string { return "cat" }
+func (catalogPlugin) Register(r *plugin.Registry) error {
+	i18n.Catalogs.Add(r, i18n.Catalog{Lang: "de", Messages: map[string]string{"date.format.card": "02. January 2006"}})
+	return nil
+}
+
+func TestDate(t *testing.T) {
+	reg := plugin.NewRegistry(plugin.Services{})
+	if err := reg.Use(catalogPlugin{}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(reg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	// 2024-05-01 00:30 in Berlin = 2024-04-30 22:30 UTC, a Wednesday.
+	const ts = int64(1714516200)
+	for _, c := range []struct {
+		lang   string
+		v      any
+		format string
+		zone   []string
+		want   string
+	}{
+		{"de", ts, "short", nil, "01.05.2024"},
+		{"de", ts, "long", nil, "1. Mai 2024"},
+		{"de", float64(ts), "datetime", nil, "1. Mai 2024, 00:30"},
+		{"de", ts, "time", nil, "00:30"},
+		{"de", ts, "card", nil, "01. Mai 2024"},
+		{"de-DE", ts, "long", nil, "1. Mai 2024"},
+		{"en", ts, "long", nil, "May 1, 2024"},
+		{"en", ts, "datetime", nil, "May 1, 2024, 12:30 AM"},
+		{"fr", ts, "short", nil, "05/01/2024"}, // no catalog: English, not the admin's German
+		{"de", ts, "iso", nil, "2024-05-01T00:30:00+02:00"},
+		{"de", ts, "isodate", nil, "2024-05-01"},
+		{"de", ts, "short", []string{"UTC"}, "30.04.2024"},
+		{"de", nil, "long", nil, ""},
+	} {
+		r.SetLocale(c.lang, berlin)
+		got, err := r.date(c.v, c.format, c.zone...)
+		if err != nil || got != c.want {
+			t.Errorf("%s %s %v: %q (%v), want %q", c.lang, c.format, c.zone, got, err, c.want)
+		}
+	}
+
+	r.SetLocale("de", berlin)
+	r.i18n.Add(i18n.Catalog{Lang: "de", Messages: map[string]string{"date.format.weekday": "Monday, 2. January"}})
+	if got, _ := r.date(ts, "weekday"); got != "Mittwoch, 1. Mai" {
+		t.Errorf("weekday: %q", got)
+	}
+
+	for _, c := range []struct {
+		v      any
+		format string
+		zone   []string
+		want   string
+	}{
+		{ts, "nope", nil, "unknown format"},
+		{"2024-05-01", "long", nil, "not a date field value"},
+		{ts, "long", []string{"Mars/Olympus"}, "unknown time zone"},
+	} {
+		if _, err := r.date(c.v, c.format, c.zone...); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%v %s: want %q, got %v", c.v, c.format, c.want, err)
+		}
+	}
+}

@@ -10,7 +10,7 @@
 <script src="{{asset "alpine.min.js"}}" defer></script>
 </head>
 {{if .User}}
-<body class="app" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' data-csrf="{{.CSRF}}" data-i18n="{{json (messages "js.")}}">
+<body class="app" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' data-csrf="{{.CSRF}}" data-tz="{{.TZ}}" data-i18n="{{json (messages "js.")}}">
 <aside class="sidebar">
   <a class="brand" href="/admin/"><span class="brand__mark">b</span> baseplate</a>
   <nav class="nav">

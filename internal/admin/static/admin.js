@@ -11,6 +11,39 @@
     args.forEach((a, i) => { s = s.replace('{' + i + '}', a); });
     return s;
   };
+  // Date fields store Unix seconds; inputs show and take wall time in the
+  // site's time zone (data-tz), not the browser's.
+  window.bpDate = (() => {
+    const tz = () => document.body.dataset.tz || 'UTC';
+    // Wall time of ms in tz, as if it were UTC (ms).
+    const wall = (ms) => {
+      const p = {};
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz(), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      }).formatToParts(new Date(ms)).forEach((x) => { p[x.type] = x.value; });
+      return { ms: Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute), p };
+    };
+    return {
+      toInput(v, withTime) {
+        if (typeof v !== 'number') return '';
+        const { p } = wall(v * 1000);
+        return p.year + '-' + p.month + '-' + p.day + (withTime ? 'T' + p.hour + ':' + p.minute : '');
+      },
+      // "2024-05-01" (00:00) or "2024-05-01T09:30" → Unix seconds, or null.
+      fromInput(s) {
+        if (!s) return null;
+        const [d, t = '00:00'] = s.split('T');
+        const [y, m, day] = d.split('-').map(Number);
+        const [h, min] = t.split(':').map(Number);
+        const want = Date.UTC(y, m - 1, day, h, min);
+        // Offset of the zone at that time; twice for days with a DST switch.
+        let ms = want - (wall(want).ms - want);
+        ms = want - (wall(ms).ms - ms);
+        return Math.round(ms / 1000);
+      },
+    };
+  })();
+
   // New items get "n…" keys; stored items keep the server's "<table>:<id>".
   const uid = () => 'n' + Math.random().toString(36).slice(2, 10);
 
