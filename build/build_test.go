@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
 	"github.com/janmarkuslanger/baseplate/storage/sqlite"
@@ -299,5 +301,61 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 	}
 	if read(t, b, "index.html") != "[]" {
 		t.Error("a failed build must keep the previous site")
+	}
+}
+
+func TestPublicFiles(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	tmpl := theme["templates/page.html"]
+	b.Theme = fstest.MapFS{
+		"templates/page.html":             tmpl,
+		"public/favicon.ico":              {Data: []byte("ico")},
+		"public/.well-known/security.txt": {Data: []byte("Contact: x")},
+	}
+	b.Reg.Public(fstest.MapFS{"google123.html": {Data: []byte("verify")}})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{"favicon.ico": "ico", ".well-known/security.txt": "Contact: x", "google123.html": "verify"} {
+		if got := read(t, b, p); got != want {
+			t.Errorf("%s = %q, want %q", p, got, want)
+		}
+	}
+
+	// A path the build already uses fails the build instead of being overwritten.
+	for name, f := range map[string]fstest.MapFS{
+		"generated file":  {"robots.txt": {Data: []byte("mine")}},
+		"page":            {"index.html": {Data: []byte("mine")}},
+		"page directory":  {"ueber-uns": {Data: []byte("mine")}},
+		"plugin vs theme": {"favicon.ico": {Data: []byte("other")}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b, st := setup(t)
+			b.Theme = fstest.MapFS{"templates/page.html": tmpl, "public/favicon.ico": {Data: []byte("ico")}}
+			b.Reg.Public(f)
+			add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+			add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+			add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{"title": "B"})
+			_, err := b.Build(ctx)
+			var m i18n.Msg
+			if !errors.As(err, &m) || m.Key != MsgPublicConflict {
+				t.Fatalf("want conflict, got %v", err)
+			}
+			if _, err := os.Stat(b.DistDir); !errors.Is(err, fs.ErrNotExist) {
+				t.Error("a failed build must not publish a site")
+			}
+		})
+	}
+}
+
+func TestNoPublicDir(t *testing.T) {
+	b, st := setup(t) // theme without public/
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	if _, err := b.Build(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }

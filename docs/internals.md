@@ -81,4 +81,4 @@ plugins/* ─▶ public packages only
 | Public routes | form endpoint |
 | Hooks | save, build |
 | Data migrations | renamed fields, content fixes |
-| Theme | templates + assets per customer |
+| Theme | templates, `assets/`, `public/` (site root) per customer |

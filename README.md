@@ -116,6 +116,7 @@ A theme is an `fs.FS` containing:
 
 - `templates/*.html` — one template per routable content type (`{{define "page"}}…{{end}}`). A theme can override any default, such as `baseplate/head` or `block/<name>`.
 - `assets/` — copied to `dist/assets/`.
+- `public/` — copied 1:1 to the site root (`favicon.ico`, `.well-known/…`, verification files). A path the build already uses (a page, `robots.txt`, `sitemap.xml`, …) fails the build.
 
 Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`.
 
