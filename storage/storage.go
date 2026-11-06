@@ -69,12 +69,14 @@ type ListQuery struct {
 
 // Referrer is an entry whose relation field points at another entry. Field
 // is the relation field; Nested is true when the field sits inside a
-// component (group, list item or block) of the entry.
+// component (group, list item or block) of the entry; Block names the block
+// that holds the field, if any.
 type Referrer struct {
 	Type   string
 	ID     int64
 	Field  string
 	Nested bool
+	Block  string
 }
 
 type User struct {

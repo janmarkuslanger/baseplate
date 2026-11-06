@@ -193,7 +193,7 @@ func TestNestedReferrer(t *testing.T) {
 		t.Errorf("block relation: %v", block)
 	}
 	refs, _ := s.Referrers(ctx, "form", f.ID)
-	if len(refs) != 1 || refs[0].Type != "page" || refs[0].ID != page.ID || !refs[0].Nested {
+	if len(refs) != 1 || refs[0].Type != "page" || refs[0].ID != page.ID || !refs[0].Nested || refs[0].Block != "form" {
 		t.Errorf("nested referrer: %+v", refs)
 	}
 	s.DeleteEntry(ctx, "page", page.ID)

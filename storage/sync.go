@@ -22,13 +22,16 @@ type dialectSQL struct {
 	// quote quotes an identifier; column names come from field names and
 	// may be SQL keywords ("limit", "order", …).
 	quote func(name string) string
+	// insertDefault is the INSERT tail for a row with only default values.
+	insertDefault string
 }
 
 var dialects = map[Dialect]dialectSQL{
 	SQLite: {
-		idPK:     "INTEGER PRIMARY KEY AUTOINCREMENT",
-		slugType: "TEXT",
-		quote:    func(n string) string { return `"` + n + `"` },
+		idPK:          "INTEGER PRIMARY KEY AUTOINCREMENT",
+		slugType:      "TEXT",
+		quote:         func(n string) string { return `"` + n + `"` },
+		insertDefault: "DEFAULT VALUES",
 		types: map[content.Storage]string{
 			content.StoreText: "TEXT", content.StoreLongText: "TEXT",
 			content.StoreNumber: "REAL", content.StoreBool: "INTEGER",
@@ -45,9 +48,10 @@ var dialects = map[Dialect]dialectSQL{
 		},
 	},
 	MySQL: {
-		idPK:     "BIGINT AUTO_INCREMENT PRIMARY KEY",
-		slugType: "VARCHAR(255)",
-		quote:    func(n string) string { return "`" + n + "`" },
+		idPK:          "BIGINT AUTO_INCREMENT PRIMARY KEY",
+		slugType:      "VARCHAR(255)",
+		quote:         func(n string) string { return "`" + n + "`" },
+		insertDefault: "() VALUES ()",
 		types: map[content.Storage]string{
 			content.StoreText: "TEXT", content.StoreLongText: "LONGTEXT",
 			content.StoreNumber: "DOUBLE", content.StoreBool: "TINYINT(1)",

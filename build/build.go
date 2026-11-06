@@ -4,6 +4,7 @@ package build
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/xml"
 	"errors"
@@ -266,9 +267,9 @@ func meta(p *render.Page, cfg settings.Settings, base string) render.Meta {
 	seo, _ := p.Data["seo"].(map[string]any)
 	title := str(p.Data["title"])
 	m := render.Meta{
-		Title:       firstNonEmpty(str(seo["metaTitle"]), title),
+		Title:       cmp.Or(str(seo["metaTitle"]), title),
 		Description: str(seo["metaDescription"]),
-		Canonical:   firstNonEmpty(str(seo["canonical"]), p.AbsURL),
+		Canonical:   cmp.Or(str(seo["canonical"]), p.AbsURL),
 	}
 	if site := cfg.SiteName; site != "" && str(seo["metaTitle"]) == "" && title != site {
 		m.Title = title + " | " + site
@@ -281,9 +282,9 @@ func meta(p *render.Page, cfg settings.Settings, base string) render.Meta {
 		robots[1] = "nofollow"
 	}
 	m.Robots = strings.Join(robots, ", ")
-	m.OGTitle = firstNonEmpty(str(seo["ogTitle"]), m.Title)
-	m.OGDescription = firstNonEmpty(str(seo["ogDescription"]), m.Description)
-	m.OGImage = absolute(base, firstNonEmpty(str(seo["ogImage"]), cfg.DefaultOGImage))
+	m.OGTitle = cmp.Or(str(seo["ogTitle"]), m.Title)
+	m.OGDescription = cmp.Or(str(seo["ogDescription"]), m.Description)
+	m.OGImage = absolute(base, cmp.Or(str(seo["ogImage"]), cfg.DefaultOGImage))
 	return m
 }
 
@@ -337,7 +338,7 @@ func (s *site) robots(_ []*render.Page) error {
 // llms writes /llms.txt following https://llmstxt.org.
 func (s *site) llms(pages []*render.Page) error {
 	var b strings.Builder
-	b.WriteString("# " + firstNonEmpty(s.cfg.SiteName, "Website") + "\n\n")
+	b.WriteString("# " + cmp.Or(s.cfg.SiteName, "Website") + "\n\n")
 	if extra := s.cfg.LLMSContent; extra != "" {
 		b.WriteString(extra + "\n\n")
 	}
@@ -386,15 +387,6 @@ func absolute(base, u string) string {
 		return u
 	}
 	return base + u
-}
-
-func firstNonEmpty(vs ...string) string {
-	for _, v := range vs {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func str(v any) string { s, _ := v.(string); return s }

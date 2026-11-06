@@ -57,6 +57,16 @@ func EntryTable(typ string) string { return "ct_" + typ }
 // BlockTable is the table of a block, e.g. "cb_heading".
 func BlockTable(name string) string { return "cb_" + name }
 
+// blockOf returns the block a component table belongs to ("" if none):
+// cb_faq → faq, cb_faq__items → faq.
+func blockOf(table string) string {
+	if !strings.HasPrefix(table, "cb_") {
+		return ""
+	}
+	name, _, _ := strings.Cut(blockName(table), "__")
+	return name
+}
+
 // blockName is the inverse of BlockTable.
 func blockName(table string) string { return strings.TrimPrefix(table, "cb_") }
 

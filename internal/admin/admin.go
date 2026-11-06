@@ -4,6 +4,7 @@ package admin
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
@@ -427,32 +428,21 @@ type editPage struct {
 
 // relationLabel names the relation field of a referrer: its label, or
 // "<block> › <field>" when the field sits inside a block.
-func (a *Admin) relationLabel(rt *content.Type, ref storage.Referrer, target string) string {
-	if !ref.Nested {
-		for _, f := range rt.Fields {
-			if f.Name == ref.Field && f.Label != "" {
-				return f.Label
+func (a *Admin) relationLabel(rt *content.Type, ref storage.Referrer) string {
+	label := func(fs []content.Field) string {
+		for _, f := range fs {
+			if f.Name == ref.Field {
+				return cmp.Or(f.Label, f.Name)
 			}
 		}
 		return ref.Field
 	}
-	for _, b := range a.Reg.Schema.AllBlocks() {
-		for _, f := range b.Fields {
-			if f.Name == ref.Field && f.Ref == target {
-				return b.Label + " › " + firstNonEmpty(f.Label, f.Name)
-			}
+	if ref.Block != "" {
+		if b, ok := a.Reg.Schema.Block(ref.Block); ok {
+			return b.Label + " › " + label(b.Fields)
 		}
 	}
-	return ref.Field
-}
-
-func firstNonEmpty(vs ...string) string {
-	for _, v := range vs {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return label(rt.Fields)
 }
 
 // usedIn is an entry whose relation points at the edited entry.
@@ -477,7 +467,7 @@ func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []use
 			continue
 		}
 		u := usedIn{Type: rt.Label, Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
-		u.Field = a.relationLabel(rt, ref, t.Name)
+		u.Field = a.relationLabel(rt, ref)
 		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
 			u.Title = fmt.Sprint(a.orDash(src.Data[rt.Title()]))
 		}
