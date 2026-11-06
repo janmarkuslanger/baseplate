@@ -5,6 +5,7 @@ package main
 import (
 	"embed"
 	"io/fs"
+	"log"
 
 	"github.com/janmarkuslanger/baseplate"
 	"github.com/janmarkuslanger/baseplate/fields"
@@ -15,7 +16,10 @@ import (
 var themeFS embed.FS
 
 func main() {
-	theme, _ := fs.Sub(themeFS, "theme")
+	theme, err := fs.Sub(themeFS, "theme")
+	if err != nil {
+		log.Fatal(err)
+	}
 	app := baseplate.New(baseplate.Config{Theme: theme})
 	app.Use(fields.CoreBlocks{}, forms.New())
 	app.Main()
