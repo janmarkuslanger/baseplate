@@ -11,6 +11,23 @@
 customer project ── main.go ── baseplate + plugins ──▶ one binary ──▶ dist/ (static)
 ```
 
+## C4 model
+
+[`workspace.dsl`](workspace.dsl) describes a customer website built on baseplate as a
+[Structurizr DSL](https://docs.structurizr.com/dsl) model with two views:
+
+| View | Shows |
+|---|---|
+| `Context` (level 1) | developer, editor, visitor, SMTP server, crawlers around the customer website |
+| `Containers` (level 2) | baseplate binary, SQLite database, media store, static site (`dist/`) |
+
+Levels 3 and 4 are left out: the components are the packages below.
+
+```sh
+docker run --rm -v "$PWD/architecture:/w" structurizr/structurizr validate -w /w/workspace.dsl
+docker run --rm -v "$PWD/architecture:/w" structurizr/structurizr export -w /w/workspace.dsl -f mermaid -o /w/out
+```
+
 ## Packages
 
 Public API = every package outside `internal/`. Each package's contract is its package doc (`go doc <pkg>`).

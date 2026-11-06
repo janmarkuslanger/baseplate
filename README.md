@@ -1,17 +1,41 @@
+<div align="center">
+
 # baseplate
 
-A monolithic CMS in Go. Customer projects embed it as a Go module, so
-updates arrive with a version bump instead of a fork. One binary contains
-the admin, the static site generator and the dynamic endpoints (forms).
+**A monolithic CMS for Go — embed it as a module, ship one binary, publish static HTML.**
 
-- **Static output:** `build` writes plain HTML to `dist/`, which you can host anywhere.
-- **SEO & LLM built in:** meta tags, canonical, robots, Open Graph, `sitemap.xml`, `robots.txt`, `llms.txt`, and a Markdown variant of every page.
-- **Plugins for everything:** content types, schema extensions, field kinds, content blocks, extra build output, admin pages, public endpoints, migrations, hooks.
-- **Few dependencies:** `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
+[![Go Reference](https://pkg.go.dev/badge/github.com/janmarkuslanger/baseplate.svg)](https://pkg.go.dev/github.com/janmarkuslanger/baseplate)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/janmarkuslanger/baseplate)](go.mod)
+[![License](https://img.shields.io/github/license/janmarkuslanger/baseplate)](LICENSE)
+
+[Quickstart](#quickstart) · [Configuration](#configuration) · [Themes](#themes) · [Plugins](#plugins) · [Docs](#documentation)
+
+</div>
+
+---
+
+baseplate is a CMS you import, not a CMS you fork. Each customer project is a
+small Go module that depends on baseplate, so updates arrive with
+`go get -u` instead of a merge. One binary contains the admin, the static
+site generator and the dynamic endpoints (e.g. forms).
+
+```
+customer project ── main.go ── baseplate + plugins ──▶ one binary ──▶ dist/ (static HTML)
+```
+
+## Features
+
+- **Static output** — `build` writes plain HTML to `dist/`. Host it anywhere.
+- **SEO & LLM ready** — meta tags, canonical, robots, Open Graph, `sitemap.xml`, `robots.txt`, `llms.txt` and a Markdown variant of every page.
+- **Plugins for everything** — content types, schema extensions, field kinds, content blocks, extra build output, admin pages, public endpoints, migrations, typed hooks.
+- **Automatic migrations** — schema changes apply on start; renames and data migrations are first-class.
+- **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
+- **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
+- **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
+
+## Quickstart
 
 Requires Go ≥ 1.26.
-
-## Quickstart (customer project)
 
 ```sh
 mkdir acme-site && cd acme-site
@@ -19,7 +43,7 @@ go mod init acme-site
 go get github.com/janmarkuslanger/baseplate@latest
 ```
 
-`main.go`:
+Create `main.go`:
 
 ```go
 package main
@@ -38,11 +62,13 @@ var themeFS embed.FS
 
 func main() {
 	theme, _ := fs.Sub(themeFS, "theme")
-	baseplate.New(baseplate.Config{Theme: theme}).Use(fields.CoreBlocks{}, forms.New()).Main()
+	baseplate.New(baseplate.Config{Theme: theme}).
+		Use(fields.CoreBlocks{}, forms.New()).
+		Main()
 }
 ```
 
-Copy `examples/site/theme` as a starting point, then:
+Copy [`examples/site/theme`](examples/site/theme) into your project as a starting point, then:
 
 ```sh
 go run . user add you@example.com   # reads the password from stdin
@@ -50,41 +76,59 @@ go run . serve                      # admin at http://localhost:8080/admin/
 go run . build                      # static site in ./dist
 ```
 
-To update baseplate, bump the module version (`go get -u`). Database
-migrations run automatically on start.
+### Commands
+
+| Command | Description |
+|---|---|
+| `serve` | start the admin and API server |
+| `build` | build the static site into the dist directory |
+| `migrate` | apply database migrations (also runs on every start) |
+| `user add EMAIL` | create an admin user; the password is read from stdin |
+
+### Updating
+
+```sh
+go get -u github.com/janmarkuslanger/baseplate
+```
+
+Database migrations run automatically on the next start.
 
 ## Configuration
 
-`baseplate.Config` sets the values in code. Environment variables override them:
+`baseplate.Config` sets values in code; environment variables override them.
 
-| Variable | Default | |
+| Variable | Default | Description |
 |---|---|---|
 | `BASEPLATE_ADDR` | `:8080` | listen address |
-| `BASEPLATE_DATA_DIR` | `./data` | SQLite database + uploaded media |
+| `BASEPLATE_DATA_DIR` | `./data` | SQLite database and uploaded media |
 | `BASEPLATE_DIST_DIR` | `./dist` | static build output |
-| `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail. Without a host, mails are only logged |
+| `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail; without a host, mails are only logged |
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
 | `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes |
-| `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in `i18n/locales`) |
-| `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits. Only behind a proxy that overwrites it |
+| `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in [`i18n/locales`](i18n/locales)) |
+| `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits. Only set it behind a proxy that overwrites the header |
+
+`Config.Store` and `Config.Mailer` replace the default SQLite storage and SMTP mailer.
 
 ## Themes
 
 A theme is an `fs.FS` containing:
 
-- `templates/*.html` defines one template per routable content type (`{{define "page"}}…{{end}}`). It can override any default, such as `baseplate/head` or `block/<name>`.
-- `assets/` is copied to `dist/assets/`.
+- `templates/*.html` — one template per routable content type (`{{define "page"}}…{{end}}`). A theme can override any default, such as `baseplate/head` or `block/<name>`.
+- `assets/` — copied to `dist/assets/`.
 
-Every group, list item and block carries a stable, unique `_key` (e.g. `cb_heading:12`) that survives edits and moves, e.g. for anchors: `<section id="{{.Block._key}}">`.
-
-Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`. Useful calls:
+Page templates receive `render.Page`: `.Data` (fields), `.Site` (settings), `.Meta` (computed SEO), `.URL`, `.Nav`.
 
 ```html
-<head>{{template "baseplate/head" .}}</head>   <!-- all SEO/OG tags -->
+<head>{{template "baseplate/head" .}}</head>   <!-- all SEO / Open Graph tags -->
 {{blocks .Data.body .}}                        <!-- renders content blocks -->
 ```
 
-## Writing a plugin
+Every group, list item and block carries a stable, unique `_key` (e.g. `cb_heading:12`) that survives edits and moves — useful for anchors: `<section id="{{.Block._key}}">`.
+
+## Plugins
+
+A plugin has a name and registers what it adds:
 
 ```go
 type News struct{}
@@ -103,6 +147,8 @@ func (News) Register(r *plugin.Registry) error {
 }
 ```
 
+Enable it with `app.Use(News{})`.
+
 | Registry method | Purpose |
 |---|---|
 | `ContentType`, `Extend` | new content types, extra fields on existing ones (e.g. `page`) |
@@ -113,36 +159,54 @@ func (News) Register(r *plugin.Registry) error {
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |
 | `DataMigration` | one-time content changes after schema changes |
-| `hook` package | typed hooks: `plugin.EntryBeforeSave.On(r, fn)` … – see [docs/plugins.md](docs/plugins.md) |
 | `Funcs` | frontend template functions |
+| `hook` package | typed hooks, e.g. `plugin.EntryBeforeSave.On(r, fn)` — see [docs/plugins.md](docs/plugins.md) |
 
-### Relations
+[`plugins/forms`](plugins/forms) is a complete example that uses most of these.
+
+<details>
+<summary><strong>Relations</strong></summary>
 
 ```go
 content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 	Ref: "category", Many: true, Inverse: "articles"}
 ```
 
-- `Many` false → one target, true → ordered list
+- `Many: false` → one target, `Many: true` → ordered list
 - `Inverse` adds a read-only field on the target (`.Data.articles` in its template)
-- templates get resolved targets: `{{range .Data.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}`
-- deleting a target removes the links; the admin shows "Verwendet in" and warns before deleting
+- Templates get resolved targets: `{{range .Data.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}`
+- Deleting a target removes the links; the admin shows "Verwendet in" and warns before deleting
 
-### Schema changes
+</details>
+
+<details>
+<summary><strong>Schema changes</strong></summary>
 
 | Change | How |
 |---|---|
-| add field | nothing – column/table is created on start |
+| add field | nothing — the column/table is created on start |
 | rename field | `content.Field{Name: "summary", RenamedFrom: "teaser", ...}` |
 | anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names |
-| remove field | remove it; the column stays, data is kept |
-| change kind | startup error – rename the field and migrate the data |
+| remove field | remove it; the column stays and data is kept |
+| change kind | startup error — rename the field and migrate the data |
 
-`plugins/forms` is a complete example that uses most of these.
+</details>
 
 ## Forms on a static site
 
-Static pages post to the CMS server (`POST /api/forms/{id}`). Set **Settings → CMS-Server-URL** to the server's public URL. Submissions are stored (admin: *Anfragen*) and sent to the form's recipient. Spam protection comes from a honeypot field and a per-IP rate limit.
+Static pages post to the CMS server (`POST /api/forms/{id}`). Set
+**Settings → CMS-Server-URL** to the server's public URL. Submissions are
+stored (admin: *Anfragen*) and sent to the form's recipient. Spam protection
+comes from a honeypot field and a per-IP rate limit.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/plugins.md](docs/plugins.md) | registry, blocks, hooks, translations, compatibility rules |
+| [docs/internals.md](docs/internals.md) | system overview, components, runtime, data model, extension points |
+| [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) | principles and package map |
+| [pkg.go.dev](https://pkg.go.dev/github.com/janmarkuslanger/baseplate) | API reference |
 
 ## Development
 
@@ -150,3 +214,9 @@ Static pages post to the CMS server (`POST /api/forms/{id}`). Set **Settings →
 go test ./...
 go run ./examples/site serve
 ```
+
+Issues and pull requests are welcome. Please run `go test ./...` before opening a PR.
+
+## License
+
+[Apache License 2.0](LICENSE)
