@@ -146,3 +146,16 @@ func TestDelete(t *testing.T) {
 		t.Errorf("delete twice: %v", err)
 	}
 }
+
+func TestDeleteReferencedPage(t *testing.T) {
+	svc, _ := service(t)
+	ctx := context.Background()
+	parent, _ := svc.Save(ctx, entries.Save{Type: "page", Data: page("ueber", 0), Publish: true})
+	child, _ := svc.Save(ctx, entries.Save{Type: "page", Data: page("team", parent.Entry.ID), Publish: true})
+
+	changed, err := svc.Delete(ctx, "page", parent.Entry.ID)
+	var ref *storage.ReferencedError
+	if !errors.As(err, &ref) || changed || len(ref.Referrers) != 1 || ref.Referrers[0].ID != child.Entry.ID {
+		t.Fatalf("delete parent: changed=%v err=%v", changed, err)
+	}
+}

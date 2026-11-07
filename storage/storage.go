@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -21,6 +22,19 @@ var ErrNotFound = errors.New("storage: not found")
 
 // ErrInvalidRelation is returned when a relation points to a missing entry.
 var ErrInvalidRelation = i18n.Key("validation.relationTarget")
+
+// ReferencedError is returned by DeleteEntry while relations of other
+// entries point at the entry. Referrers lists them; removing those
+// relations allows the delete.
+type ReferencedError struct {
+	Type      string
+	ID        int64
+	Referrers []Referrer
+}
+
+func (e *ReferencedError) Error() string {
+	return fmt.Sprintf("storage: %s #%d is referenced by %d relation(s)", e.Type, e.ID, len(e.Referrers))
+}
 
 // Dialect identifies the SQL flavour of a store. baseplate ships SQLite; an
 // adapter for another database adds its own value (see ARCHITECTURE.md,
@@ -130,10 +144,11 @@ type Entries interface {
 	GetEntryBySlug(ctx context.Context, typ, slug string) (*Entry, error)
 	// ListEntries returns one page of matching entries and the total count.
 	ListEntries(ctx context.Context, q ListQuery) ([]Entry, int, error)
-	// DeleteEntry removes the entry, its components and every relation from
-	// or to it.
+	// DeleteEntry removes the entry, its components and its relations. It
+	// fails with *ReferencedError while other entries point at it.
 	DeleteEntry(ctx context.Context, typ string, id int64) error
-	// Referrers lists entries with relations pointing at the given entry.
+	// Referrers lists other entries whose relation fields (as the schema
+	// declares them) point at the given entry.
 	Referrers(ctx context.Context, typ string, id int64) ([]Referrer, error)
 }
 

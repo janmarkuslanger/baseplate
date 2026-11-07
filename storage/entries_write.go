@@ -94,6 +94,13 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 		return err
 	}
 	return s.tx(ctx, func(q querier) error {
+		refs, err := s.referrers(ctx, q, typ, id)
+		if err != nil {
+			return err
+		}
+		if len(refs) > 0 {
+			return &ReferencedError{Type: typ, ID: id, Referrers: refs}
+		}
 		res, err := q.ExecContext(ctx, `DELETE FROM `+t.Name+` WHERE id = ?`, id)
 		if err != nil {
 			return err
@@ -104,6 +111,8 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 		if err := s.deleteChildren(ctx, q, t.Name, id); err != nil {
 			return err
 		}
+		// What still points here is not counted as a referrer: relations
+		// of fields removed from the schema, and the entry's own.
 		_, err = q.ExecContext(ctx, `DELETE FROM relations WHERE target_type = ? AND target_id = ?`, typ, id)
 		return err
 	})

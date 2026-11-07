@@ -133,39 +133,25 @@ func TestRelationIntegrity(t *testing.T) {
 		t.Error("failed create must roll back")
 	}
 
-	form := &storage.Entry{Type: "page", Slug: "ziel", Data: map[string]any{"title": "Ziel"}}
-	s.CreateEntry(ctx, form)
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
 	s.CreateEntry(ctx, cat)
 	post := &storage.Entry{Type: "post", Data: map[string]any{"categories": []any{cat.ID}}}
 	s.CreateEntry(ctx, post)
-	// A relation from inside a nested block: page → article → page "parent"
-	// is not a block field, so use a child page whose parent is "ziel".
-	child := &storage.Entry{Type: "page", Slug: "kind", Data: map[string]any{"title": "Kind", "parent": form.ID}}
-	s.CreateEntry(ctx, child)
 
 	refs, err := s.Referrers(ctx, "category", cat.ID)
 	if err != nil || len(refs) != 1 || refs[0].Type != "post" || refs[0].ID != post.ID || refs[0].Field != "categories" {
 		t.Fatalf("referrers: %+v %v", refs, err)
 	}
 
+	// Deleting the owner removes its relations; the target is free again.
+	if err := s.DeleteEntry(ctx, "post", post.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.DeleteEntry(ctx, "category", cat.ID); err != nil {
-		t.Fatal(err)
+		t.Fatalf("unreferenced category: %v", err)
 	}
-	p, _ := s.GetEntry(ctx, "post", post.ID)
-	if len(p.Data["categories"].([]any)) != 0 {
-		t.Error("relation to deleted entry must disappear")
-	}
-	if err := s.DeleteEntry(ctx, "page", form.ID); err != nil {
-		t.Fatal(err)
-	}
-	c, _ := s.GetEntry(ctx, "page", child.ID)
-	if c.Data["parent"] != nil {
-		t.Errorf("parent of deleted page: %v", c.Data["parent"])
-	}
-	if n := count(t, s, `SELECT COUNT(*) FROM ct_page__seo`); n != 0 {
-		// pages without SEO data own no seo component
-		t.Logf("seo components: %d", n)
+	if n := count(t, s, `SELECT COUNT(*) FROM relations WHERE field = 'categories'`); n != 0 {
+		t.Errorf("relations left: %d", n)
 	}
 }
 
