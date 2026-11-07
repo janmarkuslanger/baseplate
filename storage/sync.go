@@ -78,22 +78,30 @@ func scanColumns(rows *sql.Rows) (map[string]string, error) {
 	return out, rows.Err()
 }
 
-// sync creates missing tables and columns. It never drops or alters
-// existing ones; a column whose type no longer matches the schema is an
-// error, so data is never converted silently.
+// sync applies pending renames and creates missing tables and columns, in
+// one transaction: a failed or interrupted start leaves the database as it
+// was. It never drops or alters existing tables; a column whose type no
+// longer matches the schema is an error, so data is never converted
+// silently.
 func (s *SQLStore) sync(ctx context.Context, l *layout) error {
+	return s.tx(ctx, func(q querier) error {
+		if err := s.renames(ctx, q, l); err != nil {
+			return err
+		}
+		return s.createMissing(ctx, q, l)
+	})
+}
+
+func (s *SQLStore) createMissing(ctx context.Context, q querier, l *layout) error {
 	d := dialects[s.dialect]
-	if err := s.renames(ctx, l); err != nil {
-		return err
-	}
 	for _, name := range l.order {
 		t := l.tables[name]
-		existing, err := d.columns(ctx, s.db, t.Name)
+		existing, err := d.columns(ctx, q, t.Name)
 		if err != nil {
 			return fmt.Errorf("inspect %s: %w", t.Name, err)
 		}
 		if len(existing) == 0 {
-			if _, err := s.db.ExecContext(ctx, createTableSQL(d, t)); err != nil {
+			if _, err := q.ExecContext(ctx, createTableSQL(d, t)); err != nil {
 				return fmt.Errorf("create %s: %w", t.Name, err)
 			}
 			continue
@@ -102,7 +110,7 @@ func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 			want := d.types[c.Storage]
 			have, ok := existing[c.Name]
 			if !ok {
-				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s NULL`, t.Name, d.quote(c.Name), want)); err != nil {
+				if _, err := q.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s NULL`, t.Name, d.quote(c.Name), want)); err != nil {
 					return fmt.Errorf("add %s.%s: %w", t.Name, c.Name, err)
 				}
 				continue
@@ -139,8 +147,9 @@ func sameType(have, want string) bool {
 
 // renames applies RenamedFrom: columns, component tables (with their
 // nested tables) and link rows move from the old field name to the new one.
-// A rename whose old name no longer exists has already happened.
-func (s *SQLStore) renames(ctx context.Context, l *layout) error {
+// Each rename runs once; it is recorded in schema_migrations like a data
+// migration, so a later field reusing the old name keeps its data.
+func (s *SQLStore) renames(ctx context.Context, q querier, l *layout) error {
 	d := dialects[s.dialect]
 	for _, name := range l.order { // parents before children
 		t := l.tables[name]
@@ -148,47 +157,64 @@ func (s *SQLStore) renames(ctx context.Context, l *layout) error {
 			if f.RenamedFrom == "" || f.RenamedFrom == f.Name {
 				continue
 			}
-			switch l.fieldStorage(f) {
-			case content.StoreGroup, content.StoreList:
-				if err := s.renameTables(ctx, d, ComponentTable(t.Name, f.RenamedFrom), ComponentTable(t.Name, f.Name)); err != nil {
-					return err
-				}
-				if _, err := s.db.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
-					return err
-				}
-			case content.StoreBlocks:
-				if _, err := s.db.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
-					return err
-				}
-			case content.StoreRelation:
-				if _, err := s.db.ExecContext(ctx, `UPDATE relations SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom); err != nil {
-					return err
-				}
-			default:
-				cols, err := d.columns(ctx, s.db, t.Name)
-				if err != nil {
-					return err
-				}
-				oldCol, newCol := Column(f.RenamedFrom), Column(f.Name)
-				if _, ok := cols[oldCol]; !ok {
-					continue
-				}
-				if _, ok := cols[newCol]; ok {
-					return fmt.Errorf("storage: cannot rename %s.%s to %s: both columns exist", t.Name, oldCol, newCol)
-				}
-				if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, t.Name, d.quote(oldCol), d.quote(newCol))); err != nil {
-					return fmt.Errorf("rename %s.%s: %w", t.Name, oldCol, err)
-				}
+			key := fmt.Sprintf("rename:%s.%s>%s", t.Name, f.RenamedFrom, f.Name)
+			var done int
+			if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, key).Scan(&done); err != nil {
+				return err
+			}
+			if done > 0 {
+				continue
+			}
+			if err := s.rename(ctx, q, d, l, t, f); err != nil {
+				return err
+			}
+			if _, err := q.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, key, s.now().Unix()); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
+// rename moves the data of one field from f.RenamedFrom to f.Name. Old
+// names that no longer exist count as renamed (databases renamed before
+// renames were recorded).
+func (s *SQLStore) rename(ctx context.Context, q querier, d dialectSQL, l *layout, t *table, f content.Field) error {
+	switch l.fieldStorage(f) {
+	case content.StoreGroup, content.StoreList:
+		if err := s.renameTables(ctx, q, d, ComponentTable(t.Name, f.RenamedFrom), ComponentTable(t.Name, f.Name)); err != nil {
+			return err
+		}
+		_, err := q.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom)
+		return err
+	case content.StoreBlocks:
+		_, err := q.ExecContext(ctx, `UPDATE components SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom)
+		return err
+	case content.StoreRelation:
+		_, err := q.ExecContext(ctx, `UPDATE relations SET field = ? WHERE owner_table = ? AND field = ?`, f.Name, t.Name, f.RenamedFrom)
+		return err
+	}
+	cols, err := d.columns(ctx, q, t.Name)
+	if err != nil {
+		return err
+	}
+	oldCol, newCol := Column(f.RenamedFrom), Column(f.Name)
+	if _, ok := cols[oldCol]; !ok {
+		return nil
+	}
+	if _, ok := cols[newCol]; ok {
+		return fmt.Errorf("storage: cannot rename %s.%s to %s: both columns exist", t.Name, oldCol, newCol)
+	}
+	if _, err := q.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, t.Name, d.quote(oldCol), d.quote(newCol))); err != nil {
+		return fmt.Errorf("rename %s.%s: %w", t.Name, oldCol, err)
+	}
+	return nil
+}
+
 // renameTables renames a component table and every table nested below it
 // (same prefix), and updates the link tables.
-func (s *SQLStore) renameTables(ctx context.Context, d dialectSQL, from, to string) error {
-	all, err := d.tables(ctx, s.db)
+func (s *SQLStore) renameTables(ctx context.Context, q querier, d dialectSQL, from, to string) error {
+	all, err := d.tables(ctx, q)
 	if err != nil {
 		return err
 	}
@@ -210,7 +236,7 @@ func (s *SQLStore) renameTables(ctx context.Context, d dialectSQL, from, to stri
 		if !identRe.MatchString(renamed) {
 			return fmt.Errorf("storage: renamed table name %q is invalid or too long", renamed)
 		}
-		if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, old, renamed)); err != nil {
+		if _, err := q.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, old, renamed)); err != nil {
 			return fmt.Errorf("rename table %s: %w", old, err)
 		}
 		for _, stmt := range []string{
@@ -218,7 +244,7 @@ func (s *SQLStore) renameTables(ctx context.Context, d dialectSQL, from, to stri
 			`UPDATE components SET owner_table = ? WHERE owner_table = ?`,
 			`UPDATE relations SET owner_table = ? WHERE owner_table = ?`,
 		} {
-			if _, err := s.db.ExecContext(ctx, stmt, renamed, old); err != nil {
+			if _, err := q.ExecContext(ctx, stmt, renamed, old); err != nil {
 				return err
 			}
 		}

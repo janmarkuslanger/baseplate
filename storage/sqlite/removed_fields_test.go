@@ -24,6 +24,15 @@ func startWith(t *testing.T, path string, types ...content.Type) *storage.SQLSto
 	if err := s.Migrate(ctx, storage.CoreMigrations); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.UseSchema(ctx, newRegistry(t, s, types...).Schema); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// newRegistry registers the core, the core blocks and the given types.
+func newRegistry(t *testing.T, s *storage.SQLStore, types ...content.Type) *plugin.Registry {
+	t.Helper()
 	reg := plugin.NewRegistry(plugin.Services{Store: s})
 	if err := reg.Use(fields.Core{}, fields.CoreBlocks{}); err != nil {
 		t.Fatal(err)
@@ -33,10 +42,7 @@ func startWith(t *testing.T, path string, types ...content.Type) *storage.SQLSto
 			t.Fatal(err)
 		}
 	}
-	if err := s.UseSchema(ctx, reg.Schema); err != nil {
-		t.Fatal(err)
-	}
-	return s
+	return reg
 }
 
 var categoryType = content.Type{Name: "category", Fields: []content.Field{{Name: "title", Kind: fields.Text}}}
