@@ -249,7 +249,7 @@ func (a *App) Setup(ctx context.Context) error {
 	}
 	a.Registry = reg
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
-	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies}
+	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies, Logger: c.Logger}
 	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale, BuildOnPublish: c.BuildOnPublish}
 	return a.admin.Init()
 }

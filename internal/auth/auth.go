@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -90,6 +91,9 @@ type Manager struct {
 	}
 	// SecureCookies forces the Secure flag (set when served behind HTTPS).
 	SecureCookies bool
+	// Logger records storage errors while checking a session
+	// (slog.Default() if nil).
+	Logger *slog.Logger
 
 	limiter ratelimit.Limiter
 	// dummyHash is checked for unknown users so timing does not reveal
@@ -207,7 +211,14 @@ func FromContext(ctx context.Context) *Current {
 // X-CSRF-Token header).
 func (m *Manager) Require(loginPath string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cur := m.current(r)
+		cur, err := m.current(r)
+		if err != nil {
+			// Fail closed: the session could not be checked, which is
+			// neither a login nor a reason to send the editor to it.
+			m.logger().Error("auth: check session", "err", err)
+			http.Error(w, i18n.Key("error.internal").Error(), http.StatusInternalServerError)
+			return
+		}
 		if cur == nil {
 			if r.Header.Get("HX-Request") != "" {
 				w.Header().Set("HX-Redirect", loginPath)
@@ -232,20 +243,35 @@ func (m *Manager) Require(loginPath string, next http.Handler) http.Handler {
 	})
 }
 
-func (m *Manager) current(r *http.Request) *Current {
+// current returns the session's user, nil without a valid session, and an
+// error if the store fails to answer.
+func (m *Manager) current(r *http.Request) (*Current, error) {
 	c, err := r.Cookie(CookieName)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	s, err := m.Store.GetSession(r.Context(), c.Value)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("get session: %w", err)
 	}
 	u, err := m.Store.GetUser(r.Context(), s.UserID)
-	if err != nil {
-		return nil
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, nil
 	}
-	return &Current{User: u, Session: s}
+	if err != nil {
+		return nil, fmt.Errorf("get user %d: %w", s.UserID, err)
+	}
+	return &Current{User: u, Session: s}, nil
+}
+
+func (m *Manager) logger() *slog.Logger {
+	if m.Logger != nil {
+		return m.Logger
+	}
+	return slog.Default()
 }
 
 // Login allows limitMax attempts per key per limitWindow.
