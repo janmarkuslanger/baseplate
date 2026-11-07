@@ -106,7 +106,7 @@ Database migrations run automatically on the next start.
 | `BASEPLATE_ADDR` | `:8080` | listen address |
 | `BASEPLATE_DATA_DIR` | `./data` | SQLite database and uploaded media |
 | `BASEPLATE_DIST_DIR` | `./dist` | static build output; a symlink is followed. The build writes `<dir>.tmp`, `<dir>.old` and `<dir>.lock` next to it, and concurrent builds (e.g. `serve` and a cron `build`) wait for each other |
-| `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail; without a host, mails are only logged |
+| `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail; without a host, mails are only logged. Port 465 uses implicit TLS, other ports STARTTLS when the server offers it |
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
 | `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes (in the admin or through `Services.Entries`) |
 | `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in [`i18n/locales`](i18n/locales)) |
