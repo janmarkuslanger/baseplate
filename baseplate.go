@@ -66,8 +66,9 @@ type Config struct {
 	AdminLocale string
 	// TrustedProxyHeader names a header carrying the client IP, e.g.
 	// "X-Forwarded-For" (BASEPLATE_TRUSTED_PROXY_HEADER). Rate limits use it
-	// instead of the connection address. Only set it behind a proxy that
-	// overwrites the header. Default: off.
+	// instead of the connection address; the last address in the header
+	// counts. Only set it behind exactly one proxy that sets or appends the
+	// header. Default: off.
 	TrustedProxyHeader string
 	// Store overrides the storage adapter. Default: SQLite in DataDir.
 	Store storage.Store

@@ -227,7 +227,8 @@ func TestRateLimitBehindProxy(t *testing.T) {
 		}
 		r := httptest.NewRequest("POST", "/api/forms/"+itoa(id), strings.NewReader(url.Values{"name": {"A"}, "email": {"a@b.de"}, "dsgvo": {"1"}}.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		r.Header.Set("X-Forwarded-For", ip+", 10.0.0.1")
+		// The client-supplied part before the proxy's entry is ignored.
+		r.Header.Set("X-Forwarded-For", "9.9.9.9, "+ip)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
 		return w.Code
