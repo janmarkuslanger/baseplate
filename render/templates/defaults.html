@@ -11,7 +11,7 @@
 {{with .Meta.OGDescription}}<meta property="og:description" content="{{.}}">{{end}}
 {{with .Meta.OGImage}}<meta property="og:image" content="{{.}}"><meta name="twitter:card" content="summary_large_image">{{end}}
 {{with .Site.siteName}}<meta property="og:site_name" content="{{.}}">{{end}}
-<link rel="alternate" type="text/markdown" href="{{.MarkdownURL}}">
+{{with .MarkdownURL}}<link rel="alternate" type="text/markdown" href="{{.}}">{{end}}
 {{end}}
 
 {{define "block/heading"}}{{if eq (print .Block.level) "h3"}}<h3>{{.Block.text}}</h3>{{else}}<h2>{{.Block.text}}</h2>{{end}}{{end}}

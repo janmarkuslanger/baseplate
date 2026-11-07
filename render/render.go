@@ -36,7 +36,7 @@ type Page struct {
 	Type        *content.Type
 	URL         string // site-relative, e.g. "/about/"
 	AbsURL      string
-	MarkdownURL string
+	MarkdownURL string // empty when the page has no Markdown variant
 	Meta        Meta
 	Nav         []Link
 }
@@ -248,9 +248,9 @@ func (r *Renderer) blocks(items any, page *Page) (template.HTML, error) {
 // Markdown renders a page as Markdown for the .md variant.
 func (r *Renderer) Markdown(p *Page) string {
 	var b strings.Builder
-	b.WriteString("# " + fmt.Sprint(p.Data["title"]) + "\n\n")
+	b.WriteString("# " + markup.EscapeText(fmt.Sprint(p.Data["title"])) + "\n\n")
 	if p.Meta.Description != "" {
-		b.WriteString("> " + p.Meta.Description + "\n\n")
+		b.WriteString("> " + markup.EscapeText(p.Meta.Description) + "\n\n")
 	}
 	r.markdownFields(&b, p.Type.Fields, p.Data)
 	return strings.TrimSpace(b.String()) + "\n"

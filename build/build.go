@@ -336,12 +336,23 @@ func (s *site) renderPage(p *render.Page) error {
 	if !s.r.Has(name) && s.r.Has(name+".html") {
 		name += ".html"
 	}
+	// The Markdown variant renders first: a page without one (noindex, or
+	// an empty templates/markdown.md) must not link to it.
+	var md []byte
+	if indexable(p) {
+		var err error
+		if md, err = s.r.ExecuteOutput(render.PageOutput, p); err != nil {
+			return fmt.Errorf("%s: %w", p.URL, err)
+		}
+	}
+	if md == nil {
+		p.MarkdownURL = ""
+	}
 	if err := s.RenderPage(p.URL, name, p.Type.Layout, p); err != nil {
 		return fmt.Errorf("%s: %w", p.URL, err)
 	}
-	md, err := s.r.ExecuteOutput(render.PageOutput, p)
-	if err != nil || md == nil {
-		return err
+	if md == nil {
+		return nil
 	}
 	return s.WriteFile(p.MarkdownURL, md)
 }
