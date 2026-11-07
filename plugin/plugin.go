@@ -11,6 +11,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -57,18 +58,27 @@ func RemoteIP(r *http.Request) string {
 	return host
 }
 
-// ProxyIP returns a ClientIP func that reads the first address of header
-// (e.g. "X-Forwarded-For") and falls back to RemoteIP. Only use it behind a
-// proxy that overwrites the header; otherwise clients can spoof it.
+// ProxyIP returns a ClientIP func that reads the last address of header
+// (e.g. "X-Forwarded-For"): the one the proxy in front of baseplate
+// appended. Entries before it come from the client and are ignored. Several
+// header lines count as one comma-separated list. An empty or invalid last
+// entry falls back to RemoteIP. Only use it behind exactly one proxy that
+// sets or appends the header; otherwise clients can spoof it.
 func ProxyIP(header string) func(r *http.Request) string {
 	return func(r *http.Request) string {
-		if v := r.Header.Get(header); v != "" {
-			first, _, _ := strings.Cut(v, ",")
-			if ip := strings.TrimSpace(first); ip != "" {
-				return ip
-			}
+		values := r.Header.Values(header)
+		if len(values) == 0 {
+			return RemoteIP(r)
 		}
-		return RemoteIP(r)
+		last := values[len(values)-1]
+		if i := strings.LastIndexByte(last, ','); i >= 0 {
+			last = last[i+1:]
+		}
+		addr, err := netip.ParseAddr(strings.TrimSpace(last))
+		if err != nil {
+			return RemoteIP(r)
+		}
+		return addr.Unmap().String()
 	}
 }
 

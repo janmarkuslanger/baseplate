@@ -110,7 +110,7 @@ Database migrations run automatically on the next start.
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
 | `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes |
 | `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in [`i18n/locales`](i18n/locales)) |
-| `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits. Only set it behind a proxy that overwrites the header |
+| `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits, taken from the last address in the header. Only set it behind exactly one proxy that sets or appends the header |
 
 `Config.Store` and `Config.Mailer` replace the default SQLite storage and SMTP mailer.
 
