@@ -204,7 +204,9 @@ func (s *SQLStore) GetSession(ctx context.Context, token string) (*Session, erro
 	}
 	ses.ExpiresAt = time.Unix(exp, 0)
 	if s.now().After(ses.ExpiresAt) {
-		s.DeleteSession(ctx, token)
+		if err := s.DeleteSession(ctx, token); err != nil {
+			return nil, fmt.Errorf("delete expired session: %w", err)
+		}
 		return nil, ErrNotFound
 	}
 	return &ses, nil
