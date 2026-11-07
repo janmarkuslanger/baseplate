@@ -160,8 +160,8 @@ func (s *Schema) Block(name string) (Block, bool) {
 	return b, ok
 }
 
-// Blocks returns the blocks allowed by f: the named ones, or all blocks
-// except restricted ones if f.Blocks is empty (sorted by label).
+// Blocks returns the blocks allowed by f (all blocks if f.Blocks is empty),
+// sorted by label.
 func (s *Schema) Blocks(f Field) []Block {
 	var out []Block
 	if len(f.Blocks) > 0 {
@@ -173,9 +173,7 @@ func (s *Schema) Blocks(f Field) []Block {
 		return out
 	}
 	for _, b := range s.blocks {
-		if !b.Restricted {
-			out = append(out, b)
-		}
+		out = append(out, b)
 	}
 	slices.SortFunc(out, func(a, b Block) int { return cmp.Compare(a.Label, b.Label) })
 	return out

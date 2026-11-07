@@ -191,9 +191,7 @@ func (a *Admin) edit(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t *content.Type, e *storage.Entry, data map[string]any, errs content.Errors) {
 	blocks := map[string]any{}
 	labels := map[string]string{}
-	// Skeletons of every block, also restricted ones: the fields that offer
-	// them pick from this map.
-	for _, b := range a.Reg.Schema.AllBlocks() {
+	for _, b := range a.Reg.Schema.Blocks(content.Field{}) {
 		item := skeleton(b.Fields, map[string]any{})
 		item[content.BlockTypeKey] = b.Name
 		blocks[b.Name] = item
