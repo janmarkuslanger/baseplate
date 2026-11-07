@@ -31,6 +31,9 @@ const (
 	argonMemory = 64 * 1024
 	argonPar    = 2
 	argonKeyLen = 32
+	// maxHashing bounds concurrent password checks at login. Each needs
+	// argonMemory (64 MiB), so a login flood cannot exhaust memory.
+	maxHashing = 4
 )
 
 var (
@@ -90,6 +93,9 @@ type Manager struct {
 	// which e-mails exist.
 	dummyOnce sync.Once
 	dummyHash string
+
+	slotsOnce sync.Once
+	slots     chan struct{}
 }
 
 // Login checks credentials and creates a session. key identifies the client
@@ -100,14 +106,23 @@ func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Se
 	}
 	u, err := m.Store.GetUserByEmail(ctx, email)
 	if errors.Is(err, storage.ErrNotFound) {
-		m.dummyOnce.Do(func() { m.dummyHash = HashPassword("dummy") })
-		CheckPassword(m.dummyHash, pw)
-		return nil, ErrInvalidLogin
+		u = nil // checked against a dummy hash, so timing does not reveal it
+	} else if err != nil {
+		return nil, err
 	}
+	release, err := m.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if !CheckPassword(u.PasswordHash, pw) {
+	var ok bool
+	if u == nil {
+		m.dummyOnce.Do(func() { m.dummyHash = HashPassword("dummy") })
+		CheckPassword(m.dummyHash, pw)
+	} else {
+		ok = CheckPassword(u.PasswordHash, pw)
+	}
+	release()
+	if !ok {
 		return nil, ErrInvalidLogin
 	}
 	m.limiter.Reset(key)
@@ -116,6 +131,17 @@ func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Se
 		return nil, err
 	}
 	return s, nil
+}
+
+// acquire waits for one of maxHashing slots, or until ctx ends.
+func (m *Manager) acquire(ctx context.Context) (release func(), err error) {
+	m.slotsOnce.Do(func() { m.slots = make(chan struct{}, maxHashing) })
+	select {
+	case m.slots <- struct{}{}:
+		return func() { <-m.slots }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // SetCookie sends the session cookie.

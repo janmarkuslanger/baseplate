@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/janmarkuslanger/baseplate/storage"
 	"github.com/janmarkuslanger/baseplate/storage/sqlite"
@@ -94,5 +95,48 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 	if _, err := m.Login(ctx, "other-ip", "a@b.de", "pw"); err != nil {
 		t.Fatalf("other key must not be limited: %v", err)
+	}
+}
+
+func TestLoginWaitsForHashingSlot(t *testing.T) {
+	m := setup(t)
+	// Occupy every slot, as a flood of parallel logins would.
+	var releases []func()
+	for range maxHashing {
+		release, err := m.acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := m.Login(ctx, "ip", "a@b.de", "pw"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("login beyond the bound: want DeadlineExceeded, got %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := m.Login(context.Background(), "ip", "a@b.de", "pw")
+		done <- err
+	}()
+	releases[0]()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("login after a slot was freed: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("login did not proceed after a slot was freed")
+	}
+	for _, release := range releases[1:] {
+		release()
+	}
+	// Every login returned its slot: maxHashing more checks still run.
+	for range maxHashing + 1 {
+		if _, err := m.Login(context.Background(), "ip2", "x@b.de", "pw"); !errors.Is(err, ErrInvalidLogin) {
+			t.Fatalf("unknown user: want ErrInvalidLogin, got %v", err)
+		}
 	}
 }
