@@ -31,7 +31,7 @@ customer project ── main.go ── baseplate + plugins ──▶ one binary 
 - **Automatic migrations** — schema changes apply on start; renames and data migrations are first-class.
 - **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
 - **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
-- **Navigations** — any number of menus with links of any depth, edited in the admin ([`plugins/navigation`](plugins/navigation)).
+- **Navigations** — any number of menus whose links (page or URL) nest to any depth, edited in the admin ([`plugins/navigation`](plugins/navigation)).
 - **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
 
 ## Quickstart
@@ -243,10 +243,12 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 
 ## Navigations
 
-`navigation.New()` adds the type *Navigationen*: each has a name, a key the
-theme refers to (`main`, `footer`, …, unique) and links. A link points to a
-page (optionally `#anchor`), to a URL, or nowhere — then it is a heading for
-its children; children nest to any depth.
+`navigation.New()` adds two types. A **link** (*Links*) has a label, a URL
+(external targets, also `/page/#anchor`), a page (internal targets; not
+both) and ordered child links — links nest to any depth. A **navigation**
+(*Navigationen*) has a name, a unique key the theme refers to (`main`,
+`footer`, …) and its links. A link without URL and page is a heading for
+its children.
 
 ```html
 {{define "menu"}}<ul>{{range .}}
@@ -255,18 +257,20 @@ its children; children nest to any depth.
     {{if .Children}}{{template "menu" .Children}}{{end}}
   </li>{{end}}</ul>{{end}}
 
-{{template "menu" (navigation "main" (entries "navigation") .)}}
+{{template "menu" (navigation "main" .)}}   <!-- in a layout: (navigation "main" .Page) -->
 ```
 
 | Field | |
 |---|---|
-| `.Title`, `.URL` | label; page URL (+ `#anchor`), the link's URL, or empty for a heading |
-| `.Current` | the link points to the rendered page (not for anchor links) |
+| `.Title`, `.URL` | label; page URL or the link's URL; empty for a heading |
+| `.Current` | the link points to the rendered page (anchor links never do) |
 | `.Active` | current, a page containing the rendered page (`/kurse/` on `/kurse/yoga/`), or an ancestor of one |
-| `.Children`, `.Data` | nested links; the raw block data |
+| `.Children`, `.Data` | child links; the link entry's data |
 
-Links to unpublished pages are left out with their children. An unknown key
-renders no links. In a layout, pass the page: `(navigation "main" (entries "navigation") .Page)`.
+Only published navigations and links count. Links to unpublished pages are
+left out with their children, an unknown key renders no links, and a link
+that contains itself further down stops there. Page URLs come from the
+page passed in (its `.Nav`).
 
 ## Forms on a static site
 

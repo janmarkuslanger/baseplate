@@ -1,6 +1,4 @@
 {
-  "navigation.anchor": "Anker auf der Seite",
-  "navigation.anchor.help": "Optional, z. B. „leistungen“ für /seite/#leistungen",
   "navigation.children": "Unterpunkte",
   "navigation.items": "Links",
   "navigation.key": "Schlüssel",
@@ -8,10 +6,13 @@
   "navigation.keyTaken": "Eine andere Navigation verwendet diesen Schlüssel bereits.",
   "navigation.label": "Beschriftung",
   "navigation.link": "Link",
+  "navigation.link.plural": "Links",
   "navigation.name": "Name",
   "navigation.page": "Seite",
+  "navigation.page.help": "Für interne Links. Nicht veröffentlichte Seiten werden ausgeblendet.",
   "navigation.type": "Navigation",
   "navigation.type.plural": "Navigationen",
   "navigation.url": "URL",
-  "navigation.url.help": "Für Ziele ohne Seite, z. B. externe Links. Ohne Seite und URL ist der Link eine Überschrift für seine Unterpunkte."
+  "navigation.url.help": "Für externe Links, z. B. https://… oder /seite/#anker. Ohne URL und Seite ist der Link eine Überschrift für seine Unterpunkte.",
+  "navigation.urlOrPage": "Bitte entweder eine URL oder eine Seite angeben, nicht beides."
 }
