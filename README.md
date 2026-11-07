@@ -235,7 +235,7 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 | add field | nothing — the column/table is created on start |
 | rename field | `content.Field{Name: "summary", RenamedFrom: "teaser", ...}` |
 | anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names |
-| remove field | remove it; the column stays and data is kept |
+| remove field | remove it; its column, component rows and relations stay, also when the entry is saved, so re-adding the field brings the data back |
 | change kind | startup error — rename the field and migrate the data |
 
 </details>

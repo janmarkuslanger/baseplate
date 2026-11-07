@@ -74,6 +74,11 @@ func (s *SQLStore) UpdateEntry(ctx context.Context, e *Entry) error {
 		}
 		for c := range tree {
 			if !r.used[c] {
+				// A removed component takes along what is still linked to
+				// it: data of fields no longer in the schema.
+				if err := s.deleteChildren(ctx, q, c.table, c.id); err != nil {
+					return err
+				}
 				if _, err := q.ExecContext(ctx, `DELETE FROM `+c.table+` WHERE id = ?`, c.id); err != nil {
 					return err
 				}
