@@ -29,6 +29,10 @@ var (
 	BeforeSave = hook.NewAction[*Event]("entry.beforeSave", "after validation, before an entry is stored; error aborts the save")
 	// AfterSave runs after an entry was stored. Errors are logged.
 	AfterSave = hook.NewAction[*Event]("entry.afterSave", "after an entry was stored; errors are logged")
+	// PublishedChanged runs after a save or delete that changed published
+	// content (the entry is or was published), whoever made it: the admin
+	// or a plugin through plugin.Services.Entries. Errors are logged.
+	PublishedChanged = hook.NewAction[*Event]("entry.publishedChanged", "after a save or delete that changed published content; errors are logged")
 )
 
 // Logger is the subset of *slog.Logger the service uses.
@@ -128,7 +132,17 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	if err := AfterSave.Run(ctx, s.Hooks, ev); err != nil && s.Logger != nil {
 		s.Logger.Error("entry hook", "err", err)
 	}
-	return &Result{Entry: e, Changed: wasPublished || e.Status == storage.StatusPublished}, nil
+	changed := wasPublished || e.Status == storage.StatusPublished
+	if changed {
+		s.publishedChanged(ctx, ev)
+	}
+	return &Result{Entry: e, Changed: changed}, nil
+}
+
+func (s *Service) publishedChanged(ctx context.Context, ev *Event) {
+	if err := PublishedChanged.Run(ctx, s.Hooks, ev); err != nil && s.Logger != nil {
+		s.Logger.Error("entry hook", "err", err)
+	}
 }
 
 // Delete removes an entry. changed reports whether it was published. An
@@ -145,7 +159,12 @@ func (s *Service) Delete(ctx context.Context, typ string, id int64) (changed boo
 	if err := s.Store.DeleteEntry(ctx, typ, id); err != nil {
 		return false, err
 	}
-	return e.Status == storage.StatusPublished, nil
+	changed = e.Status == storage.StatusPublished
+	if changed {
+		t, _ := s.Schema.Type(typ)
+		s.publishedChanged(ctx, &Event{Entry: e, Type: t})
+	}
+	return changed, nil
 }
 
 // load returns the entry to update, or a new one.

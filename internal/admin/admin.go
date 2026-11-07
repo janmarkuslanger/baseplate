@@ -4,6 +4,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
@@ -13,9 +14,11 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/janmarkuslanger/baseplate/build"
+	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/auth"
 	"github.com/janmarkuslanger/baseplate/internal/fileserver"
@@ -41,11 +44,16 @@ type Admin struct {
 	// Lang is the admin language (default i18n.Default).
 	Lang string
 	// BuildOnPublish rebuilds the site in the background whenever published
-	// content changes (publish, update, unpublish, delete).
+	// content changes (publish, update, unpublish, delete), in the admin or
+	// through plugin.Services.Entries (entries.PublishedChanged).
 	BuildOnPublish bool
 
-	// rebuild holds one pending background build request (BuildOnPublish).
-	rebuild chan struct{}
+	// rebuild holds one pending background build request (BuildOnPublish);
+	// stopBuilds ends autoBuild, which closes buildsDone.
+	rebuild    chan struct{}
+	stopBuilds context.CancelFunc
+	buildsDone chan struct{}
+	closeOnce  sync.Once
 
 	i18n    *i18n.Bundle
 	base    *template.Template
@@ -70,8 +78,13 @@ func (a *Admin) Init() error {
 	}
 	a.i18n = i18n.NewBundle(append(i18n.Core(), i18n.Catalogs.Items(a.Reg)...)...)
 	if a.BuildOnPublish {
-		a.rebuild = make(chan struct{}, 1)
-		go a.autoBuild()
+		ctx, cancel := context.WithCancel(context.Background())
+		a.rebuild, a.stopBuilds, a.buildsDone = make(chan struct{}, 1), cancel, make(chan struct{})
+		entries.PublishedChanged.On(a.Reg, func(context.Context, *entries.Event) error {
+			a.contentChanged()
+			return nil
+		})
+		go a.autoBuild(ctx)
 	}
 	base, err := template.New("").Funcs(a.funcs()).ParseFS(templateFS, "templates/layout.html", "templates/fields.html")
 	if err != nil {

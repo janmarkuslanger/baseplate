@@ -38,7 +38,7 @@ Public API = every package outside `internal/`. Each package's contract is its p
 | `plugin` | extension API | `Plugin`, `Registry`, `Services` |
 | `hook` | typed extension points | `NewAction`, `NewFilter`, `NewList` |
 | `content` | schema, validation, data conventions | `Type`, `Field`, `Kind`, `Block`, `Schema`, `Errors`, `RefID` |
-| `entries` | save/delete content with rules and hooks | `Service.Save`, `Service.Delete`, `BeforeSave`, `AfterSave` |
+| `entries` | save/delete content with rules and hooks | `Service.Save`, `Service.Delete`, `BeforeSave`, `AfterSave`, `PublishedChanged` |
 | `settings` | typed site settings | `Settings`, `Load` |
 | `fields` | built-in kinds, core blocks, page/settings types | `Core`, `CoreBlocks`, kind names, `RoutableFields` |
 | `storage` | persistence port + SQL implementation | `Store`, `Entry`, `EntryTable`, `Column` |
