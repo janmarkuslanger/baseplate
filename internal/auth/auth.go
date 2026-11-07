@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"github.com/janmarkuslanger/baseplate/i18n"
+	"github.com/janmarkuslanger/baseplate/internal/ratelimit"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -84,7 +85,7 @@ type Manager struct {
 	// SecureCookies forces the Secure flag (set when served behind HTTPS).
 	SecureCookies bool
 
-	limiter limiter
+	limiter ratelimit.Limiter
 	// dummyHash is checked for unknown users so timing does not reveal
 	// which e-mails exist.
 	dummyOnce sync.Once
@@ -94,7 +95,7 @@ type Manager struct {
 // Login checks credentials and creates a session. key identifies the client
 // for rate limiting (typically the remote IP).
 func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Session, error) {
-	if !m.limiter.allow(key) {
+	if !m.limiter.Allow(key, limitMax, limitWindow) {
 		return nil, ErrRateLimited
 	}
 	u, err := m.Store.GetUserByEmail(ctx, email)
@@ -109,7 +110,7 @@ func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Se
 	if !CheckPassword(u.PasswordHash, pw) {
 		return nil, ErrInvalidLogin
 	}
-	m.limiter.reset(key)
+	m.limiter.Reset(key)
 	s := &storage.Session{Token: token(), UserID: u.ID, CSRF: token(), ExpiresAt: time.Now().Add(sessionTTL)}
 	if err := m.Store.CreateSession(ctx, s); err != nil {
 		return nil, err
@@ -193,40 +194,8 @@ func (m *Manager) current(r *http.Request) *Current {
 	return &Current{User: u, Session: s}
 }
 
-// limiter allows 10 failed attempts per key per 15 minutes.
-type limiter struct {
-	mu   sync.Mutex
-	hits map[string][]time.Time
-}
-
+// Login allows limitMax attempts per key per limitWindow.
 const (
 	limitWindow = 15 * time.Minute
 	limitMax    = 10
 )
-
-func (l *limiter) allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.hits == nil {
-		l.hits = map[string][]time.Time{}
-	}
-	now := time.Now()
-	recent := l.hits[key][:0]
-	for _, t := range l.hits[key] {
-		if now.Sub(t) < limitWindow {
-			recent = append(recent, t)
-		}
-	}
-	if len(recent) >= limitMax {
-		l.hits[key] = recent
-		return false
-	}
-	l.hits[key] = append(recent, now)
-	return true
-}
-
-func (l *limiter) reset(key string) {
-	l.mu.Lock()
-	delete(l.hits, key)
-	l.mu.Unlock()
-}
