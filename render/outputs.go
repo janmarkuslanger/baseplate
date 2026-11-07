@@ -70,6 +70,8 @@ func (r *Renderer) parseOutputs(layers []fs.FS, funcs map[string]any) error {
 		},
 		"markdown": r.Markdown,
 		"mdtext":   func(v any) string { return markup.EscapeText(fmt.Sprint(v)) },
+		// sitetext translates into the site language: {{sitetext "llms.pages" "Pages"}}.
+		"sitetext": func(key, fallback string) string { s, _ := r.text(key, fallback); return s },
 		"replace":  strings.ReplaceAll,
 	} {
 		if _, ok := funcs[k]; ok {

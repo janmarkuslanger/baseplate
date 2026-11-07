@@ -127,12 +127,16 @@ func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	json.Unmarshal([]byte(data), &values)
 
 	// Label values with the current form definition; keep unknown keys.
+	// Checkbox values (stored as yes/no in the site language) are left out
+	// of the preview.
 	seen := map[string]bool{}
+	checkbox := map[string]bool{}
 	if def, err := p.load(context.Background(), s.FormID); err == nil {
 		for _, f := range def.Fields {
 			if v, ok := values[f.Name]; ok {
 				s.Values = append(s.Values, labeled{f.Label, v})
 				seen[f.Name] = true
+				checkbox[f.Label] = f.Type == "checkbox"
 			}
 		}
 	}
@@ -143,7 +147,7 @@ func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	}
 	var parts []string
 	for _, v := range s.Values {
-		if v.Value != "" && v.Value != "nein" && v.Value != "ja" {
+		if v.Value != "" && !checkbox[v.Label] {
 			parts = append(parts, v.Value)
 		}
 	}
