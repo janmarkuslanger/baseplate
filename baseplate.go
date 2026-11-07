@@ -61,8 +61,9 @@ type Config struct {
 	// BuildOnPublish rebuilds the static site in the background after
 	// published content changes (BASEPLATE_BUILD_ON_PUBLISH=1).
 	BuildOnPublish bool
-	// AdminLocale is the admin language, e.g. "de" or "en"
-	// (BASEPLATE_ADMIN_LOCALE, default "de").
+	// AdminLocale is the admin language (BASEPLATE_ADMIN_LOCALE, default
+	// "de"). The core ships the "de" catalog (i18n/locales); other locales
+	// need a catalog, missing keys fall back to German.
 	AdminLocale string
 	// TrustedProxyHeader names a header carrying the client IP, e.g.
 	// "X-Forwarded-For" (BASEPLATE_TRUSTED_PROXY_HEADER). Rate limits use it

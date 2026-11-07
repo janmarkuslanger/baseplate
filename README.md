@@ -121,7 +121,7 @@ A theme is an `fs.FS` containing:
 - `templates/*.html` — one template per routable content type (`{{define "page"}}…{{end}}`). A theme can override any default, such as `baseplate/head` or `block/<name>`.
 - `layout` (optional) — wraps every page: `{{define "layout"}}<html><head>{{template "baseplate/head" .Page}}</head><body>{{.Content}}</body></html>{{end}}`. `Type.Layout` picks another layout template, `"-"` none; generators use `s.RenderPage(path, tmpl, "", data)`. Without a `layout`, type templates render the whole document as before.
 - `assets/` — copied to `dist/assets/`.
-- `templates/output/<path>` — generated files of the site root (text templates). The core ships `robots.txt`, `sitemap.xml` and `llms.txt` (`{{if .Site.llmsTxt}}`); the same path in the theme replaces it, an empty template means no file, new paths add files (`feed.xml`, `sitemap-index.xml`, …). Data: `.Site`, `.BaseURL`, `.Pages`, `.Indexable`, `.Sitemap`; functions as in page templates plus `xml` (escape), `mdtext` (escape plain text for Markdown) and `replace`.
+- `templates/output/<path>` — generated files of the site root (text templates). The core ships `robots.txt`, `sitemap.xml` and `llms.txt` (`{{if .Site.llmsTxt}}`); the same path in the theme replaces it, an empty template means no file, new paths add files (`feed.xml`, `sitemap-index.xml`, …). Data: `.Site`, `.BaseURL`, `.Pages`, `.Indexable`, `.Sitemap`; functions as in page templates plus `xml` (escape), `mdtext` (escape plain text for Markdown), `sitetext "key" "fallback"` (catalog text in the site language) and `replace`.
 - `templates/markdown.md` — the Markdown variant of each page (default `{{markdown .}}`: title, description and the Markdown of its blocks — fields outside blocks are not included; empty = no `.md` file and no `<link rel="alternate">`). `noindex` pages get none.
 - `public/` — copied 1:1 to the site root (`favicon.ico`, `.well-known/…`, verification files). A path the build already uses (a page, `robots.txt`, `sitemap.xml`, …) fails the build.
 
@@ -154,7 +154,7 @@ Date fields (`fields.Date`, `fields.DateTime`) store Unix seconds. The admin con
 |---|---|---|
 | `short`, `long`, `time`, `datetime` | `01.05.2024`, `1. Mai 2024`, `09:30`, `1. Mai 2024, 09:30` | English (`05/01/2024`, `May 1, 2024`, …) |
 | `iso`, `isodate` | `2024-05-01T09:30:00+02:00`, `2024-05-01` | same |
-| own | catalog key `date.format.<name>` (Go layout; month/weekday names are translated) | |
+| own | catalog key `date.format.<name>` (Go layout; full month/weekday names `January`/`Monday` are translated, abbreviations `Jan`/`Mon` stay English) | |
 
 Language = **Settings → Sprache**; a third argument overrides the zone: `{{date .Data.x "time" "UTC"}}`.
 
@@ -193,9 +193,9 @@ Enable it with `app.Use(News{})`.
 | empty (default) | `/news/<slug>/` |
 | `"/aktuelles/{slug}/"` | `/aktuelles/<slug>/` |
 | `"/{slug}/"` | `/<slug>/` |
-| `"/{parents}/{slug}/"` (core `page`) | `/ueber-uns/team/`; needs a field `parent` relating to the type itself; slug `index` = empty |
+| `"/{parents}/{slug}/"` (core `page`) | `/ueber-uns/team/`; needs a field `parent` relating to the type itself |
 
-Patterns are checked on start; duplicate URLs fail the build.
+In every pattern an entry's own slug `index` is empty (`/news/index/` becomes `/news/`); as a parent in `{parents}` it stays, so a child of the home page gets `/index/team/`. Patterns are checked on start; duplicate URLs fail the build.
 
 | Registry method | Purpose |
 |---|---|

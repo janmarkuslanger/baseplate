@@ -3,7 +3,7 @@
 
 {{with .Site.llmsContent}}{{.}}
 
-{{end}}## Seiten
+{{end}}## {{sitetext "llms.pages" "Pages"}}
 
 {{range .Indexable}}- [{{mdtext .Data.title}}]({{$.BaseURL}}{{or .MarkdownURL .URL}}){{with .Meta.Description}}: {{mdtext .}}{{end}}
 {{end}}
