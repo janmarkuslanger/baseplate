@@ -16,13 +16,13 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/i18n"
+	"github.com/janmarkuslanger/baseplate/internal/ratelimit"
 	bpmail "github.com/janmarkuslanger/baseplate/mail"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/settings"
@@ -65,8 +65,7 @@ type Plugin struct {
 	reg     *plugin.Registry
 	texts   *i18n.Bundle
 	pages   *template.Template
-	mu      sync.Mutex
-	hits    map[string][]time.Time
+	limiter ratelimit.Limiter
 	nowFunc func() time.Time
 }
 
@@ -85,10 +84,10 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 		i18n.Catalogs.Add(r, c)
 	}
 	p.texts = i18n.NewBundle(cats...)
-	p.hits = map[string][]time.Time{}
 	if p.nowFunc == nil {
 		p.nowFunc = time.Now
 	}
+	p.limiter.Now = p.nowFunc
 	p.pages, err = template.ParseFS(frontendFS, "templates/response.html")
 	if err != nil {
 		return err
@@ -208,24 +207,6 @@ func (p *Plugin) formByID(id any) (*formDef, error) {
 	return d, err
 }
 
-func (p *Plugin) allow(ip string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	now := p.nowFunc()
-	recent := p.hits[ip][:0]
-	for _, t := range p.hits[ip] {
-		if now.Sub(t) < p.Window {
-			recent = append(recent, t)
-		}
-	}
-	if len(recent) >= p.Limit {
-		p.hits[ip] = recent
-		return false
-	}
-	p.hits[ip] = append(recent, now)
-	return true
-}
-
 type response struct {
 	Lang      string
 	BackLabel string
@@ -271,7 +252,7 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 		success() // pretend success so bots learn nothing
 		return
 	}
-	if !p.allow(p.reg.ClientIP(r)) {
+	if !p.limiter.Allow(p.reg.ClientIP(r), p.Limit, p.Window) {
 		p.respond(w, http.StatusTooManyRequests, response{Lang: lang, Title: p.pt(lang, "forms.public.tooMany"), Message: p.pt(lang, "forms.public.tooMany.hint"), Back: back})
 		return
 	}
