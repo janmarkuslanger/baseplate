@@ -60,7 +60,7 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		cond = " WHERE " + strings.Join(where, " AND ")
 	}
 	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+t.Name+cond, args...).Scan(&total); err != nil {
+	if err := s.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM `+t.Name+cond, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	tail := cond + ` ORDER BY updated_at DESC, id DESC`
@@ -78,7 +78,7 @@ func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, arg
 	for _, c := range t.Columns {
 		cols = append(cols, s.col(c.Name))
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+t.Name+tail, args...)
+	rows, err := s.conn().QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+t.Name+tail, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (s *SQLStore) hydrate(ctx context.Context, t *table, owners map[int64]map[s
 	// Components: links first, then one query per component table.
 	var links []link
 	err := s.inChunks(ids, func(chunk []any) error {
-		rows, err := s.db.QueryContext(ctx, `SELECT owner_id, field, component_table, component_id FROM components WHERE owner_table = ? AND owner_id IN (`+placeholders(len(chunk))+`) ORDER BY position`,
+		rows, err := s.conn().QueryContext(ctx, `SELECT owner_id, field, component_table, component_id FROM components WHERE owner_table = ? AND owner_id IN (`+placeholders(len(chunk))+`) ORDER BY position`,
 			append([]any{t.Name}, chunk...)...)
 		if err != nil {
 			return err
@@ -197,7 +197,7 @@ func (s *SQLStore) hydrate(ctx context.Context, t *table, owners map[int64]map[s
 
 	// Relations.
 	return s.inChunks(ids, func(chunk []any) error {
-		rows, err := s.db.QueryContext(ctx, `SELECT owner_id, field, target_id FROM relations WHERE owner_table = ? AND owner_id IN (`+placeholders(len(chunk))+`) ORDER BY position`,
+		rows, err := s.conn().QueryContext(ctx, `SELECT owner_id, field, target_id FROM relations WHERE owner_table = ? AND owner_id IN (`+placeholders(len(chunk))+`) ORDER BY position`,
 			append([]any{t.Name}, chunk...)...)
 		if err != nil {
 			return err
@@ -235,7 +235,7 @@ func (s *SQLStore) loadComponents(ctx context.Context, ct *table, comps map[int6
 		cols = append(cols, s.col(c.Name))
 	}
 	return s.inChunks(ids, func(chunk []any) error {
-		rows, err := s.db.QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+ct.Name+` WHERE id IN (`+placeholders(len(chunk))+`)`, chunk...)
+		rows, err := s.conn().QueryContext(ctx, `SELECT `+strings.Join(cols, ", ")+` FROM `+ct.Name+` WHERE id IN (`+placeholders(len(chunk))+`)`, chunk...)
 		if err != nil {
 			return err
 		}

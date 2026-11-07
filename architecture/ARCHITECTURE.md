@@ -60,6 +60,7 @@ Public API = every package outside `internal/`. Each package's contract is its p
 baseplate ships SQLite only. The rest of the system depends on the
 `storage.Store` interface, so MySQL, Postgres or another database can be
 added later as an adapter; plugins with their own tables then add SQL for
-that database.
+that database. An adapter must serialize `Entries.Atomic` transactions
+(also across processes), since slug and singleton uniqueness rely on it.
 
 Details: [`docs/internals.md`](../docs/internals.md), plugin API: [`docs/plugins.md`](../docs/plugins.md)

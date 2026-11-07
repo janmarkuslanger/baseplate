@@ -150,6 +150,12 @@ type Entries interface {
 	// Referrers lists other entries whose relation fields (as the schema
 	// declares them) point at the given entry.
 	Referrers(ctx context.Context, typ string, id int64) ([]Referrer, error)
+	// Atomic runs fn in one write transaction on a view of the store bound
+	// to it, committed if fn returns nil. Atomic calls must be serialized
+	// (also across processes sharing the database): what fn reads stays
+	// true until its writes are committed. entries.Service relies on this
+	// for slug and singleton uniqueness. fn must use only the given view.
+	Atomic(ctx context.Context, fn func(Entries) error) error
 }
 
 // Users stores admin users.
