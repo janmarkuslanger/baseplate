@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,5 +67,22 @@ func TestUsersAndSessions(t *testing.T) {
 	s.CreateSession(ctx, &storage.Session{Token: "old", UserID: u.ID, CSRF: "c", ExpiresAt: time.Now().Add(-time.Minute)})
 	if _, err := s.GetSession(ctx, "old"); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("expired session: want ErrNotFound, got %v", err)
+	}
+}
+
+// An expired session that cannot be deleted is an error, not "not found":
+// the session would otherwise stay in the table unnoticed.
+func TestExpiredSessionDeleteFailure(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	if err := s.CreateSession(ctx, &storage.Session{Token: "old", UserID: 1, CSRF: "c", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().ExecContext(ctx, `CREATE TRIGGER keep_sessions BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'locked'); END`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.GetSession(ctx, "old")
+	if err == nil || errors.Is(err, storage.ErrNotFound) || !strings.Contains(err.Error(), "locked") {
+		t.Fatalf("want the delete error, got %v", err)
 	}
 }
