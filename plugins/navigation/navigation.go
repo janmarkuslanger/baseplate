@@ -15,6 +15,7 @@ package navigation
 import (
 	"context"
 	"embed"
+	"regexp"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/entries"
@@ -29,6 +30,9 @@ const (
 	TypeName = "navigation"
 	LinkType = "navlink"
 )
+
+// keyRe is the form of a navigation key: lowercase words joined by "-".
+var keyRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 //go:embed locales/*.json
 var localesFS embed.FS
@@ -68,7 +72,7 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 		Name: TypeName, Label: "navigation.type", LabelPlural: "navigation.type.plural", TitleField: "name",
 		Fields: []content.Field{
 			{Name: "name", Label: "navigation.name", Kind: fields.Text, Required: true},
-			{Name: "key", Label: "navigation.key", Kind: fields.Slug, Required: true, Help: "navigation.key.help"},
+			{Name: "key", Label: "navigation.key", Kind: fields.Text, Required: true, Help: "navigation.key.help"},
 			{Name: "items", Label: "navigation.items", Kind: fields.Relation, Ref: LinkType, Many: true},
 		},
 	}); err != nil {
@@ -79,7 +83,8 @@ func (p *Plugin) Register(r *plugin.Registry) error {
 }
 
 // check enforces what single fields cannot: a link has a URL or a page, not
-// both, and a navigation key names one navigation only (drafts included).
+// both, and a navigation key has the form of keyRe and names one
+// navigation only (drafts included).
 // Hooks run before the save transaction, so two editors saving the same new
 // key at the same moment are not caught; for menus this is accepted.
 func (p *Plugin) check(ctx context.Context, e *entries.Event) error {
@@ -91,6 +96,9 @@ func (p *Plugin) check(ctx context.Context, e *entries.Event) error {
 		}
 	case TypeName:
 		key, _ := e.Entry.Data["key"].(string)
+		if !keyRe.MatchString(key) {
+			return i18n.M("navigation.keyInvalid")
+		}
 		all, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName})
 		if err != nil {
 			return err

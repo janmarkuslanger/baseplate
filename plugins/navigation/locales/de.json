@@ -3,6 +3,7 @@
   "navigation.items": "Links",
   "navigation.key": "Schlüssel",
   "navigation.key.help": "Name, unter dem das Theme die Navigation einbindet, z. B. „main“ oder „footer“",
+  "navigation.keyInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche, z. B. „main“ oder „footer-rechtliches“.",
   "navigation.keyTaken": "Eine andere Navigation verwendet diesen Schlüssel bereits.",
   "navigation.label": "Beschriftung",
   "navigation.link": "Link",

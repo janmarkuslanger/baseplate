@@ -169,3 +169,15 @@ func TestKeyUnique(t *testing.T) {
 		t.Fatalf("resave: %v", err)
 	}
 }
+
+func TestKeyForm(t *testing.T) {
+	reg := setup(t)
+	for _, key := range []string{"Main", "main menu", "-main", "main_menu"} {
+		_, err := reg.Entries.Save(context.Background(), entries.Save{Type: TypeName, Data: map[string]any{"name": "N", "key": key}})
+		var errs content.Errors
+		if !errors.As(err, &errs) {
+			t.Errorf("key %q: err = %v, want a validation error", key, err)
+		}
+	}
+	save(t, reg, TypeName, map[string]any{"name": "N", "key": "footer-rechtliches"}, true)
+}
