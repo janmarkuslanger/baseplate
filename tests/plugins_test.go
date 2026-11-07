@@ -78,7 +78,7 @@ func TestPluginContentInAdmin(t *testing.T) {
 		}
 		return string(b)
 	}
-	c.PostForm(srv.URL+"/admin/login", url.Values{"email": {"a@b.de"}, "password": {"sehr-geheim-123"}})
+	postLogin(t, c, srv.URL, credentials("a@b.de", "sehr-geheim-123"))
 	dash := get("/admin/")
 	csrf := csrfRe.FindStringSubmatch(dash)[1]
 
@@ -157,7 +157,7 @@ func TestPluginKindAdminTemplate(t *testing.T) {
 	defer srv.Close()
 	jar, _ := cookiejar.New(nil)
 	c := &http.Client{Jar: jar}
-	c.PostForm(srv.URL+"/admin/login", url.Values{"email": {"a@b.de"}, "password": {"sehr-geheim-123"}})
+	postLogin(t, c, srv.URL, credentials("a@b.de", "sehr-geheim-123"))
 	res, err := c.Get(srv.URL + "/admin/c/page/new")
 	if err != nil {
 		t.Fatal(err)

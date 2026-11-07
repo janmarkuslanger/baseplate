@@ -80,9 +80,39 @@ func (c *client) do(method, path string, form url.Values) (*http.Response, strin
 
 var csrfRe = regexp.MustCompile(`data-csrf="([0-9A-Za-z]+)"`)
 
+var loginCSRFRe = regexp.MustCompile(`name="csrf" value="([0-9A-Za-z]+)"`)
+
+// credentials returns the fields of the login form.
+func credentials(email, pw string) url.Values {
+	return url.Values{"email": {email}, "password": {pw}}
+}
+
+// postLogin submits the login form like a browser: it loads the form first
+// for its CSRF token and cookie.
+func postLogin(t *testing.T, c *http.Client, base string, form url.Values) *http.Response {
+	t.Helper()
+	res, err := c.Get(base + "/admin/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	m := loginCSRFRe.FindStringSubmatch(string(b))
+	if m == nil {
+		t.Fatal("no csrf token in login form")
+	}
+	form.Set("csrf", m[1])
+	res, err = c.PostForm(base+"/admin/login", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	return res
+}
+
 func (c *client) login() {
 	c.t.Helper()
-	res, _ := c.do("POST", "/admin/login", url.Values{"email": {"admin@example.com"}, "password": {"sehr-geheim-123"}})
+	res := postLogin(c.t, c.http, c.srv.URL, credentials("admin@example.com", "sehr-geheim-123"))
 	if res.StatusCode != http.StatusSeeOther {
 		c.t.Fatalf("login: %d", res.StatusCode)
 	}
@@ -105,7 +135,7 @@ func TestAdminFlow(t *testing.T) {
 	if res, _ := c.do("GET", "/admin/", nil); res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("anonymous dashboard: %d", res.StatusCode)
 	}
-	if res, _ := c.do("POST", "/admin/login", url.Values{"email": {"admin@example.com"}, "password": {"falsch"}}); res.StatusCode != http.StatusUnauthorized {
+	if res := postLogin(t, c.http, c.srv.URL, credentials("admin@example.com", "falsch")); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("bad login: %d", res.StatusCode)
 	}
 	c.login()
@@ -166,10 +196,46 @@ func TestAdminFlow(t *testing.T) {
 	}
 }
 
+func TestLoginCSRF(t *testing.T) {
+	_, c := newTestApp(t)
+	creds := credentials("admin@example.com", "sehr-geheim-123")
+	loggedIn := func() bool {
+		res, _ := c.do("GET", "/admin/", nil)
+		return res.StatusCode == http.StatusOK
+	}
+
+	// A cross-site form post carries neither the cookie nor the token.
+	if res, _ := c.do("POST", "/admin/login", creds); res.StatusCode != http.StatusForbidden || loggedIn() {
+		t.Fatalf("login without token: %d, logged in %v", res.StatusCode, loggedIn())
+	}
+
+	// A token from the attacker's own visit does not match the victim's cookie.
+	attacker, _ := cookiejar.New(nil)
+	ac := &http.Client{Jar: attacker, CheckRedirect: c.http.CheckRedirect}
+	res, _ := ac.Get(c.srv.URL + "/admin/login")
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	foreign := loginCSRFRe.FindStringSubmatch(string(b))[1]
+	c.do("GET", "/admin/login", nil) // victim has a cookie of their own
+	forged := credentials("admin@example.com", "sehr-geheim-123")
+	forged.Set("csrf", foreign)
+	if res, body := c.do("POST", "/admin/login", forged); res.StatusCode != http.StatusForbidden || loggedIn() {
+		t.Fatalf("login with foreign token: %d, logged in %v", res.StatusCode, loggedIn())
+	} else if !loginCSRFRe.MatchString(body) {
+		t.Error("rejected login does not render a fresh form")
+	}
+
+	if res := postLogin(t, c.http, c.srv.URL, creds); res.StatusCode != http.StatusSeeOther || !loggedIn() {
+		t.Fatalf("login with token: %d", res.StatusCode)
+	}
+}
+
 func TestLoginBodyLimit(t *testing.T) {
 	_, c := newTestApp(t)
 	big := strings.Repeat("x", 1<<20)
-	res, _ := c.do("POST", "/admin/login", url.Values{"email": {"admin@example.com"}, "password": {"sehr-geheim-123"}, "pad": {big}})
+	form := credentials("admin@example.com", "sehr-geheim-123")
+	form.Set("pad", big)
+	res := postLogin(t, c.http, c.srv.URL, form)
 	if res.StatusCode == http.StatusSeeOther {
 		t.Fatal("oversized login body must not be accepted")
 	}
