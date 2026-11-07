@@ -31,7 +31,7 @@ customer project ── main.go ── baseplate + plugins ──▶ one binary 
 - **Automatic migrations** — schema changes apply on start; renames and data migrations are first-class.
 - **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
 - **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
-- **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`, `golang.org/x/sys`. htmx and Alpine.js are embedded.
+- **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
 
 ## Quickstart
 

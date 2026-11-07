@@ -82,25 +82,8 @@ func lockDist(ctx context.Context, dist string) (unlock func(), err error) {
 	}
 }
 
-// errNoExchange reports that the system or file system cannot exchange
-// two paths atomically.
-var errNoExchange = errors.New("atomic exchange not supported")
-
-// swap replaces dist with tmp. Where the system exchanges both paths in
-// one step (Linux renameat2, macOS renamex_np), dist never disappears and
-// tmp holds the previous site afterwards. Elsewhere, and on the first
-// build, renameSwap moves dist aside first.
+// swap replaces dist with tmp. If that fails, the previous site is put back.
 func swap(tmp, dist string) error {
-	err := exchange(tmp, dist)
-	if errors.Is(err, errNoExchange) {
-		return renameSwap(tmp, dist)
-	}
-	return err
-}
-
-// renameSwap replaces dist with two renames, so dist is briefly missing.
-// If that fails, the previous site is put back.
-func renameSwap(tmp, dist string) error {
 	old := dist + ".old"
 	if err := os.RemoveAll(old); err != nil {
 		return err
