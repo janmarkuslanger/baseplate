@@ -67,7 +67,7 @@
   "date.weekday.6": "Samstag",
   "edit.delete": "{0} löschen",
   "edit.delete.confirm": "Diesen Eintrag wirklich löschen?",
-  "edit.delete.usedIn": "Dieser Eintrag wird an {0} Stelle(n) verwendet. Die Verknüpfungen werden entfernt. Wirklich löschen?",
+  "edit.delete.usedIn": "Dieser Eintrag wird an {0} Stelle(n) verwendet (siehe „Verwendet in“). Entferne diese Verknüpfungen, um ihn löschen zu können.",
   "edit.dirty": "ungespeicherte Änderungen",
   "edit.errors": "Bitte prüfe die markierten Felder.",
   "edit.new": "Neu",

@@ -66,7 +66,7 @@ plugins/* ─▶ public packages only
 - `RenamedFrom` moves data on start, once per rename (recorded in `schema_migrations` as `rename:<table>.<old>><new>`); renames and table/column creation run in one transaction; table/column names are stable API (`storage.EntryTable` …)
 - save = one transaction (row, components, relations)
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
-- delete removes components and all relations from/to the entry
+- delete is refused while relation fields of other entries point at the entry (`ReferencedError`); otherwise it removes the entry, its components and all relations from/to it
 - build resolves relations one level deep (+ inverse fields)
 - date fields = Unix seconds; the admin converts in the site time zone (browser `Intl`), the build formats in it
 - pages = type template → `.Content` of the layout (`Type.Layout`, default `layout` if defined)

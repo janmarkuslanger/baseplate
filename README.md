@@ -223,7 +223,7 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 - `Many: false` → one target, `Many: true` → ordered list
 - `Inverse` adds a read-only field on the target (`.Data.articles` in its template)
 - Templates get resolved targets: `{{range .Data.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}`
-- Deleting a target removes the links; the admin shows "Verwendet in" and warns before deleting
+- An entry other entries still point at cannot be deleted (`*storage.ReferencedError` lists the referrers); the admin shows them under "Verwendet in". Remove those relations first. Relations of fields removed from the schema and an entry's relations to itself do not count
 
 </details>
 

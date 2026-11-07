@@ -131,7 +131,9 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	return &Result{Entry: e, Changed: wasPublished || e.Status == storage.StatusPublished}, nil
 }
 
-// Delete removes an entry. changed reports whether it was published.
+// Delete removes an entry. changed reports whether it was published. An
+// entry other entries still point at is not deleted; the error is a
+// *storage.ReferencedError listing them.
 func (s *Service) Delete(ctx context.Context, typ string, id int64) (changed bool, err error) {
 	e, err := s.Store.GetEntry(ctx, typ, id)
 	if errors.Is(err, storage.ErrNotFound) {

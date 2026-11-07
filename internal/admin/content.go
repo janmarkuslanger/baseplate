@@ -14,6 +14,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/fields"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/auth"
 	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -305,6 +306,16 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	changed, err := a.Reg.Entries.Delete(r.Context(), t.Name, id)
 	if errors.Is(err, entries.ErrNotFound) {
 		http.NotFound(w, r)
+		return
+	}
+	if ref, ok := errors.AsType[*storage.ReferencedError](err); ok {
+		// Still in use: show the editor with the referrers instead.
+		e, gerr := a.store().GetEntry(r.Context(), t.Name, id)
+		if gerr != nil {
+			a.fail(w, gerr)
+			return
+		}
+		a.renderEdit(w, r, http.StatusConflict, t, e, e.Data, content.Errors{"_": i18n.M("edit.delete.usedIn", len(ref.Referrers))})
 		return
 	}
 	if err != nil {

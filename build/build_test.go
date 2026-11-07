@@ -285,8 +285,9 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 		t.Errorf("resolved: %q", got)
 	}
 
-	// A deleted target is not an error.
-	if err := st.DeleteEntry(ctx, "author", ada); err != nil {
+	// A missing target is not an error. DeleteEntry refuses referenced
+	// entries, so remove the row the way a data migration could.
+	if _, err := st.DB().ExecContext(ctx, `DELETE FROM `+storage.EntryTable("author")+` WHERE id = ?`, ada); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.Build(ctx); err != nil {

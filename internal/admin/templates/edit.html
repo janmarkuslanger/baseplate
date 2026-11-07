@@ -37,7 +37,7 @@
     </div>
   </header>
 
-  {{if $p.Errors}}<div class="alert alert--error">{{t "edit.errors"}}{{with index $p.Errors "_"}} {{.}}{{end}}</div>{{end}}
+  {{if $p.Errors}}<div class="alert alert--error">{{with index $p.Errors "_"}}{{.}}{{else}}{{t "edit.errors"}}{{end}}</div>{{end}}
 
   {{$tabs := $t.Tabs}}
   {{if gt (len $tabs) 1}}
@@ -79,9 +79,13 @@
 {{template "block-templates"}}
 
 {{if and (not $p.IsNew) (not $t.Singleton)}}
-<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm({{if $p.UsedIn}}{{json (t "edit.delete.usedIn" (len $p.UsedIn))}}{{else}}{{json (t "edit.delete.confirm")}}{{end}})) $event.preventDefault()">
+{{if $p.UsedIn}}
+<p class="danger-zone muted">{{t "edit.delete.usedIn" (len $p.UsedIn)}}</p>
+{{else}}
+<form class="danger-zone" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/delete" x-data x-on:submit="if (!confirm({{json (t "edit.delete.confirm")}})) $event.preventDefault()">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <button class="btn btn--danger btn--sm">{{t "edit.delete" (t $t.Label)}}</button>
 </form>
+{{end}}
 {{end}}
 {{end}}
