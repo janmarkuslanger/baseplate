@@ -38,7 +38,9 @@ type Field struct {
 	// Fields are the sub-fields of the "group" and "list" kinds.
 	Fields []Field
 	// RenamedFrom is the field's previous name. On start, stored data under
-	// the old name is moved to the new one (once; afterwards it is a no-op).
+	// the old name is moved to the new one. Each rename runs once and is
+	// recorded; to reuse the old name for a new field, remove RenamedFrom
+	// first (Schema.Check rejects both at once).
 	RenamedFrom string
 }
 
@@ -394,6 +396,9 @@ func (s *Schema) Blocks(f Field) []Block {
 func (s *Schema) Check() error {
 	var walk func(owner string, fs []Field) error
 	walk = func(owner string, fs []Field) error {
+		if err := checkRenames(owner, fs); err != nil {
+			return err
+		}
 		for _, f := range fs {
 			k, ok := s.kinds[f.Kind]
 			if !ok {
@@ -429,6 +434,30 @@ func (s *Schema) Check() error {
 		if err := walk("block "+b.Name, b.Fields); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// checkRenames rejects RenamedFrom values that name another field of the
+// same list or that two fields share: the store could not tell whose data
+// is whose.
+func checkRenames(owner string, fs []Field) error {
+	names := map[string]bool{}
+	for _, f := range fs {
+		names[f.Name] = true
+	}
+	from := map[string]string{}
+	for _, f := range fs {
+		if f.RenamedFrom == "" || f.RenamedFrom == f.Name {
+			continue
+		}
+		if names[f.RenamedFrom] {
+			return fmt.Errorf("content: %s.%s is renamed from %q, which is still a field; remove RenamedFrom before reusing the old name", owner, f.Name, f.RenamedFrom)
+		}
+		if other, dup := from[f.RenamedFrom]; dup {
+			return fmt.Errorf("content: %s.%s and %s.%s are both renamed from %q", owner, other, owner, f.Name, f.RenamedFrom)
+		}
+		from[f.RenamedFrom] = f.Name
 	}
 	return nil
 }
