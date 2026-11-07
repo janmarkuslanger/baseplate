@@ -26,11 +26,19 @@ import (
 type fakeMailer struct {
 	sent []mail.Message
 	fail bool
+	// during runs while the mail is being sent, e.g. to cancel the request.
+	during func()
 }
 
-func (f *fakeMailer) Send(_ context.Context, m mail.Message) error {
+func (f *fakeMailer) Send(ctx context.Context, m mail.Message) error {
 	if f.fail {
 		return errors.New("smtp down")
+	}
+	if f.during != nil {
+		f.during()
+	}
+	if err := ctx.Err(); err != nil {
+		return err // like SMTP, which closes the connection when ctx ends
 	}
 	f.sent = append(f.sent, m)
 	return nil
@@ -81,11 +89,16 @@ func setup(t *testing.T) (*plugin.Registry, *Plugin, *fakeMailer, int64) {
 
 func post(t *testing.T, reg *plugin.Registry, id int64, form url.Values) *httptest.ResponseRecorder {
 	t.Helper()
+	return postCtx(t, context.Background(), reg, id, form)
+}
+
+func postCtx(t *testing.T, ctx context.Context, reg *plugin.Registry, id int64, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
 	mux := http.NewServeMux()
 	for _, rt := range reg.Routes() {
 		mux.Handle(rt.Pattern, rt.Handler)
 	}
-	r := httptest.NewRequest("POST", "/api/forms/"+itoa(id), strings.NewReader(form.Encode()))
+	r := httptest.NewRequestWithContext(ctx, "POST", "/api/forms/"+itoa(id), strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Referer", "https://acme.test/kontakt/")
 	w := httptest.NewRecorder()
@@ -149,6 +162,19 @@ func TestSubmitMailFailureStillStores(t *testing.T) {
 	reg.Store.DB().QueryRow(`SELECT mailed FROM form_submissions`).Scan(&mailed)
 	if count(t, reg) != 1 || mailed != 0 {
 		t.Errorf("count=%d mailed=%d", count(t, reg), mailed)
+	}
+}
+
+func TestSubmitMailOutlivesRequest(t *testing.T) {
+	reg, _, m, id := setup(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.during = cancel // the visitor closes the tab while the mail is sent
+	postCtx(t, ctx, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
+	var mailed int
+	reg.Store.DB().QueryRow(`SELECT mailed FROM form_submissions`).Scan(&mailed)
+	if len(m.sent) != 1 || mailed != 1 {
+		t.Errorf("sent=%d mailed=%d, want the mail sent and marked", len(m.sent), mailed)
 	}
 }
 

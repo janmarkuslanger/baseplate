@@ -45,6 +45,8 @@ const (
 	HoneypotField = "_hp"
 	maxBody       = 64 << 10
 	maxValueLen   = 5000
+	// mailTimeout bounds sending the notification of one submission.
+	mailTimeout = time.Minute
 )
 
 // Field types offered in the form builder.
@@ -310,6 +312,10 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 	}
 	// The submission is stored either way; a mail failure is logged and
 	// visible in the admin (not mailed), but not shown to the visitor.
+	// A visitor leaving the page must not abort the mail, so it is sent
+	// with its own deadline instead of the request's.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailTimeout)
+	defer cancel()
 	if err := p.reg.Mailer.Send(ctx, msg); err != nil {
 		p.reg.Logger.Error("forms: send mail", "err", err, "submission", subID)
 	} else if _, err := p.reg.Store.DB().ExecContext(ctx, `UPDATE form_submissions SET mailed = 1 WHERE id = ?`, subID); err != nil {
