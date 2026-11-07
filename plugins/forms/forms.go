@@ -158,6 +158,8 @@ type formDef struct {
 	ID     int64
 	Data   map[string]any
 	Fields []fieldDef
+
+	published bool
 }
 
 type fieldDef struct {
@@ -173,7 +175,7 @@ func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
 	if e.Type != TypeName {
 		return nil, storage.ErrNotFound
 	}
-	d := &formDef{ID: e.ID, Data: e.Data}
+	d := &formDef{ID: e.ID, Data: e.Data, published: e.Status == storage.StatusPublished}
 	list, _ := e.Data["fields"].([]any)
 	for _, it := range list {
 		m, _ := it.(map[string]any)
@@ -184,15 +186,24 @@ func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
 	return d, nil
 }
 
+// loadPublished is load for visitors: a draft form does not exist for them.
+func (p *Plugin) loadPublished(ctx context.Context, id int64) (*formDef, error) {
+	d, err := p.load(ctx, id)
+	if err == nil && !d.published {
+		return nil, storage.ErrNotFound
+	}
+	return d, err
+}
+
 // formByID is available in frontend templates: {{with formByID .Block.form}}.
 func (p *Plugin) formByID(id any) (*formDef, error) {
 	n, ok := content.RefID(id)
 	if !ok {
 		return nil, nil
 	}
-	d, err := p.load(context.Background(), n)
+	d, err := p.loadPublished(context.Background(), n)
 	if errors.Is(err, storage.ErrNotFound) {
-		return nil, nil // form was deleted; render nothing
+		return nil, nil // form was deleted or is a draft; render nothing
 	}
 	return d, err
 }
@@ -239,7 +250,7 @@ func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
 	lang := p.siteLang(ctx)
 	back := r.Referer()
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	def, err := p.load(ctx, id)
+	def, err := p.loadPublished(ctx, id)
 	if err != nil {
 		p.respond(w, http.StatusNotFound, response{Lang: lang, Title: p.pt(lang, "forms.public.notFound"), Back: back})
 		return

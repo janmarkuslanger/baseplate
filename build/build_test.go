@@ -305,6 +305,30 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 	}
 }
 
+func TestDraftRelationTargetsNotRendered(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "category", Fields: []content.Field{{Name: "name", Kind: fields.Text}}})
+	b.Reg.Extend(fields.PageType,
+		content.Field{Name: "category", Kind: fields.Relation, Ref: "category"},
+		content.Field{Name: "categories", Kind: fields.Relation, Ref: "category", Many: true})
+	if err := st.UseSchema(ctx, b.Reg.Schema); err != nil {
+		t.Fatal(err)
+	}
+	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.category}}{{.Data.name}}{{end}}][{{range .Data.categories}}{{.Data.name}};{{end}}]{{end}}`)}}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	draft := add(t, st, "category", "", storage.StatusDraft, map[string]any{"name": "Geheim"})
+	pub := add(t, st, "category", "", storage.StatusPublished, map[string]any{"name": "News"})
+	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A", "category": draft, "categories": []any{draft, pub}})
+
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, b, "index.html"); got != "[][News;]" {
+		t.Errorf("draft relation target rendered: %q", got)
+	}
+}
+
 func TestPublicFiles(t *testing.T) {
 	b, st := setup(t)
 	ctx := context.Background()

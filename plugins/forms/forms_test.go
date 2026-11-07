@@ -72,7 +72,7 @@ func setup(t *testing.T) (*plugin.Registry, *Plugin, *fakeMailer, int64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &storage.Entry{Type: TypeName, Data: data}
+	e := &storage.Entry{Type: TypeName, Status: storage.StatusPublished, Data: data}
 	if err := st.CreateEntry(ctx, e); err != nil {
 		t.Fatal(err)
 	}
@@ -238,5 +238,56 @@ func TestRateLimitBehindProxy(t *testing.T) {
 	}
 	if send("1.1.1.1") != http.StatusTooManyRequests {
 		t.Fatal("same client must be limited")
+	}
+}
+
+// unpublish turns the form into a draft, as the admin's "save as draft" does.
+func unpublish(t *testing.T, reg *plugin.Registry, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	e, err := reg.Store.GetEntry(ctx, TypeName, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Status = storage.StatusDraft
+	if err := reg.Store.UpdateEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDraftFormRejectsSubmissions(t *testing.T) {
+	reg, _, m, id := setup(t)
+	unpublish(t, reg, id)
+	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("draft form: want 404, got %d", w.Code)
+	}
+	if count(t, reg) != 0 || len(m.sent) != 0 {
+		t.Error("draft form submission was processed")
+	}
+}
+
+func TestDraftFormNotRendered(t *testing.T) {
+	reg, _, _, id := setup(t)
+	unpublish(t, reg, id)
+	ctx := context.Background()
+	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.SettingsType, Slug: fields.SettingsType, Status: storage.StatusPublished,
+		Data: map[string]any{"baseURL": "https://acme.test"}})
+	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.PageType, Slug: "kontakt", Status: storage.StatusPublished, Data: map[string]any{
+		"title": "Kontakt", "body": []any{map[string]any{"_type": BlockName, "form": float64(id)}},
+	}})
+	dist := filepath.Join(t.TempDir(), "dist")
+	b := &build.Builder{Reg: reg, DistDir: dist, Theme: fstest.MapFS{
+		"templates/page.html": {Data: []byte(`{{define "page"}}[{{blocks .Data.body .}}]{{end}}`)},
+	}}
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	html, err := os.ReadFile(filepath.Join(dist, "kontakt", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(html), "<form") {
+		t.Errorf("draft form rendered:\n%s", html)
 	}
 }
