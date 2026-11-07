@@ -184,6 +184,29 @@ func TestPluginMediaService(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "data", "media", strings.TrimPrefix(saved, "/media/"))); err != nil {
 		t.Errorf("file not in the media library: %v", err)
 	}
+
+	// Uploads are served one by one; the library is not listed.
+	h := app.Handler()
+	get := func(p string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", p, nil))
+		return w
+	}
+	if w := get(saved); w.Code != http.StatusOK {
+		t.Errorf("GET %s: %d", saved, w.Code)
+	}
+	if w := get("/media/"); w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "logo-") {
+		t.Errorf("GET /media/ lists the library: %d\n%s", w.Code, w.Body.String())
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "dist", "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "dist", "assets", "site.css"), []byte("body{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w := get("/assets/"); w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "site.css") {
+		t.Errorf("GET /assets/ lists the dist dir: %d\n%s", w.Code, w.Body.String())
+	}
 }
 
 // mediaPlugin uploads a file through Services.Media while registering.

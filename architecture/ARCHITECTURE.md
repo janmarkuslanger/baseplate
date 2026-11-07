@@ -52,6 +52,7 @@ Public API = every package outside `internal/`. Each package's contract is its p
 | `internal/auth` | users, sessions, CSRF | – |
 | `internal/media` | media library (plugins: `Services.Media`) | – |
 | `internal/markup` | HTML sanitizer, HTML → Markdown | – |
+| `internal/fileserver` | static files without directory listings (dist preview, media, admin assets) | – |
 | `internal/ratelimit` | in-memory sliding-window limits (login, forms) | – |
 
 ## Databases
