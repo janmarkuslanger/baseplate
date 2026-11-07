@@ -32,6 +32,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/internal/admin"
 	"github.com/janmarkuslanger/baseplate/internal/auth"
+	"github.com/janmarkuslanger/baseplate/internal/fileserver"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 	"github.com/janmarkuslanger/baseplate/mail"
 	"github.com/janmarkuslanger/baseplate/plugin"
@@ -264,7 +265,7 @@ func (a *App) Handler() http.Handler {
 	for _, rt := range a.Registry.Routes() {
 		mux.Handle(rt.Pattern, rt.Handler)
 	}
-	mux.Handle("/", http.FileServer(http.Dir(a.cfg.DistDir)))
+	mux.Handle("/", fileserver.New(os.DirFS(a.cfg.DistDir)))
 	return securityHeaders(mux)
 }
 

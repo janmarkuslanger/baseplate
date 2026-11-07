@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/auth"
+	"github.com/janmarkuslanger/baseplate/internal/fileserver"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/settings"
@@ -119,7 +121,7 @@ func (a *Admin) Init() error {
 // Mount registers all admin routes on mux under /admin/ and /media/.
 func (a *Admin) Mount(mux *http.ServeMux) {
 	static, _ := fs.Sub(staticFS, "static")
-	mux.Handle("GET /admin/static/", http.StripPrefix("/admin/static/", cacheStatic(http.FileServerFS(static))))
+	mux.Handle("GET /admin/static/", http.StripPrefix("/admin/static/", cacheStatic(fileserver.New(static))))
 	mux.HandleFunc("GET /admin/login", a.loginPage)
 	mux.HandleFunc("POST /admin/login", a.login)
 
@@ -141,7 +143,7 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 		})
 	}
 	mux.Handle("/admin/", a.Auth.Require("/admin/login", authed))
-	mux.Handle("GET /media/", http.StripPrefix("/media/", http.FileServer(http.Dir(a.Media.Dir))))
+	mux.Handle("GET /media/", http.StripPrefix("/media/", fileserver.New(os.DirFS(a.Media.Dir))))
 }
 
 func cacheStatic(h http.Handler) http.Handler {
