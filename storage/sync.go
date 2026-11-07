@@ -91,7 +91,10 @@ func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 		if err := s.createMissing(ctx, q, l); err != nil {
 			return err
 		}
-		return s.checkStoredKinds(ctx, q, l)
+		if err := s.checkStoredKinds(ctx, q, l); err != nil {
+			return err
+		}
+		return s.syncSingletons(ctx, q, l)
 	})
 }
 

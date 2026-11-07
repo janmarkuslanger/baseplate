@@ -65,6 +65,9 @@ type SQLStore struct {
 	dialect Dialect
 	now     func() time.Time
 	layout  *layout
+	// q is the transaction of a store view handed out by Atomic; nil on
+	// the store itself.
+	q querier
 }
 
 // NewSQLStore wraps an open connection; adapters call it with their dialect.

@@ -100,15 +100,6 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 			e.Status = storage.StatusPublished
 		}
 	}
-	if t.Routable && e.Slug != "" {
-		taken, err := s.slugTaken(ctx, t, e, clean)
-		if err != nil {
-			return nil, err
-		}
-		if taken {
-			errs["slug"] = i18n.M("validation.slugTaken")
-		}
-	}
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -118,10 +109,35 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	if err := BeforeSave.Run(ctx, s.Hooks, ev); err != nil {
 		return nil, content.Errors{"_": err}
 	}
-	if e.ID == 0 {
-		err = s.Store.CreateEntry(ctx, e)
-	} else {
-		err = s.Store.UpdateEntry(ctx, e)
+	// The uniqueness checks and the write share one transaction, so
+	// concurrent saves cannot both pass the check. Hooks run before it:
+	// they may use the store, which the transaction holds.
+	err = s.Store.Atomic(ctx, func(st storage.Entries) error {
+		if t.Singleton && e.ID == 0 {
+			cur, err := st.GetEntryBySlug(ctx, t.Name, t.Name)
+			switch {
+			case err == nil:
+				e.ID, e.CreatedAt = cur.ID, cur.CreatedAt
+			case !errors.Is(err, storage.ErrNotFound):
+				return err
+			}
+		}
+		if t.Routable && e.Slug != "" {
+			taken, err := slugTaken(ctx, st, t, e)
+			if err != nil {
+				return err
+			}
+			if taken {
+				return content.Errors{"slug": i18n.M("validation.slugTaken")}
+			}
+		}
+		if e.ID == 0 {
+			return st.CreateEntry(ctx, e)
+		}
+		return st.UpdateEntry(ctx, e)
+	})
+	if _, ok := errors.AsType[content.Errors](err); ok {
+		return nil, err
 	}
 	if errors.Is(err, storage.ErrInvalidRelation) {
 		return nil, content.Errors{"_": err}
@@ -189,12 +205,12 @@ func (s *Service) load(ctx context.Context, t *content.Type, id int64) (*storage
 }
 
 // slugTaken reports a sibling (same type and parent) with the same slug.
-func (s *Service) slugTaken(ctx context.Context, t *content.Type, e *storage.Entry, data map[string]any) (bool, error) {
-	all, _, err := s.Store.ListEntries(ctx, storage.ListQuery{Type: t.Name})
+func slugTaken(ctx context.Context, st storage.Entries, t *content.Type, e *storage.Entry) (bool, error) {
+	all, _, err := st.ListEntries(ctx, storage.ListQuery{Type: t.Name})
 	if err != nil {
 		return false, err
 	}
-	parent, _ := content.RefID(data["parent"])
+	parent, _ := content.RefID(e.Data["parent"])
 	for _, o := range all {
 		p, _ := content.RefID(o.Data["parent"])
 		if o.ID != e.ID && o.Slug == e.Slug && p == parent {

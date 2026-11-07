@@ -13,7 +13,7 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 	if _, err := s.entryTable(typ); err != nil {
 		return nil, err
 	}
-	return s.referrers(ctx, s.db, typ, id)
+	return s.referrers(ctx, s.conn(), typ, id)
 }
 
 // referrers resolves relation rows pointing at an entry to the entries

@@ -34,7 +34,20 @@ func (s *SQLStore) UseSchema(ctx context.Context, sc *content.Schema) error {
 // col quotes a column name for the store's dialect.
 func (s *SQLStore) col(name string) string { return dialects[s.dialect].quote(name) }
 
+// conn is the connection entry queries run on: the transaction inside
+// Atomic, the database otherwise.
+func (s *SQLStore) conn() querier {
+	if s.q != nil {
+		return s.q
+	}
+	return s.db
+}
+
+// tx runs fn in a transaction, or in the surrounding one inside Atomic.
 func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
+	if s.q != nil {
+		return fn(s.q)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -44,6 +57,17 @@ func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// Atomic runs fn in one transaction on a view of the store bound to it.
+// The SQLite adapter begins transactions IMMEDIATE, so writers queue up
+// before their first read, across connections and processes.
+func (s *SQLStore) Atomic(ctx context.Context, fn func(Entries) error) error {
+	return s.tx(ctx, func(q querier) error {
+		view := *s
+		view.q = q
+		return fn(&view)
+	})
 }
 
 func (s *SQLStore) entryTable(typ string) (*table, error) {

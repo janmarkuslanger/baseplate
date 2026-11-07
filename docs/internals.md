@@ -64,7 +64,8 @@ plugins/* ─▶ public packages only
 - tables follow the code schema; created/extended on start, never dropped
 - kind change of a field with stored data → startup error (column ↔ component ↔ relation storage, other component tables, relation `Ref`, several rows under a single field); checked in the schema-sync transaction
 - `RenamedFrom` moves data on start, once per rename (recorded in `schema_migrations` as `rename:<table>.<old>><new>`); renames and table/column creation run in one transaction; table/column names are stable API (`storage.EntryTable` …)
-- save = one transaction (row, components, relations)
+- save = one transaction (row, components, relations); `entries.Service` runs the slug check (same type and parent) and the write in one `Store.Atomic` transaction, which the SQLite adapter begins `IMMEDIATE`, so concurrent saves — also from other processes — are serialized
+- a singleton table holds at most one row (unique index `ct_<type>_single`); several existing rows → startup error naming them
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
 - delete is refused while relation fields of other entries point at the entry (`ReferencedError`); otherwise it removes the entry, its components and all relations from/to it
 - build resolves relations one level deep (+ inverse fields)
