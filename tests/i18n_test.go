@@ -32,14 +32,22 @@ func TestAllKeysTranslated(t *testing.T) {
 			}
 		}
 	}
-	b, err := os.ReadFile("../plugins/forms/locales/de.json")
-	if err != nil {
-		t.Fatal(err)
+	plugins, err := filepath.Glob("../plugins/*/locales/de.json")
+	if err != nil || len(plugins) == 0 {
+		t.Fatalf("no plugin catalogs found: %v", err)
 	}
-	var forms map[string]string
-	json.Unmarshal(b, &forms)
-	for k, v := range forms {
-		de[k] = v
+	for _, p := range plugins {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var msgs map[string]string
+		if err := json.Unmarshal(b, &msgs); err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		for k, v := range msgs {
+			de[k] = v
+		}
 	}
 
 	used := map[string]string{}

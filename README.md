@@ -31,6 +31,7 @@ customer project ── main.go ── baseplate + plugins ──▶ one binary 
 - **Automatic migrations** — schema changes apply on start; renames and data migrations are first-class.
 - **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
 - **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
+- **Navigations** — any number of menus with links of any depth, edited in the admin ([`plugins/navigation`](plugins/navigation)).
 - **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
 
 ## Quickstart
@@ -239,6 +240,33 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 | change kind | startup error while data is stored under the old kind (also: another relation `Ref`, `Many` → single with several targets, list → group with several items) — rename the field and migrate the data |
 
 </details>
+
+## Navigations
+
+`navigation.New()` adds the type *Navigationen*: each has a name, a key the
+theme refers to (`main`, `footer`, …, unique) and links. A link points to a
+page (optionally `#anchor`), to a URL, or nowhere — then it is a heading for
+its children; children nest to any depth.
+
+```html
+{{define "menu"}}<ul>{{range .}}
+  <li{{if .Active}} class="active"{{end}}>
+    <a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>
+    {{if .Children}}{{template "menu" .Children}}{{end}}
+  </li>{{end}}</ul>{{end}}
+
+{{template "menu" (navigation "main" (entries "navigation") .)}}
+```
+
+| Field | |
+|---|---|
+| `.Title`, `.URL` | label; page URL (+ `#anchor`), the link's URL, or empty for a heading |
+| `.Current` | the link points to the rendered page (not for anchor links) |
+| `.Active` | current, a page containing the rendered page (`/kurse/` on `/kurse/yoga/`), or an ancestor of one |
+| `.Children`, `.Data` | nested links; the raw block data |
+
+Links to unpublished pages are left out with their children. An unknown key
+renders no links. In a layout, pass the page: `(navigation "main" (entries "navigation") .Page)`.
 
 ## Forms on a static site
 

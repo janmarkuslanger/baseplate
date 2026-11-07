@@ -1,0 +1,17 @@
+{
+  "navigation.anchor": "Anker auf der Seite",
+  "navigation.anchor.help": "Optional, z. B. „leistungen“ für /seite/#leistungen",
+  "navigation.children": "Unterpunkte",
+  "navigation.items": "Links",
+  "navigation.key": "Schlüssel",
+  "navigation.key.help": "Name, unter dem das Theme die Navigation einbindet, z. B. „main“ oder „footer“",
+  "navigation.keyTaken": "Eine andere Navigation verwendet diesen Schlüssel bereits.",
+  "navigation.label": "Beschriftung",
+  "navigation.link": "Link",
+  "navigation.name": "Name",
+  "navigation.page": "Seite",
+  "navigation.type": "Navigation",
+  "navigation.type.plural": "Navigationen",
+  "navigation.url": "URL",
+  "navigation.url.help": "Für Ziele ohne Seite, z. B. externe Links. Ohne Seite und URL ist der Link eine Überschrift für seine Unterpunkte."
+}
