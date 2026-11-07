@@ -2,8 +2,10 @@ package build
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
@@ -16,13 +18,18 @@ type query struct {
 	sort          string
 	desc          bool
 	limit, offset int
-	where         []cond // field equals value
-	has           []cond // relation field points to one of value's IDs
+	where         []cond    // field equals value
+	has           []hasCond // relation field points to one of the IDs
 }
 
 type cond struct {
 	field string
 	value any
+}
+
+type hasCond struct {
+	field string
+	ids   []int64
 }
 
 // entries implements the "entries" template function: published entries
@@ -32,7 +39,8 @@ type cond struct {
 //	"sort" "field" | "-field"   ascending / descending; default: last updated first
 //	"limit" n, "offset" n       0 or empty = no limit
 //	"where" "field" value       field equals value
-//	"has" "relation" refs       relation contains one of refs; empty refs = no filter
+//	"has" "relation" refs       relation contains one of refs (entry IDs or refs);
+//	                            empty refs = no filter, anything else fails
 func (s *site) entries(typ string, opts ...any) ([]*render.Ref, error) {
 	t, ok := s.b.Reg.Schema.Type(typ)
 	if !ok {
@@ -109,11 +117,16 @@ func (s *site) parseQuery(t *content.Type, opts []any) (query, error) {
 			if rel := k.Storage == content.StoreRelation; rel != (key == "has") || k.Storage.Container() {
 				return q, fmt.Errorf("%s: field %q has kind %s (use \"where\" for plain fields, \"has\" for relations)", key, name, f.Kind)
 			}
-			c := cond{name, opts[i+2]}
 			if key == "where" {
-				q.where = append(q.where, c)
-			} else {
-				q.has = append(q.has, c)
+				q.where = append(q.where, cond{name, opts[i+2]})
+				break
+			}
+			ids, err := refIDs(opts[i+2])
+			if err != nil {
+				return q, fmt.Errorf("has %q: %w", name, err)
+			}
+			if len(ids) > 0 {
+				q.has = append(q.has, hasCond{name, ids})
 			}
 		default:
 			return q, fmt.Errorf("unknown option %v", opts[i])
@@ -130,43 +143,51 @@ func (q query) match(e storage.Entry) bool {
 		}
 	}
 	for _, c := range q.has {
-		ids := refIDs(c.value)
-		if len(ids) == 0 {
-			continue
-		}
 		f := content.Field{Name: c.field}
-		if !slices.ContainsFunc(ids, func(id int64) bool { return points(e, f, id) }) {
+		if !slices.ContainsFunc(c.ids, func(id int64) bool { return points(e, f, id) }) {
 			return false
 		}
 	}
 	return true
 }
 
-// refIDs reads one or many relation values (IDs, resolved refs).
-func refIDs(v any) []int64 {
+// refIDs reads one or many relation values (IDs, resolved refs). Empty
+// values (nil, "") are skipped; anything else that is not an entry ID, such
+// as a slug, is an error rather than a filter that silently matches all.
+func refIDs(v any) ([]int64, error) {
 	var ids []int64
-	add := func(x any) {
-		if id, ok := content.RefID(x); ok {
-			ids = append(ids, id)
+	add := func(x any) error {
+		if empty(x) {
+			return nil
 		}
+		if r, ok := x.(*render.Ref); ok && r == nil {
+			return nil
+		}
+		id, ok := content.RefID(x)
+		if !ok {
+			return fmt.Errorf("not an entry ID: %#v", x)
+		}
+		ids = append(ids, id)
+		return nil
 	}
+	var err error
 	switch l := v.(type) {
 	case []*render.Ref:
 		for _, r := range l {
-			add(r)
+			err = errors.Join(err, add(r))
 		}
 	case []any:
 		for _, x := range l {
-			add(x)
+			err = errors.Join(err, add(x))
 		}
 	case []int64:
 		for _, x := range l {
-			add(x)
+			err = errors.Join(err, add(x))
 		}
 	default:
-		add(v)
+		err = add(v)
 	}
-	return ids
+	return ids, err
 }
 
 // count reads a limit/offset: a template int or a number from entry data.
@@ -179,10 +200,14 @@ func count(v any) (int, error) {
 	case int64:
 		n = int(x)
 	case float64:
+		if x != float64(int(x)) {
+			return 0, fmt.Errorf("not a whole number: %v", x)
+		}
 		n = int(x)
 	case string:
 		if x != "" {
-			if _, err := fmt.Sscan(x, &n); err != nil {
+			var err error
+			if n, err = strconv.Atoi(x); err != nil {
 				return 0, fmt.Errorf("not a number: %q", x)
 			}
 		}

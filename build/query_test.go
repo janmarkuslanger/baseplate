@@ -78,6 +78,8 @@ func TestEntries(t *testing.T) {
 		{"has category", `entries "post" "has" "categories" (index $.Data.picked 0) "sort" "slug"`, "AC"},
 		{"has from block data", `entries "post" "has" "categories" $.Data.picked "sort" "slug"`, "AC"},
 		{"has empty = all", `entries "post" "has" "categories" $.Data.none "sort" "slug"`, "ABCD"},
+		{"has empty string = all", `entries "post" "has" "categories" "" "sort" "slug"`, "ABCD"},
+		{"limit as string", `entries "post" "sort" "slug" "limit" "2"`, "AB"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, st, ids := listSetup(t, `{{$q := `+c.query+`}}`+item)
@@ -130,6 +132,10 @@ func TestEntriesErrors(t *testing.T) {
 		{`entries "post" "where" "featured"`, `"where" needs 2 value`},
 		{`entries "post" "limit" -1`, `negative`},
 		{`entries "post" "limit" "drei"`, `not a number`},
+		{`entries "post" "limit" "1abc"`, `not a number: "1abc"`},
+		{`entries "post" "offset" 1.5`, `not a whole number`},
+		{`entries "post" "has" "categories" "yoga"`, `has "categories": not an entry ID: "yoga"`},
+		{`entries "post" "has" "categories" true`, `not an entry ID`},
 		{`entries "post" "filter" 1`, `unknown option filter`},
 		{`entries "post" "where" "categories" 1`, `use "where" for plain fields`},
 		{`entries "post" "has" "featured" true`, `use "where" for plain fields`},

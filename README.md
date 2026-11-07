@@ -138,11 +138,11 @@ Lists of other entries (e.g. in a listing block) come from `entries`:
 | Option | |
 |---|---|
 | `"sort" "field"` / `"-field"` | ascending / descending, empty values last; default: last updated first |
-| `"limit" n`, `"offset" n` | 0 or empty = no limit |
+| `"limit" n`, `"offset" n` | whole numbers; 0 or empty = no limit |
 | `"where" "field" value` | field equals value (repeatable) |
-| `"has" "relation" refs` | relation contains one of refs; empty refs = no filter (repeatable) |
+| `"has" "relation" refs` | relation contains one of refs (entry IDs or resolved relations, not slugs); empty refs = no filter (repeatable) |
 
-Published entries only; each result has `.URL` (routable types), `.Data` with relations resolved one level deep. Unknown types, fields or options fail the build.
+Published entries only; each result has `.URL` (routable types), `.Data` with relations resolved one level deep. Unknown types, fields or options and invalid values (a non-number limit, a ref that is not an entry ID) fail the build.
 
 Date fields (`fields.Date`, `fields.DateTime`) store Unix seconds. The admin converts input in the site's time zone (**Settings → Zeitzone**, default `Europe/Berlin`); templates format with `date`:
 
