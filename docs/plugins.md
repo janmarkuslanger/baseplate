@@ -43,6 +43,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | which blocks a field offers | `Field.Blocks`; empty = all registered blocks |
 | change it for a field you don't own | `r.AllowBlocks("page", "body", "hero", "faq")`; dotted paths for fields in groups (`"hero.blocks"`) |
 | unknown names | startup error (`Schema.Check`) |
+| Markdown output | `Block.Markdown` renders the block for the `.md` variants and `llms.txt`; nil leaves it out. Escape editor values with `markdown.EscapeText` (text) and `markdown.EscapeURL` (link targets), or a title like `About [x](y)` becomes a link and `<script>` raw HTML |
 
 ## Hooks
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/internal/markup"
+	"github.com/janmarkuslanger/baseplate/markdown"
 	"github.com/janmarkuslanger/baseplate/plugin"
 )
 
@@ -50,7 +51,7 @@ func coreBlocks() []content.Block {
 			if d["level"] == "h3" {
 				prefix = "### "
 			}
-			return prefix + markup.EscapeText(str(d["text"]))
+			return prefix + markdown.EscapeText(str(d["text"]))
 		}},
 		{Name: "richtext", Label: "block.richtext", Fields: []content.Field{
 			{Name: "html", Label: "block.richtext.html", Kind: RichText, Required: true},
@@ -60,16 +61,16 @@ func coreBlocks() []content.Block {
 			{Name: "alt", Label: "block.image.alt", Kind: Text, Help: "block.image.alt.help"},
 			{Name: "caption", Label: "block.image.caption", Kind: Text},
 		}, Markdown: func(d map[string]any) string {
-			return "![" + markup.EscapeText(str(d["alt"])) + "](" + markup.EscapeURL(str(d["src"])) + ")"
+			return "![" + markdown.EscapeText(str(d["alt"])) + "](" + markdown.EscapeURL(str(d["src"])) + ")"
 		}},
 		{Name: "cta", Label: "block.cta", Fields: []content.Field{
 			{Name: "text", Label: "block.cta.text", Kind: Textarea},
 			{Name: "label", Label: "block.cta.label", Kind: Text, Required: true},
 			{Name: "href", Label: "block.cta.href", Kind: URL, Required: true},
 		}, Markdown: func(d map[string]any) string {
-			md := "[" + markup.EscapeText(str(d["label"])) + "](" + markup.EscapeURL(str(d["href"])) + ")"
+			md := "[" + markdown.EscapeText(str(d["label"])) + "](" + markdown.EscapeURL(str(d["href"])) + ")"
 			if t := str(d["text"]); t != "" {
-				md = markup.EscapeText(t) + "\n\n" + md
+				md = markdown.EscapeText(t) + "\n\n" + md
 			}
 			return md
 		}},
@@ -79,7 +80,7 @@ func coreBlocks() []content.Block {
 			{Name: "children", Label: "block.article.children", Kind: Blocks},
 		}, Markdown: func(d map[string]any) string {
 			if t := str(d["title"]); t != "" {
-				return "## " + markup.EscapeText(t)
+				return "## " + markdown.EscapeText(t)
 			}
 			return ""
 		}},

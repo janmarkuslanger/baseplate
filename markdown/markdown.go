@@ -1,4 +1,8 @@
-package markup
+// Package markdown escapes plain values for Markdown output, such as the
+// content.Block Markdown funcs behind the .md page variants and llms.txt.
+// Values from editors must go through it, or a title like "About [x](y)"
+// becomes a link and "<script>" raw HTML.
+package markdown
 
 import (
 	"regexp"

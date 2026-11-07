@@ -21,6 +21,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/markup"
+	"github.com/janmarkuslanger/baseplate/markdown"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -248,9 +249,9 @@ func (r *Renderer) blocks(items any, page *Page) (template.HTML, error) {
 // Markdown renders a page as Markdown for the .md variant.
 func (r *Renderer) Markdown(p *Page) string {
 	var b strings.Builder
-	b.WriteString("# " + markup.EscapeText(fmt.Sprint(p.Data["title"])) + "\n\n")
+	b.WriteString("# " + markdown.EscapeText(fmt.Sprint(p.Data["title"])) + "\n\n")
 	if p.Meta.Description != "" {
-		b.WriteString("> " + markup.EscapeText(p.Meta.Description) + "\n\n")
+		b.WriteString("> " + markdown.EscapeText(p.Meta.Description) + "\n\n")
 	}
 	r.markdownFields(&b, p.Type.Fields, p.Data)
 	return strings.TrimSpace(b.String()) + "\n"
