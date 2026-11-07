@@ -1,7 +1,13 @@
 package fields
 
 import (
+	"context"
+	"net/url"
+	"strings"
+
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/entries"
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
 	"github.com/janmarkuslanger/baseplate/settings"
 )
@@ -72,7 +78,7 @@ func (Core) Register(r *plugin.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return r.ContentType(content.Type{
+	if err := r.ContentType(content.Type{
 		Name: SettingsType, Label: "type.settings", LabelPlural: "type.settings.plural", Singleton: true, TitleField: settings.SiteName,
 		Fields: []content.Field{
 			{Name: settings.SiteName, Label: "settings.siteName", Kind: Text, Required: true},
@@ -84,7 +90,37 @@ func (Core) Register(r *plugin.Registry) error {
 			{Name: settings.LLMSTxt, Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
 			{Name: settings.LLMSContent, Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	entries.BeforeSave.On(r, checkURLs)
+	return nil
+}
+
+// checkURLs enforces what the URL kind cannot know from the field alone:
+// the base URL is absolute, and a canonical is absolute or site-relative.
+func checkURLs(_ context.Context, e *entries.Event) error {
+	if e.Type.Name == SettingsType {
+		if v := str(e.Entry.Data[settings.BaseURL]); v != "" && !settings.ValidBaseURL(v) {
+			return i18n.M("validation.baseURL")
+		}
+	}
+	seo, _ := e.Entry.Data["seo"].(map[string]any)
+	if v := str(seo["canonical"]); v != "" && !ValidCanonical(v) {
+		return i18n.M("validation.canonical")
+	}
+	return nil
+}
+
+// ValidCanonical reports whether s can be a canonical URL: absolute
+// http(s), or a path from the site root ("/other/") that the build
+// resolves against the base URL.
+func ValidCanonical(s string) bool {
+	if strings.HasPrefix(s, "/") {
+		return !strings.HasPrefix(s, "//")
+	}
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 func str(v any) string { s, _ := v.(string); return s }

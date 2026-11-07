@@ -42,6 +42,10 @@ type Builder struct {
 // ErrBaseURLMissing means the settings have no base URL yet.
 var ErrBaseURLMissing = i18n.Key("build.baseURLMissing")
 
+// ErrBaseURLInvalid means the base URL is not an absolute http(s) URL
+// (saved before the admin validated it).
+var ErrBaseURLInvalid = i18n.Key("build.baseURLInvalid")
+
 // MsgPublicConflict is the key of the error for a public file whose path the
 // build already uses (argument: the path).
 const MsgPublicConflict = "build.publicConflict"
@@ -82,6 +86,9 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	}
 	if cfg.BaseURL == "" {
 		return Result{}, ErrBaseURLMissing
+	}
+	if !settings.ValidBaseURL(cfg.BaseURL) {
+		return Result{}, ErrBaseURLInvalid
 	}
 
 	tmp := dist + ".tmp"
@@ -232,7 +239,9 @@ func (s *site) collect() ([]*render.Page, error) {
 		seen[u] = str(p.Data["title"])
 		p.URL, p.AbsURL = u, base+u
 		p.MarkdownURL = markdownURL(u)
-		p.Meta = meta(p, s.cfg)
+		if p.Meta, err = meta(p, s.cfg); err != nil {
+			return nil, err
+		}
 		if p.Type.Name == fields.PageType {
 			parent, _ := content.RefID(p.Data["parent"])
 			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
@@ -291,13 +300,19 @@ func markdownURL(u string) string {
 	return strings.TrimSuffix(u, "/") + ".md"
 }
 
-func meta(p *render.Page, cfg settings.Settings) render.Meta {
+func meta(p *render.Page, cfg settings.Settings) (render.Meta, error) {
 	seo, _ := p.Data["seo"].(map[string]any)
 	title := str(p.Data["title"])
 	m := render.Meta{
 		Title:       cmp.Or(str(seo["metaTitle"]), title),
 		Description: str(seo["metaDescription"]),
-		Canonical:   cmp.Or(str(seo["canonical"]), p.AbsURL),
+		Canonical:   p.AbsURL,
+	}
+	if c := str(seo["canonical"]); c != "" {
+		if !fields.ValidCanonical(c) { // saved before the admin validated it
+			return m, i18n.M("build.canonicalInvalid", p.URL, c)
+		}
+		m.Canonical = absolute(cfg.BaseURL, c)
 	}
 	if site := cfg.SiteName; site != "" && str(seo["metaTitle"]) == "" && title != site {
 		m.Title = title + " | " + site
@@ -313,7 +328,7 @@ func meta(p *render.Page, cfg settings.Settings) render.Meta {
 	m.OGTitle = cmp.Or(str(seo["ogTitle"]), m.Title)
 	m.OGDescription = cmp.Or(str(seo["ogDescription"]), m.Description)
 	m.OGImage = absolute(cfg.BaseURL, cmp.Or(str(seo["ogImage"]), cfg.DefaultOGImage))
-	return m
+	return m, nil
 }
 
 func (s *site) renderPage(p *render.Page) error {
@@ -340,7 +355,8 @@ func (s *site) outputs(pages []*render.Page) error {
 			continue
 		}
 		data.Indexable = append(data.Indexable, p)
-		if seo, _ := p.Data["seo"].(map[string]any); seo["sitemapExclude"] != true && str(seo["canonical"]) == "" {
+		// A canonical pointing at the page itself keeps it in the sitemap.
+		if seo, _ := p.Data["seo"].(map[string]any); seo["sitemapExclude"] != true && p.Meta.Canonical == p.AbsURL {
 			data.Sitemap = append(data.Sitemap, p)
 		}
 	}

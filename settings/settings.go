@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 	_ "time/tzdata" // time zones also on hosts without zoneinfo
@@ -28,6 +29,15 @@ const (
 	LLMSContent    = "llmsContent"
 	Timezone       = "timezone"
 )
+
+// ValidBaseURL reports whether s can be the site's base URL: an absolute
+// http(s) URL without credentials, query or fragment. Canonicals, the
+// sitemap and robots.txt are built from it and must be absolute.
+func ValidBaseURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" &&
+		u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
+}
 
 // DefaultTimezone is used when the settings name none.
 const DefaultTimezone = "Europe/Berlin"

@@ -39,6 +39,18 @@ func TestFromData(t *testing.T) {
 	}
 }
 
+func TestValidBaseURL(t *testing.T) {
+	for in, want := range map[string]bool{
+		"https://a.test": true, "http://a.test/sub": true, " https://a.test/ ": true,
+		"": false, "/": false, "/site": false, "a.test": false, "mailto:a@a.test": false, "ftp://a.test": false,
+		"https://": false, "https://a.test/?x=1": false, "https://a.test/#top": false, "https://u:p@a.test": false,
+	} {
+		if got := settings.ValidBaseURL(in); got != want {
+			t.Errorf("%q: %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestLocation(t *testing.T) {
 	for in, want := range map[string]string{"": "Europe/Berlin", "America/New_York": "America/New_York", "Mars/Olympus": "Europe/Berlin"} {
 		if got := settings.FromData(map[string]any{"timezone": in}).Location.String(); got != want {
