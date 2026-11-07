@@ -3,7 +3,6 @@ package build
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -23,9 +22,6 @@ func writeSite(t *testing.T, dir, version string) {
 // A web server serving dist (or the preview at /) must always find a
 // site: replacing it may never leave a moment without dist.
 func TestSwapNeverLeavesDistMissing(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		t.Skip("no atomic exchange on " + runtime.GOOS + "; renameSwap leaves a short gap")
-	}
 	root := t.TempDir()
 	dist, tmp := filepath.Join(root, "dist"), filepath.Join(root, "dist.tmp")
 	writeSite(t, dist, "v0")

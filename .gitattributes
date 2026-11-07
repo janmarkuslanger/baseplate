@@ -1,3 +1,0 @@
-# Embedded templates and catalogs are output byte for byte; a Windows
-# checkout must not turn their line endings into CRLF.
-* text=auto eol=lf
