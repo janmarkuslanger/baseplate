@@ -60,11 +60,21 @@ type Result struct {
 
 // Build renders the site into a temporary directory and swaps it into
 // DistDir only on success, so a failed build never leaves a broken site.
-// Concurrent calls are serialized.
+// Concurrent calls are serialized, across processes too (see lockDist).
 func (b *Builder) Build(ctx context.Context) (Result, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	start := time.Now()
+
+	dist, err := distTarget(b.DistDir)
+	if err != nil {
+		return Result{}, err
+	}
+	unlock, err := lockDist(ctx, dist)
+	if err != nil {
+		return Result{}, err
+	}
+	defer unlock()
 
 	cfg, err := settings.Load(ctx, b.Reg.Store)
 	if err != nil {
@@ -74,8 +84,6 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		return Result{}, ErrBaseURLMissing
 	}
 
-	// Clean first: with "dist/" the .tmp/.old paths would land inside dist.
-	dist := filepath.Clean(b.DistDir)
 	tmp := dist + ".tmp"
 	if err := os.RemoveAll(tmp); err != nil {
 		return Result{}, err
@@ -101,7 +109,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 
-	if err := plugin.BuildAfter.Run(ctx, b.Reg, &plugin.BuildEvent{DistDir: dist, Pages: len(pages)}); err != nil && b.Reg.Logger != nil {
+	if err := plugin.BuildAfter.Run(ctx, b.Reg, &plugin.BuildEvent{DistDir: filepath.Clean(b.DistDir), Pages: len(pages)}); err != nil && b.Reg.Logger != nil {
 		b.Reg.Logger.Error("build hook", "err", err)
 	}
 	return Result{Pages: len(pages), Duration: time.Since(start), Finished: time.Now()}, nil
@@ -143,25 +151,6 @@ func (b *Builder) copyAssets(out string) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// swap replaces dist with tmp. If that fails, the previous site is put back.
-func swap(tmp, dist string) error {
-	old := dist + ".old"
-	if err := os.RemoveAll(old); err != nil {
-		return err
-	}
-	if err := os.Rename(dist, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	if err := os.Rename(tmp, dist); err != nil {
-		if rerr := os.Rename(old, dist); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-			return errors.Join(err, fmt.Errorf("restore previous site: %w", rerr))
-		}
-		return err
-	}
-	os.RemoveAll(old) // the new site is live; a leftover is removed by the next build
 	return nil
 }
 
