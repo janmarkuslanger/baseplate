@@ -25,12 +25,15 @@ import (
 const MaxBodySize = 64 << 20
 
 const (
-	CookieName  = "bp_session"
-	sessionTTL  = 14 * 24 * time.Hour
-	argonTime   = 2
-	argonMemory = 64 * 1024
-	argonPar    = 2
-	argonKeyLen = 32
+	CookieName = "bp_session"
+	// LoginCSRFCookie carries the login form's CSRF token (double submit:
+	// the form field must match the cookie).
+	LoginCSRFCookie = "bp_login_csrf"
+	sessionTTL      = 14 * 24 * time.Hour
+	argonTime       = 2
+	argonMemory     = 64 * 1024
+	argonPar        = 2
+	argonKeyLen     = 32
 	// maxHashing bounds concurrent password checks at login. Each needs
 	// argonMemory (64 MiB), so a login flood cannot exhaust memory.
 	maxHashing = 4
@@ -142,6 +145,31 @@ func (m *Manager) acquire(ctx context.Context) (release func(), err error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// LoginCSRF returns the CSRF token for the login form and sets it as a
+// cookie. An existing token is kept, so several open login tabs work.
+func (m *Manager) LoginCSRF(w http.ResponseWriter, r *http.Request) string {
+	if c, err := r.Cookie(LoginCSRFCookie); err == nil && c.Value != "" {
+		return c.Value
+	}
+	tok := token()
+	http.SetCookie(w, &http.Cookie{
+		Name: LoginCSRFCookie, Value: tok, Path: "/admin/login",
+		HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: m.SecureCookies || r.TLS != nil,
+	})
+	return tok
+}
+
+// CheckLoginCSRF reports whether the login form's csrf field matches the
+// cookie set by LoginCSRF. It stops other sites from logging a visitor
+// into an attacker's account.
+func (m *Manager) CheckLoginCSRF(r *http.Request) bool {
+	c, err := r.Cookie(LoginCSRFCookie)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(r.FormValue("csrf")), []byte(c.Value)) == 1
 }
 
 // SetCookie sends the session cookie.
