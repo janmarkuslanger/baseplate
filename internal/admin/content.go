@@ -282,9 +282,6 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	if res.Changed {
-		a.contentChanged()
-	}
 	e := res.Entry
 	fl := "saved"
 	if e.Status == storage.StatusPublished && !t.Singleton {
@@ -303,7 +300,7 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	changed, err := a.Reg.Entries.Delete(r.Context(), t.Name, id)
+	_, err := a.Reg.Entries.Delete(r.Context(), t.Name, id)
 	if errors.Is(err, entries.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -321,9 +318,6 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.fail(w, err)
 		return
-	}
-	if changed {
-		a.contentChanged()
 	}
 	http.Redirect(w, r, "/admin/c/"+t.Name+"?flash=deleted", http.StatusSeeOther)
 }

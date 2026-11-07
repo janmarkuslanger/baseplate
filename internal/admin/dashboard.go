@@ -55,15 +55,35 @@ func (a *Admin) contentChanged() {
 	}
 }
 
-// autoBuild runs one build per pending request, for the app's lifetime.
-func (a *Admin) autoBuild() {
-	for range a.rebuild {
-		res, err := a.Builder.Build(context.Background())
+// autoBuild runs one build per pending request until Close.
+func (a *Admin) autoBuild(ctx context.Context) {
+	defer close(a.buildsDone)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-a.rebuild:
+		}
+		res, err := a.Builder.Build(ctx)
+		if ctx.Err() != nil {
+			return // stopped by Close; the build was cut short on purpose
+		}
 		if err != nil {
 			a.Logger.Error("auto build", "err", err)
 		}
 		a.recordBuild(res, err)
 	}
+}
+
+// Close stops background builds and waits for a running one, so the store
+// can be closed afterwards.
+func (a *Admin) Close() {
+	a.closeOnce.Do(func() {
+		if a.stopBuilds != nil {
+			a.stopBuilds()
+			<-a.buildsDone
+		}
+	})
 }
 
 func (a *Admin) build(w http.ResponseWriter, r *http.Request) {

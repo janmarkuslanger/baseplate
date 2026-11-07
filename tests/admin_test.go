@@ -38,9 +38,16 @@ type client struct {
 // newTestApp starts a server with an admin user; it returns the dist dir.
 func newTestApp(t *testing.T, plugins ...plugin.Plugin) (string, *client) {
 	t.Helper()
+	_, dist, c := startApp(t, io.Discard, plugins...)
+	return dist, c
+}
+
+// startApp is newTestApp that also returns the app and logs to logs.
+func startApp(t *testing.T, logs io.Writer, plugins ...plugin.Plugin) (*baseplate.App, string, *client) {
+	t.Helper()
 	dir := t.TempDir()
 	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Theme: testTheme,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		Logger: slog.New(slog.NewTextHandler(logs, nil))})
 	app.Use(fields.CoreBlocks{})
 	app.Use(plugins...)
 	var out bytes.Buffer
@@ -56,7 +63,7 @@ func newTestApp(t *testing.T, plugins ...plugin.Plugin) (string, *client) {
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
 	c := &client{t: t, srv: srv, http: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
-	return filepath.Join(dir, "dist"), c
+	return app, filepath.Join(dir, "dist"), c
 }
 
 func (c *client) do(method, path string, form url.Values) (*http.Response, string) {

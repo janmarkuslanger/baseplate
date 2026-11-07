@@ -108,7 +108,7 @@ Database migrations run automatically on the next start.
 | `BASEPLATE_DIST_DIR` | `./dist` | static build output; a symlink is followed. The build writes `<dir>.tmp`, `<dir>.old` and `<dir>.lock` next to it, and concurrent builds (e.g. `serve` and a cron `build`) wait for each other |
 | `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail; without a host, mails are only logged |
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
-| `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes |
+| `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes (in the admin or through `Services.Entries`) |
 | `BASEPLATE_ADMIN_LOCALE` | `de` | admin language (catalogs in [`i18n/locales`](i18n/locales)) |
 | `BASEPLATE_TRUSTED_PROXY_HEADER` | off | e.g. `X-Forwarded-For`; client IP for rate limits, taken from the last address in the header. Only set it behind exactly one proxy that sets or appends the header |
 

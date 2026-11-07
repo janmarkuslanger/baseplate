@@ -254,8 +254,13 @@ func (a *App) Setup(ctx context.Context) error {
 	return a.admin.Init()
 }
 
-// Close releases the storage opened by Setup.
-func (a *App) Close() error { return a.Registry.Store.Close() }
+// Close stops background builds and releases the storage opened by Setup.
+func (a *App) Close() error {
+	if a.admin != nil {
+		a.admin.Close()
+	}
+	return a.Registry.Store.Close()
+}
 
 // Handler returns the HTTP handler of the server: admin, media, plugin
 // routes, and a preview of the last build at /.
