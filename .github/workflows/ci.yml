@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # New advisories appear without code changes; check weekly.
+  schedule:
+    - cron: "17 5 * * 1"
 
 permissions:
   contents: read
@@ -24,6 +27,17 @@ jobs:
       - run: go test -race ./...
       - name: build without cgo (any host)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./examples/site
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Fails on vulnerabilities the code can reach, in dependencies and
+      # in the standard library of the pinned toolchain.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   c4-model:
     runs-on: ubuntu-latest
