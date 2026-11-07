@@ -7,6 +7,7 @@ import (
 	stdhtml "html"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -327,6 +328,38 @@ func TestRelationOptions(t *testing.T) {
 	}
 	if _, ok := refs["page"]; !ok {
 		t.Error("core relation (parent page) missing")
+	}
+}
+
+// The media page shows only known upload errors, never text from the URL.
+func TestMediaUploadError(t *testing.T) {
+	_, c := newTestApp(t)
+	c.login()
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	mw.WriteField("csrf", c.csrf)
+	fw, _ := mw.CreateFormFile("file", "tool.exe")
+	fw.Write([]byte("MZ"))
+	mw.Close()
+	req, _ := http.NewRequest("POST", c.srv.URL+"/admin/media", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	res, err := c.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	loc := res.Header.Get("Location")
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "/admin/media?error=") {
+		t.Fatalf("rejected upload: %d %s", res.StatusCode, loc)
+	}
+	if _, html := c.do("GET", loc, nil); !strings.Contains(html, "Dateityp nicht erlaubt") {
+		t.Errorf("upload error not shown:\n%s", html)
+	}
+
+	_, html := c.do("GET", "/admin/media?error="+url.QueryEscape("Ihr Konto ist gesperrt, rufen Sie 0900 an"), nil)
+	if strings.Contains(html, "gesperrt") {
+		t.Errorf("arbitrary text from the URL shown as a message:\n%s", html)
 	}
 }
 

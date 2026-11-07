@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 )
 
@@ -15,8 +16,20 @@ func (a *Admin) mediaPage(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	a.render(w, r, http.StatusOK, a.pages["media"], view{Title: a.t("nav.media"), Active: "media", Flash: r.URL.Query().Get("error"), Page: files})
+	var flash string
+	if k := i18n.Key(r.URL.Query().Get("error")); uploadErrors[k] {
+		flash = a.tr(k)
+	}
+	a.render(w, r, http.StatusOK, a.pages["media"], view{Title: a.t("nav.media"), Active: "media", Flash: flash, Page: files})
 }
+
+// uploadErrors are the messages the upload redirect may show on the media
+// page; the query carries the key, so links cannot show arbitrary text.
+var uploadErrors = map[i18n.Key]bool{
+	errNoFile: true, media.ErrType: true, media.ErrSize: true, media.ErrContent: true,
+}
+
+const errNoFile = i18n.Key("media.error.noFile")
 
 func (a *Admin) mediaJSON(w http.ResponseWriter, r *http.Request) {
 	files, err := a.Media.List()
@@ -33,14 +46,14 @@ func (a *Admin) mediaJSON(w http.ResponseWriter, r *http.Request) {
 
 func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 	wantsJSON := strings.Contains(r.Header.Get("Accept"), "application/json")
-	respondErr := func(msg string) {
+	respondErr := func(k i18n.Key) {
 		if wantsJSON {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": msg})
+			json.NewEncoder(w).Encode(map[string]string{"error": a.tr(k)})
 			return
 		}
-		http.Redirect(w, r, "/admin/media?error="+urlQueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/media?error="+urlQueryEscape(string(k)), http.StatusSeeOther)
 	}
 	file, hdr, err := r.FormFile("file")
 	if r.MultipartForm != nil {
@@ -49,14 +62,15 @@ func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 		defer r.MultipartForm.RemoveAll()
 	}
 	if err != nil {
-		respondErr(a.t("media.error.noFile"))
+		respondErr(errNoFile)
 		return
 	}
 	defer file.Close()
 	url, err := a.Media.Save(file, hdr.Filename)
 	if err != nil {
-		if errors.Is(err, media.ErrType) || errors.Is(err, media.ErrSize) || errors.Is(err, media.ErrContent) {
-			respondErr(a.tr(err))
+		var k i18n.Key
+		if errors.As(err, &k) && uploadErrors[k] {
+			respondErr(k)
 			return
 		}
 		a.fail(w, err)
