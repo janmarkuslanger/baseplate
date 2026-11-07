@@ -88,7 +88,10 @@ func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 		if err := s.renames(ctx, q, l); err != nil {
 			return err
 		}
-		return s.createMissing(ctx, q, l)
+		if err := s.createMissing(ctx, q, l); err != nil {
+			return err
+		}
+		return s.checkStoredKinds(ctx, q, l)
 	})
 }
 

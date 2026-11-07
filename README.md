@@ -236,7 +236,7 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 | rename field | `content.Field{Name: "summary", RenamedFrom: "teaser", ...}` — runs once; remove `RenamedFrom` before giving a new field the old name |
 | anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names |
 | remove field | remove it; its column, component rows and relations stay, also when the entry is saved, so re-adding the field brings the data back |
-| change kind | startup error — rename the field and migrate the data |
+| change kind | startup error while data is stored under the old kind (also: another relation `Ref`, `Many` → single with several targets, list → group with several items) — rename the field and migrate the data |
 
 </details>
 
