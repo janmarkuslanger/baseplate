@@ -118,7 +118,7 @@ func TestBuild(t *testing.T) {
 	}
 
 	md := read(t, b, "index.md")
-	if !strings.Contains(md, "# Willkommen") || !strings.Contains(md, "## Hallo <Welt>") || !strings.Contains(md, "Text **fett**") {
+	if !strings.Contains(md, "# Willkommen") || !strings.Contains(md, `## Hallo \<Welt\>`) || !strings.Contains(md, "Text **fett**") {
 		t.Errorf("markdown:\n%s", md)
 	}
 

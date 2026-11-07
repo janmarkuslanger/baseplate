@@ -29,7 +29,7 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 		}
 	}
 	if n.Type == html.TextNode {
-		b.WriteString(n.Data)
+		b.WriteString(EscapeText(n.Data))
 		return
 	}
 	if n.Type != html.ElementNode {
@@ -55,13 +55,13 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 		children(listPrefix)
 		b.WriteString("_")
 	case atom.Code:
-		b.WriteString("`")
-		children(listPrefix)
-		b.WriteString("`")
+		code := textContent(n)
+		fence := strings.Repeat("`", longestRun(code, '`')+1)
+		b.WriteString(fence + code + fence)
 	case atom.Pre:
-		b.WriteString("```\n")
-		children(listPrefix)
-		b.WriteString("\n```\n\n")
+		code := textContent(n)
+		fence := strings.Repeat("`", max(3, longestRun(code, '`')+1))
+		b.WriteString(fence + "\n" + code + "\n" + fence + "\n\n")
 	case atom.Blockquote:
 		var inner strings.Builder
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -74,7 +74,7 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 	case atom.A:
 		b.WriteString("[")
 		children(listPrefix)
-		b.WriteString("](" + attr(n, "href") + ")")
+		b.WriteString("](" + EscapeURL(attr(n, "href")) + ")")
 	case atom.Ul, atom.Ol:
 		i := 1
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -103,6 +103,32 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 	default:
 		children(listPrefix)
 	}
+}
+
+// textContent is the literal text below n (code is not escaped).
+func textContent(n *html.Node) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+	var b strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		b.WriteString(textContent(c))
+	}
+	return b.String()
+}
+
+// longestRun is the length of the longest run of r in s.
+func longestRun(s string, r rune) int {
+	longest, run := 0, 0
+	for _, c := range s {
+		if c != r {
+			run = 0
+			continue
+		}
+		run++
+		longest = max(longest, run)
+	}
+	return longest
 }
 
 func attr(n *html.Node, key string) string {

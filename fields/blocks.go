@@ -50,7 +50,7 @@ func coreBlocks() []content.Block {
 			if d["level"] == "h3" {
 				prefix = "### "
 			}
-			return prefix + str(d["text"])
+			return prefix + markup.EscapeText(str(d["text"]))
 		}},
 		{Name: "richtext", Label: "block.richtext", Fields: []content.Field{
 			{Name: "html", Label: "block.richtext.html", Kind: RichText, Required: true},
@@ -60,16 +60,16 @@ func coreBlocks() []content.Block {
 			{Name: "alt", Label: "block.image.alt", Kind: Text, Help: "block.image.alt.help"},
 			{Name: "caption", Label: "block.image.caption", Kind: Text},
 		}, Markdown: func(d map[string]any) string {
-			return "![" + str(d["alt"]) + "](" + str(d["src"]) + ")"
+			return "![" + markup.EscapeText(str(d["alt"])) + "](" + markup.EscapeURL(str(d["src"])) + ")"
 		}},
 		{Name: "cta", Label: "block.cta", Fields: []content.Field{
 			{Name: "text", Label: "block.cta.text", Kind: Textarea},
 			{Name: "label", Label: "block.cta.label", Kind: Text, Required: true},
 			{Name: "href", Label: "block.cta.href", Kind: URL, Required: true},
 		}, Markdown: func(d map[string]any) string {
-			md := "[" + str(d["label"]) + "](" + str(d["href"]) + ")"
+			md := "[" + markup.EscapeText(str(d["label"])) + "](" + markup.EscapeURL(str(d["href"])) + ")"
 			if t := str(d["text"]); t != "" {
-				md = t + "\n\n" + md
+				md = markup.EscapeText(t) + "\n\n" + md
 			}
 			return md
 		}},
@@ -79,7 +79,7 @@ func coreBlocks() []content.Block {
 			{Name: "children", Label: "block.article.children", Kind: Blocks},
 		}, Markdown: func(d map[string]any) string {
 			if t := str(d["title"]); t != "" {
-				return "## " + t
+				return "## " + markup.EscapeText(t)
 			}
 			return ""
 		}},

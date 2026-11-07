@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+
+	"github.com/janmarkuslanger/baseplate/internal/markup"
 )
 
 // Outputs are the files baseplate generates besides the pages:
@@ -67,6 +69,7 @@ func (r *Renderer) parseOutputs(layers []fs.FS, funcs map[string]any) error {
 			return b.String(), err
 		},
 		"markdown": r.Markdown,
+		"mdtext":   func(v any) string { return markup.EscapeText(fmt.Sprint(v)) },
 		"replace":  strings.ReplaceAll,
 	} {
 		if _, ok := funcs[k]; ok {
