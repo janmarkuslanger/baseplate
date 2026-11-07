@@ -154,7 +154,7 @@ Date fields (`fields.Date`, `fields.DateTime`) store Unix seconds. The admin con
 |---|---|---|
 | `short`, `long`, `time`, `datetime` | `01.05.2024`, `1. Mai 2024`, `09:30`, `1. Mai 2024, 09:30` | English (`05/01/2024`, `May 1, 2024`, …) |
 | `iso`, `isodate` | `2024-05-01T09:30:00+02:00`, `2024-05-01` | same |
-| own | catalog key `date.format.<name>` (Go layout; full month/weekday names `January`/`Monday` are translated, abbreviations `Jan`/`Mon` stay English) | |
+| own | catalog key `date.format.<name>` (Go layout; month and weekday names `January`, `Jan`, `Monday`, `Mon` are translated from the keys `date.month.<1–12>`, `date.month.short.<1–12>`, `date.weekday.<0–6>`, `date.weekday.short.<0–6>`) | |
 
 Language = **Settings → Sprache**; a third argument overrides the zone: `{{date .Data.x "time" "UTC"}}`.
 
