@@ -47,6 +47,7 @@ Public API = every package outside `internal/`. Each package's contract is its p
 | `build` | static site build | `Builder.Build` |
 | `mail` | outgoing mail | `Mailer`, `SMTP`, `LogMailer` |
 | `i18n` | translations | `Bundle`, `Catalog`, `Catalogs`, `M` |
+| `markdown` | escaping for Markdown output (`.md` variants, `llms.txt`, `Block.Markdown`) | `EscapeText`, `EscapeURL` |
 | `plugins/forms` | forms plugin (reference plugin) | `New` |
 | `internal/admin` | admin UI | – |
 | `internal/auth` | users, sessions, CSRF | – |

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/janmarkuslanger/baseplate/markdown"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -29,7 +30,7 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 		}
 	}
 	if n.Type == html.TextNode {
-		b.WriteString(EscapeText(n.Data))
+		b.WriteString(markdown.EscapeText(n.Data))
 		return
 	}
 	if n.Type != html.ElementNode {
@@ -74,7 +75,7 @@ func mdNode(b *strings.Builder, n *html.Node, listPrefix string) {
 	case atom.A:
 		b.WriteString("[")
 		children(listPrefix)
-		b.WriteString("](" + EscapeURL(attr(n, "href")) + ")")
+		b.WriteString("](" + markdown.EscapeURL(attr(n, "href")) + ")")
 	case atom.Ul, atom.Ol:
 		i := 1
 		for c := n.FirstChild; c != nil; c = c.NextSibling {

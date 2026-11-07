@@ -29,7 +29,7 @@
 | Storage | `storage`, `storage/sqlite` | persistence behind an interface |
 | Admin | `internal/admin`, `internal/auth`, `internal/media` | editor UI, login, uploads |
 | Settings | `settings` | typed site settings |
-| Markup | `internal/markup` | HTML sanitizer, HTML → Markdown |
+| Markup | `internal/markup`, `markdown` | HTML sanitizer, HTML → Markdown, Markdown escaping |
 | Build | `build`, `render` | static site + SEO/LLM files |
 | Mail | `mail` | outgoing e-mail |
 
