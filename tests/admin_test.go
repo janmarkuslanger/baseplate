@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	stdhtml "html"
 	"io"
 	"log/slog"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/janmarkuslanger/baseplate"
 	"github.com/janmarkuslanger/baseplate/content"
+	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/plugin"
 )
@@ -368,4 +370,24 @@ type extendPage []content.Field
 func (extendPage) Name() string { return "extend-page" }
 func (e extendPage) Register(r *plugin.Registry) error {
 	return r.Extend(fields.PageType, e...)
+}
+
+// "Verwendet in" names the referring type and field in the admin language,
+// not by their catalog keys.
+func TestUsedInLabels(t *testing.T) {
+	app, _, c := startApp(t, io.Discard)
+	c.login()
+	ctx := context.Background()
+	parent, err := app.Registry.Entries.Save(ctx, entries.Save{Type: fields.PageType, Data: map[string]any{"title": "Eltern", "slug": "eltern"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.Registry.Entries.Save(ctx, entries.Save{Type: fields.PageType, Data: map[string]any{"title": "Kind", "slug": "kind", "parent": parent.Entry.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	_, html := c.do("GET", fmt.Sprintf("/admin/c/page/%d", parent.Entry.ID), nil)
+	m := regexp.MustCompile(`(?s)<ul class="used-in">.*?</ul>`).FindString(html)
+	if !strings.Contains(m, "· Seite · Übergeordnete Seite") {
+		t.Errorf("used-in list lacks translated labels: %q", m)
+	}
 }

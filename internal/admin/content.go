@@ -113,14 +113,14 @@ func (a *Admin) relationLabel(rt *content.Type, ref storage.Referrer) string {
 	label := func(fs []content.Field) string {
 		for _, f := range fs {
 			if f.Name == ref.Field {
-				return cmp.Or(f.Label, f.Name)
+				return a.t(cmp.Or(f.Label, f.Name))
 			}
 		}
 		return ref.Field
 	}
 	if ref.Block != "" {
 		if b, ok := a.Reg.Schema.Block(ref.Block); ok {
-			return b.Label + " › " + label(b.Fields)
+			return a.t(b.Label) + " › " + label(b.Fields)
 		}
 	}
 	return label(rt.Fields)
@@ -147,7 +147,7 @@ func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []use
 		if !ok {
 			continue
 		}
-		u := usedIn{Type: rt.Label, Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
+		u := usedIn{Type: a.t(rt.Label), Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
 		u.Field = a.relationLabel(rt, ref)
 		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
 			u.Title = fmt.Sprint(a.orDash(src.Data[rt.Title()]))
