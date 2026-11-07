@@ -5,6 +5,7 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"mime"
@@ -34,13 +35,23 @@ type SMTPConfig struct {
 	Username string
 	Password string
 	From     string
+	// ImplicitTLS connects with TLS from the start (SMTPS) instead of
+	// upgrading with STARTTLS. Port 465 always uses it.
+	ImplicitTLS bool
 	// Timeout bounds the whole SMTP exchange (default 30s).
 	Timeout time.Duration
 }
 
-// SMTP sends mail via an SMTP server using STARTTLS when offered. The
-// exchange is bounded by Config.Timeout and aborted when ctx ends.
-type SMTP struct{ Config SMTPConfig }
+// SMTP sends mail via an SMTP server: with implicit TLS on port 465 (or
+// Config.ImplicitTLS), otherwise using STARTTLS when offered. Credentials
+// are only sent over TLS (or to localhost). The exchange is bounded by
+// Config.Timeout and aborted when ctx ends.
+type SMTP struct {
+	Config SMTPConfig
+
+	// roots overrides the system CAs (tests).
+	roots *x509.CertPool
+}
 
 func (s SMTP) Send(ctx context.Context, m Message) error {
 	if len(m.To) == 0 {
@@ -54,8 +65,17 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(c.Host, fmt.Sprint(c.Port)))
+	tlsConf := &tls.Config{ServerName: c.Host, RootCAs: s.roots}
+	addr := net.JoinHostPort(c.Host, fmt.Sprint(c.Port))
+	var conn net.Conn
+	var err error
+	if c.ImplicitTLS || c.Port == 465 {
+		d := tls.Dialer{Config: tlsConf}
+		conn, err = d.DialContext(ctx, "tcp", addr)
+	} else {
+		var d net.Dialer
+		conn, err = d.DialContext(ctx, "tcp", addr)
+	}
 	if err != nil {
 		return fmt.Errorf("mail: dial: %w", err)
 	}
@@ -72,7 +92,7 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	}
 	defer cl.Close()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
-		if err := cl.StartTLS(&tls.Config{ServerName: c.Host}); err != nil {
+		if err := cl.StartTLS(tlsConf); err != nil {
 			return fmt.Errorf("mail: starttls: %w", err)
 		}
 	}

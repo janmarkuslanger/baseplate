@@ -3,7 +3,14 @@ package mail
 import (
 	"bufio"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"log/slog"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
@@ -17,6 +24,11 @@ func fakeSMTP(t *testing.T, stall bool) (port int, got chan string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return serveSMTP(t, ln, stall)
+}
+
+func serveSMTP(t *testing.T, ln net.Listener, stall bool) (port int, got chan string) {
+	t.Helper()
 	t.Cleanup(func() { ln.Close() })
 	got = make(chan string, 1)
 	go func() {
@@ -76,6 +88,61 @@ func TestSMTPSend(t *testing.T) {
 	body := <-got
 	if !strings.Contains(body, "Subject: Hallo\r\n") || !strings.Contains(body, "Zeile 1\r\nZeile 2") {
 		t.Errorf("message: %q", body)
+	}
+}
+
+// tlsListener listens with a fresh self-signed certificate for 127.0.0.1
+// and returns the pool that trusts it.
+func tlsListener(t *testing.T) (net.Listener, *x509.CertPool) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "127.0.0.1"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(cert)
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ln, pool
+}
+
+func TestSMTPImplicitTLS(t *testing.T) {
+	ln, pool := tlsListener(t)
+	port, got := serveSMTP(t, ln, false)
+	m := SMTP{Config: SMTPConfig{Host: "127.0.0.1", Port: port, From: "web@acme.test", ImplicitTLS: true, Timeout: 5 * time.Second}, roots: pool}
+	if err := m.Send(context.Background(), Message{To: []string{"team@acme.test"}, Subject: "Hallo", Text: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if body := <-got; !strings.Contains(body, "Subject: Hallo\r\n") {
+		t.Errorf("message: %q", body)
+	}
+}
+
+func TestSMTPImplicitTLSRejectsUntrustedCert(t *testing.T) {
+	ln, _ := tlsListener(t)
+	port, _ := serveSMTP(t, ln, false)
+	m := SMTP{Config: SMTPConfig{Host: "127.0.0.1", Port: port, From: "web@acme.test", ImplicitTLS: true, Timeout: 5 * time.Second}}
+	if err := m.Send(context.Background(), Message{To: []string{"team@acme.test"}, Text: "x"}); err == nil {
+		t.Fatal("want a certificate error")
 	}
 }
 
