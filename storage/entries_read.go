@@ -278,7 +278,7 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 		return nil, err
 	}
 	var out []Referrer
-	seen := map[string]bool{}
+	seen := map[ref]bool{}
 	for _, r := range refs {
 		table, ownerID, nested := r.table, r.id, false
 		// Walk up from components to the owning entry.
@@ -302,7 +302,7 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 		if !ok {
 			continue
 		}
-		key := fmt.Sprint(table, ownerID, r.field)
+		key := ref{table, ownerID, r.field}
 		if seen[key] {
 			continue
 		}
