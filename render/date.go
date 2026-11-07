@@ -55,16 +55,72 @@ func (r *Renderer) date(v any, format string, zone ...string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("date: unknown format %q", format)
 	}
-	out := t.Format(layout)
-	if strings.Contains(layout, "January") {
-		m, _ := r.text("date.month."+strconv.Itoa(int(t.Month())), t.Month().String())
-		out = strings.Replace(out, t.Month().String(), m, 1)
+	return r.format(t, layout), nil
+}
+
+// dateNames are the month and weekday tokens of a Go layout, long form
+// first. Their catalog keys are prefix + number: "date.month.5",
+// "date.weekday.short.3".
+type dateName struct {
+	token, prefix string
+	month         bool
+}
+
+var dateNames = []dateName{
+	{"January", "date.month.", true},
+	{"Jan", "date.month.short.", true},
+	{"Monday", "date.weekday.", false},
+	{"Mon", "date.weekday.short.", false},
+}
+
+// format is t.Format(layout) with the catalog's month and weekday names.
+// The layout is cut at name tokens; the other parts are formatted by Go
+// and the names are looked up, so a translation never depends on finding
+// Go's English output text.
+func (r *Renderer) format(t time.Time, layout string) string {
+	var out strings.Builder
+	start := 0
+	for i := 0; i < len(layout); {
+		// Go reads "PM"/"pm" as one token; its M never starts a name.
+		if strings.HasPrefix(layout[i:], "PM") || strings.HasPrefix(layout[i:], "pm") {
+			i += 2
+			continue
+		}
+		n, ok := nameAt(layout[i:])
+		if !ok {
+			i++
+			continue
+		}
+		out.WriteString(t.Format(layout[start:i]))
+		num, english := int(t.Weekday()), t.Weekday().String()
+		if n.month {
+			num, english = int(t.Month()), t.Month().String()
+		}
+		if len(n.token) == 3 {
+			english = english[:3]
+		}
+		name, _ := r.text(n.prefix+strconv.Itoa(num), english)
+		out.WriteString(name)
+		i += len(n.token)
+		start = i
 	}
-	if strings.Contains(layout, "Monday") {
-		d, _ := r.text("date.weekday."+strconv.Itoa(int(t.Weekday())), t.Weekday().String())
-		out = strings.Replace(out, t.Weekday().String(), d, 1)
+	out.WriteString(t.Format(layout[start:]))
+	return out.String()
+}
+
+// nameAt reports the name token at the start of s. Like Go's layout
+// parser, a short token followed by a lowercase letter ("Mont") is text.
+func nameAt(s string) (dateName, bool) {
+	for _, n := range dateNames {
+		if !strings.HasPrefix(s, n.token) {
+			continue
+		}
+		if rest := s[len(n.token):]; len(n.token) == 3 && rest != "" && 'a' <= rest[0] && rest[0] <= 'z' {
+			continue
+		}
+		return n, true
 	}
-	return out, nil
+	return dateName{}, false
 }
 
 // text returns the site language's catalog text for key ("de-DE" also

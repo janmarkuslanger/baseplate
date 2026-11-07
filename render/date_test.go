@@ -80,3 +80,51 @@ func TestDate(t *testing.T) {
 		}
 	}
 }
+
+func TestDateNames(t *testing.T) {
+	reg := plugin.NewRegistry(plugin.Services{})
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	layouts := map[string]string{
+		"rfc":     "Mon, 02 Jan 2006",
+		"all":     "Monday Mon January Jan",
+		"literal": "Mont Jan",        // "Mont" is text in Go layouts
+		"ampm":    "3PM Mon",         // the M of PM starts no name
+		"text":    "May: January",    // English names in literal text stay
+		"repeat":  "Jan Jan Mon Mon", // every occurrence is translated
+	}
+	renderer := func(lang string) *Renderer {
+		r, err := New(reg, nil, Options{Lang: lang, Location: berlin})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]string{}
+		for name, layout := range layouts {
+			m["date.format."+name] = layout
+		}
+		r.i18n.Add(i18n.Catalog{Lang: lang, Messages: m})
+		return r
+	}
+	// 2024-05-01 00:30 in Berlin is a Wednesday, 2024-09-01 00:00 a Sunday.
+	const may, sep = int64(1714516200), int64(1725141600)
+	for _, c := range []struct {
+		lang, format string
+		ts           int64
+		want         string
+	}{
+		{"de", "rfc", may, "Mi., 01 Mai 2024"},
+		{"de", "rfc", sep, "So., 01 Sept. 2024"},
+		{"de", "all", may, "Mittwoch Mi. Mai Mai"},
+		{"de", "literal", may, "Mont Mai"},
+		{"de", "ampm", may, "12AM Mi."},
+		{"de", "text", may, "May: Mai"},
+		{"de", "repeat", sep, "Sept. Sept. So. So."},
+		{"de-AT", "rfc", may, "Mi., 01 Mai 2024"},
+		{"fr", "rfc", may, "Wed, 01 May 2024"}, // no catalog: Go's English names
+		{"fr", "all", sep, "Sunday Sun September Sep"},
+	} {
+		got, err := renderer(c.lang).date(c.ts, c.format)
+		if err != nil || got != c.want {
+			t.Errorf("%s %s: %q (%v), want %q", c.lang, c.format, got, err, c.want)
+		}
+	}
+}
