@@ -41,6 +41,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 |---|---|
 | which blocks exist | only registered ones; the generic core blocks (heading, richtext, image, cta, article) are opt-in: `app.Use(fields.CoreBlocks{})`, optionally `CoreBlocks{Only: []string{"heading"}}` |
 | which blocks a field offers | `Field.Blocks`; empty = all registered blocks |
+| blocks only for your own fields | `Block.Restricted`: offered only by fields that name the block in `Field.Blocks`, never by open fields such as the page body (e.g. the navigation's `navitem`, which nests itself) |
 | change it for a field you don't own | `r.AllowBlocks("page", "body", "hero", "faq")`; dotted paths for fields in groups (`"hero.blocks"`) |
 | unknown names | startup error (`Schema.Check`) |
 | Markdown output | `Block.Markdown` renders the block for the `.md` variants and `llms.txt`; nil leaves it out. Escape editor values with `markdown.EscapeText` (text) and `markdown.EscapeURL` (link targets), or a title like `About [x](y)` becomes a link and `<script>` raw HTML |

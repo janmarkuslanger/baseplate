@@ -83,6 +83,10 @@ type Block struct {
 	// Markdown renders the block for the .md page variants and llms.txt
 	// consumers. Nil means the block is left out of the Markdown output.
 	Markdown func(data map[string]any) string
+	// Restricted blocks are offered only by blocks fields that name them in
+	// Field.Blocks (e.g. the items of a plugin's own type), never by fields
+	// that allow all blocks, such as the page body.
+	Restricted bool
 }
 
 // TemplateName returns Template or its default "block/<name>".
