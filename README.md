@@ -232,9 +232,9 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 <details>
 <summary><strong>Drafts and publishing</strong></summary>
 
-- Every entry has a draft; **Entwurf speichern** changes only the draft, so a published entry can be edited without touching the site
-- **Veröffentlichen** copies the draft to the published version, which the build, templates (`entries`), navigations and forms read; **Zurückziehen** removes it and keeps the draft
-- **Vorschau** (routable types) opens the saved draft rendered with the theme, among the published versions of all other entries (`build.Builder.Preview`); nothing is written to `dist/`. Links and assets on the preview point at the built site
+- Every entry has a draft; saving changes only the draft, so a published entry can be edited without touching the site
+- Publishing copies the draft to the published version, which the build, templates (`entries`), navigations and forms read; unpublishing removes it and keeps the draft
+- The preview (routable types) shows the saved draft rendered with the theme, among the published versions of all other entries (`build.Builder.Preview`); nothing is written to `dist/`. Links and assets on the preview point at the built site
 - Singletons such as the settings work the same: saved settings apply once published
 - Plugins write through `Services.Entries` (`Save` with `Publish`, `Unpublish`, `Delete`); `entries.PublishedChanged` fires on publish, unpublish and the delete of a published entry
 - Relations point at the entry (its ID is shared by all versions and locales); the build resolves them to published targets only
