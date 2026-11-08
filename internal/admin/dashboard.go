@@ -28,12 +28,12 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 		if t.Hidden || t.Singleton {
 			continue
 		}
-		_, total, err := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Limit: 1})
+		_, total, err := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Version: storage.Draft, Limit: 1})
 		if err != nil {
 			a.fail(w, err)
 			return
 		}
-		_, pub, _ := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Status: storage.StatusPublished, Limit: 1})
+		_, pub, _ := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Version: storage.Published, Limit: 1})
 		counts = append(counts, typeCount{Type: t, Total: total, Published: pub})
 	}
 	cfg, _ := settings.Load(r.Context(), a.store())

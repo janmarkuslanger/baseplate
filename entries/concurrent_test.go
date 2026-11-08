@@ -76,7 +76,7 @@ func TestConcurrentSavesKeepSlugsUnique(t *testing.T) {
 	if ok != 1 {
 		t.Errorf("%d of 8 concurrent saves of slug %q succeeded, want 1", ok, "team")
 	}
-	list, _, err := regs[0].Store.ListEntries(context.Background(), storage.ListQuery{Type: "page"})
+	list, _, err := regs[0].Store.ListEntries(context.Background(), storage.ListQuery{Type: "page", Version: storage.Draft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestConcurrentFirstSavesOfSingletonStoreOneEntry(t *testing.T) {
 			t.Errorf("every save of a singleton updates its one entry, got %v", err)
 		}
 	}
-	_, total, err := regs[0].Store.ListEntries(context.Background(), storage.ListQuery{Type: "settings"})
+	_, total, err := regs[0].Store.ListEntries(context.Background(), storage.ListQuery{Type: "settings", Version: storage.Draft})
 	if err != nil {
 		t.Fatal(err)
 	}

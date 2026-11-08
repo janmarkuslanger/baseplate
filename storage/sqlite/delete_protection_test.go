@@ -19,7 +19,7 @@ var relatedPost = content.Type{Name: "post", Fields: []content.Field{
 
 func mustCreate(t *testing.T, s *storage.SQLStore, e *storage.Entry) *storage.Entry {
 	t.Helper()
-	if err := s.CreateEntry(context.Background(), e); err != nil {
+	if err := s.SaveDraft(context.Background(), e); err != nil {
 		t.Fatal(err)
 	}
 	return e
@@ -43,7 +43,7 @@ func wantReferenced(t *testing.T, s *storage.SQLStore, typ string, id int64, wan
 			t.Errorf("referrer %d = %+v, want %+v", i, ref.Referrers[i], w)
 		}
 	}
-	if _, err := s.GetEntry(ctx, typ, id); err != nil {
+	if _, err := s.GetEntry(ctx, typ, id, "", storage.Draft); err != nil {
 		t.Errorf("refused delete removed the entry: %v", err)
 	}
 }
@@ -55,14 +55,14 @@ func TestDeleteReferencedEntryIsRefused(t *testing.T) {
 	post := mustCreate(t, s, &storage.Entry{Type: "post", Data: map[string]any{"cats": []any{cat.ID}}})
 
 	wantReferenced(t, s, "category", cat.ID, storage.Referrer{Type: "post", ID: post.ID, Field: "cats"})
-	got, _ := s.GetEntry(ctx, "post", post.ID)
+	got, _ := s.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if cats := got.Data["cats"].([]any); len(cats) != 1 {
 		t.Errorf("refused delete touched the relation: %v", cats)
 	}
 
 	// Removing the relation allows the delete.
 	got.Data["cats"] = []any{}
-	if err := s.UpdateEntry(ctx, got); err != nil {
+	if err := s.SaveDraft(ctx, got); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.DeleteEntry(ctx, "category", cat.ID); err != nil {
@@ -103,7 +103,7 @@ func TestDeleteSelfReferencingEntry(t *testing.T) {
 	s := startWith(t, filepath.Join(t.TempDir(), "db.sqlite"), categoryType, relatedPost)
 	post := mustCreate(t, s, &storage.Entry{Type: "post", Data: map[string]any{}})
 	post.Data["related"] = []any{post.ID}
-	if err := s.UpdateEntry(ctx, post); err != nil {
+	if err := s.SaveDraft(ctx, post); err != nil {
 		t.Fatal(err)
 	}
 	if refs, err := s.Referrers(ctx, "post", post.ID); err != nil || len(refs) != 0 {
@@ -137,7 +137,7 @@ func TestRemovedRelationFieldDoesNotBlockDelete(t *testing.T) {
 	s.Close()
 
 	s = startWith(t, path, categoryType, relatedPost)
-	got, _ := s.GetEntry(ctx, "post", post.ID)
+	got, _ := s.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if cats := got.Data["cats"].([]any); len(cats) != 0 {
 		t.Errorf("relation to the deleted category survived: %v", cats)
 	}

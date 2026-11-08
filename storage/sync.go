@@ -110,7 +110,16 @@ func (s *SQLStore) createMissing(ctx context.Context, q querier, l *layout) erro
 			if _, err := q.ExecContext(ctx, createTableSQL(d, t)); err != nil {
 				return fmt.Errorf("create %s: %w", t.Name, err)
 			}
+			if err := createVersionIndex(ctx, q, t); err != nil {
+				return err
+			}
 			continue
+		}
+		if _, ok := existing["document_id"]; t.Entry && !ok {
+			return fmt.Errorf("storage: table %s has the layout of baseplate v0.3 or older (no draft/published versions); this version cannot read it, start with a new database", t.Name)
+		}
+		if err := createVersionIndex(ctx, q, t); err != nil {
+			return err
 		}
 		for _, c := range t.Columns {
 			want := d.types[c.Storage]
@@ -133,9 +142,13 @@ func createTableSQL(d dialectSQL, t *table) string {
 	cols := []string{"id " + d.idPK}
 	if t.Entry {
 		cols = append(cols,
-			"slug "+d.slugType+" NOT NULL DEFAULT ''",
-			"status VARCHAR(20) NOT NULL DEFAULT 'draft'",
+			"document_id BIGINT NOT NULL",
 			"locale VARCHAR(20) NOT NULL DEFAULT ''",
+			"version VARCHAR(20) NOT NULL",
+			// Drafts count their saves; a published row keeps the
+			// revision of the draft it was published from.
+			"revision BIGINT NOT NULL",
+			"slug "+d.slugType+" NOT NULL DEFAULT ''",
 			"created_at BIGINT NOT NULL",
 			"updated_at BIGINT NOT NULL",
 		)
@@ -144,6 +157,21 @@ func createTableSQL(d dialectSQL, t *table) string {
 		cols = append(cols, d.quote(c.Name)+" "+d.types[c.Storage]+" NULL")
 	}
 	return fmt.Sprintf("CREATE TABLE %s (\n\t%s\n)", t.Name, strings.Join(cols, ",\n\t"))
+}
+
+// versionIndex names the index that keeps one row per document, locale
+// and version.
+func versionIndex(table string) string { return table + "_version" }
+
+func createVersionIndex(ctx context.Context, q querier, t *table) error {
+	if !t.Entry {
+		return nil
+	}
+	idx := versionIndex(t.Name)
+	if _, err := q.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS `+idx+` ON `+t.Name+` (document_id, locale, version)`); err != nil {
+		return fmt.Errorf("create %s: %w", idx, err)
+	}
+	return nil
 }
 
 func sameType(have, want string) bool {

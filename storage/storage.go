@@ -50,37 +50,64 @@ type Migration struct {
 	SQL  map[Dialect]string
 }
 
-// Entry statuses.
+// Version is one of the two rows an entry can have per locale: the draft
+// editors work on and the published copy the site is built from.
+type Version string
+
 const (
-	StatusDraft     = "draft"
-	StatusPublished = "published"
+	Draft     Version = "draft"
+	Published Version = "published"
 )
 
-// Entry is one content item of a content type. Data holds field values:
-// scalars, maps for groups, lists of maps for lists and blocks (block items
-// carry "_type"), int64 for single relations and []any of int64 for many.
+// Entry is one version of a content item in one locale. ID is the
+// document ID, shared by all locales and versions of the item; relations
+// point at it. Data holds field values: scalars, maps for groups, lists of
+// maps for lists and blocks (block items carry "_type"), int64 document
+// IDs for single relations and []any of them for many.
 type Entry struct {
-	ID        int64
-	Type      string
-	Slug      string
-	Status    string
-	Locale    string
+	ID      int64
+	Type    string
+	Slug    string
+	Locale  string
+	Version Version
+	// PublishedAt is when the entry was last published in its locale; zero
+	// if it is not published.
+	PublishedAt time.Time
+	// Changed is set on drafts saved since they were last published (or
+	// never published).
+	Changed   bool
 	Data      map[string]any
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-// ListQuery filters ListEntries. Type is required; other zero values mean
-// "no filter".
+// Published reports whether the entry has a published version.
+func (e *Entry) Published() bool { return !e.PublishedAt.IsZero() }
+
+// ListQuery filters ListEntries. Type and Version are required; Locale is
+// matched exactly ("" is the site language). Other zero values mean "no
+// filter".
 type ListQuery struct {
-	Type   string
-	Status string
-	Search string
-	Limit  int
-	Offset int
+	Type      string
+	Version   Version
+	Locale    string
+	Published PublishedFilter
+	Search    string
+	Limit     int
+	Offset    int
 }
 
-// Referrer is an entry whose relation field points at another entry. Field
+// PublishedFilter keeps entries by whether they have a published version
+// in their locale; useful on drafts.
+type PublishedFilter uint8
+
+const (
+	AnyPublished PublishedFilter = iota
+	OnlyPublished
+	OnlyUnpublished
+)
+
+// Referrer is a document whose relation field points at another one. Field
 // is the relation field; Nested is true when the field sits inside a
 // component (group, list item or block) of the entry; Block names the block
 // that holds the field, if any.
@@ -136,19 +163,27 @@ type Tables interface {
 }
 
 // Entries stores content. Plugins write through entries.Service, which
-// adds validation and hooks on top.
+// adds validation and hooks on top. Editing happens on the draft; Publish
+// copies it to the published version the site is built from.
 type Entries interface {
-	CreateEntry(ctx context.Context, e *Entry) error
-	UpdateEntry(ctx context.Context, e *Entry) error
-	GetEntry(ctx context.Context, typ string, id int64) (*Entry, error)
-	GetEntryBySlug(ctx context.Context, typ, slug string) (*Entry, error)
+	// SaveDraft creates or updates the draft of e.Locale. ID 0 creates a
+	// new document and sets e.ID; an ID of an existing document without a
+	// draft in e.Locale adds that locale.
+	SaveDraft(ctx context.Context, e *Entry) error
+	// Publish copies the draft to the published version, replacing it.
+	Publish(ctx context.Context, typ string, id int64, locale string) error
+	// Unpublish removes the published version; the draft stays.
+	Unpublish(ctx context.Context, typ string, id int64, locale string) error
+	GetEntry(ctx context.Context, typ string, id int64, locale string, v Version) (*Entry, error)
+	GetEntryBySlug(ctx context.Context, typ, slug, locale string, v Version) (*Entry, error)
 	// ListEntries returns one page of matching entries and the total count.
 	ListEntries(ctx context.Context, q ListQuery) ([]Entry, int, error)
-	// DeleteEntry removes the entry, its components and its relations. It
-	// fails with *ReferencedError while other entries point at it.
+	// DeleteEntry removes the document (all locales and versions), its
+	// components and its relations. It fails with *ReferencedError while
+	// other entries point at it.
 	DeleteEntry(ctx context.Context, typ string, id int64) error
-	// Referrers lists other entries whose relation fields (as the schema
-	// declares them) point at the given entry.
+	// Referrers lists other documents whose relation fields (as the schema
+	// declares them, in any version) point at the given document.
 	Referrers(ctx context.Context, typ string, id int64) ([]Referrer, error)
 	// Atomic runs fn in one write transaction on a view of the store bound
 	// to it, committed if fn returns nil. Atomic calls must be serialized

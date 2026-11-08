@@ -42,7 +42,7 @@ func TestEntryHooks(t *testing.T) {
 	c.login()
 	save := func(title string) (int, string) {
 		b, _ := json.Marshal(map[string]any{"title": title, "slug": strings.ToLower(title)})
-		res, body := c.do("POST", "/admin/c/page/save", url.Values{"csrf": {c.csrf}, "status": {"draft"}, "data": {string(b)}})
+		res, body := c.do("POST", "/admin/c/page/save", url.Values{"csrf": {c.csrf}, "data": {string(b)}})
 		return res.StatusCode, body
 	}
 	if code, _ := save("hallo"); code != 303 {

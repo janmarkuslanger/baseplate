@@ -82,9 +82,10 @@ func FromData(d map[string]any) Settings {
 	}
 }
 
-// Load returns the settings; zero values if none were saved yet.
+// Load returns the published settings; zero values if none were
+// published yet.
 func Load(ctx context.Context, st storage.Entries) (Settings, error) {
-	e, err := st.GetEntryBySlug(ctx, Type, Type)
+	e, err := st.GetEntryBySlug(ctx, Type, Type, "", storage.Published)
 	if errors.Is(err, storage.ErrNotFound) {
 		return FromData(nil), nil
 	}

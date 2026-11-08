@@ -29,6 +29,7 @@ customer project ── main.go ── baseplate + plugins ──▶ one binary 
 - **SEO & LLM ready** — meta tags, canonical, robots, Open Graph, `sitemap.xml`, `robots.txt`, `llms.txt` and a Markdown variant of every indexable page (title, description and the text of its blocks).
 - **Plugins for everything** — content types, schema extensions, field kinds, content blocks, extra build output, admin pages, public endpoints, migrations, typed hooks.
 - **Automatic migrations** — schema changes apply on start; renames and data migrations are first-class.
+- **Drafts and publishing** — editors work on a draft; the site shows the published version until the draft is published again.
 - **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
 - **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
 - **Navigations** — any number of menus whose items (page or URL) nest to any depth, edited in place in the admin ([`plugins/navigation`](plugins/navigation)).
@@ -229,13 +230,25 @@ content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
 </details>
 
 <details>
+<summary><strong>Drafts and publishing</strong></summary>
+
+- Every entry has a draft; **Entwurf speichern** changes only the draft, so a published entry can be edited without touching the site
+- **Veröffentlichen** copies the draft to the published version, which the build, templates (`entries`), navigations and forms read; **Zurückziehen** removes it and keeps the draft
+- Singletons such as the settings work the same: saved settings apply once published
+- Plugins write through `Services.Entries` (`Save` with `Publish`, `Unpublish`, `Delete`); `entries.PublishedChanged` fires on publish, unpublish and the delete of a published entry
+- Relations point at the entry (its ID is shared by all versions and locales); the build resolves them to published targets only
+- Databases of baseplate v0.3 and older are refused on start: their entry tables have no versions
+
+</details>
+
+<details>
 <summary><strong>Schema changes</strong></summary>
 
 | Change | How |
 |---|---|
 | add field | nothing — the column/table is created on start |
 | rename field | `content.Field{Name: "summary", RenamedFrom: "teaser", ...}` — runs once; remove `RenamedFrom` before giving a new field the old name |
-| anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names |
+| anything else (split, convert, move) | `r.DataMigration(...)`, using `storage.EntryTable`, `ComponentTable`, `BlockTable`, `Column` for names; an entry table holds one row per version (`document_id`, `locale`, `version` = `draft`/`published`), so update both |
 | remove field | remove it; its column, component rows and relations stay, also when the entry is saved, so re-adding the field brings the data back |
 | change kind | startup error while data is stored under the old kind (also: another relation `Ref`, `Many` → single with several targets, list → group with several items) — rename the field and migrate the data |
 

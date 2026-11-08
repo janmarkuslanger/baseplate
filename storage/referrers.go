@@ -16,9 +16,9 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 	return s.referrers(ctx, s.conn(), typ, id)
 }
 
-// referrers resolves relation rows pointing at an entry to the entries
+// referrers resolves relation rows pointing at a document to the documents
 // owning them. Rows of fields the schema no longer declares and the
-// entry's relations to itself are skipped.
+// document's relations to itself are skipped.
 func (s *SQLStore) referrers(ctx context.Context, q querier, typ string, id int64) ([]Referrer, error) {
 	rows, err := q.QueryContext(ctx, `SELECT owner_table, owner_id, field FROM relations WHERE target_type = ? AND target_id = ? ORDER BY owner_table, owner_id`, typ, id)
 	if err != nil {
@@ -67,15 +67,26 @@ func (s *SQLStore) referrers(ctx context.Context, q querier, typ string, id int6
 			nested = true
 		}
 		t, ok := s.layout.tables[table]
-		if !ok || (t.Type == typ && ownerID == id) {
+		if !ok {
 			continue
 		}
-		key := ref{table, ownerID, r.field}
+		// Both versions of a referrer count once, as their document.
+		var doc int64
+		if err := q.QueryRowContext(ctx, `SELECT document_id FROM `+table+` WHERE id = ?`, ownerID).Scan(&doc); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return nil, err
+		}
+		if t.Type == typ && doc == id {
+			continue
+		}
+		key := ref{table, doc, r.field}
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		out = append(out, Referrer{Type: t.Type, ID: ownerID, Field: r.field, Nested: nested, Block: blockOf(r.table)})
+		out = append(out, Referrer{Type: t.Type, ID: doc, Field: r.field, Nested: nested, Block: blockOf(r.table)})
 	}
 	return out, nil
 }

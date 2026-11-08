@@ -14,8 +14,8 @@ import (
 
 func TestMarkdownOutputsEscapeText(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"siteName": "A*B", "baseURL": "https://a.test", "llmsTxt": true})
-	add(t, st, fields.PageType, "x", storage.StatusPublished, map[string]any{
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"siteName": "A*B", "baseURL": "https://a.test", "llmsTxt": true})
+	add(t, st, fields.PageType, "x", storage.Published, map[string]any{
 		"title": "About [x](y) <b>bold</b>",
 		"seo":   map[string]any{"metaDescription": "eins\n# zwei"},
 		"body":  []any{map[string]any{"_type": "heading", "text": "*wichtig*"}},
@@ -42,8 +42,8 @@ func TestMarkdownOutputsEscapeText(t *testing.T) {
 // X-Robots-Tag for the .md file.
 func TestNoindexPageHasNoMarkdownVariant(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "geheim", storage.StatusPublished, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "geheim", storage.Published, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -58,8 +58,8 @@ func TestNoindexPageHasNoMarkdownVariant(t *testing.T) {
 func TestDisabledMarkdownVariantIsNotLinked(t *testing.T) {
 	b, st := setup(t)
 	b.Theme.(fstest.MapFS)["templates/markdown.md"] = &fstest.MapFile{}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test", "llmsTxt": true})
-	add(t, st, fields.PageType, "about", storage.StatusPublished, map[string]any{"title": "About"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test", "llmsTxt": true})
+	add(t, st, fields.PageType, "about", storage.Published, map[string]any{"title": "About"})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}

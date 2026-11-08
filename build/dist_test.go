@@ -34,10 +34,10 @@ func countPages(t *testing.T, dist string) int {
 // auto-build and a cron "build"): neither may publish a partial site.
 func TestConcurrentBuildersOnOneDistDir(t *testing.T) {
 	b1, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	const pages = 150
 	for i := range pages {
-		add(t, st, fields.PageType, fmt.Sprintf("p%d", i), storage.StatusPublished, map[string]any{"title": "P"})
+		add(t, st, fields.PageType, fmt.Sprintf("p%d", i), storage.Published, map[string]any{"title": "P"})
 	}
 	b2 := &Builder{Reg: b1.Reg, Theme: b1.Theme, DistDir: b1.DistDir, MediaDir: b1.MediaDir}
 
@@ -61,7 +61,7 @@ func TestConcurrentBuildersOnOneDistDir(t *testing.T) {
 
 func TestBuildWaitingForLockHonorsContext(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	dist, err := distTarget(b.DistDir)
 	if err != nil {
 		t.Fatal(err)
@@ -83,8 +83,8 @@ func TestBuildWaitingForLockHonorsContext(t *testing.T) {
 
 func TestBuildIntoSymlinkedDistDir(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Eins"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "Eins"})
 	www := filepath.Join(t.TempDir(), "www")
 	if err := os.Mkdir(www, 0o755); err != nil {
 		t.Fatal(err)
@@ -123,8 +123,8 @@ func TestInvalidDistDirRejectedBeforeRendering(t *testing.T) {
 		{file, "is not a directory"},
 	} {
 		b, st := setup(t)
-		add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-		add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+		add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+		add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
 		b.DistDir = c.dist
 		if _, err := b.Build(context.Background()); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("DistDir %q: want %q, got %v", c.dist, c.want, err)

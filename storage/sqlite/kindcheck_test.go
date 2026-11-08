@@ -55,13 +55,13 @@ func TestKindChangeWithDataFailsStart(t *testing.T) {
 			s := startWith(t, path, categoryType, tagType, post(c.from))
 			c1 := &storage.Entry{Type: "category", Data: map[string]any{"title": "eins"}}
 			c2 := &storage.Entry{Type: "category", Data: map[string]any{"title": "zwei"}}
-			s.CreateEntry(ctx, c1)
-			s.CreateEntry(ctx, c2)
+			s.SaveDraft(ctx, c1)
+			s.SaveDraft(ctx, c2)
 			e := &storage.Entry{Type: "post", Data: map[string]any{}}
 			if v := c.value(c1.ID); v != nil {
 				e.Data["f"] = v
 			}
-			if err := s.CreateEntry(ctx, e); err != nil {
+			if err := s.SaveDraft(ctx, e); err != nil {
 				t.Fatal(err)
 			}
 			s.Close()
@@ -95,9 +95,9 @@ func TestRefusedKindChangeKeepsData(t *testing.T) {
 
 	s := startWith(t, path, categoryType, v1)
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	s.CreateEntry(ctx, cat)
+	s.SaveDraft(ctx, cat)
 	post := &storage.Entry{Type: "post", Data: map[string]any{"cats": []any{cat.ID}}}
-	s.CreateEntry(ctx, post)
+	s.SaveDraft(ctx, post)
 	s.Close()
 
 	s, err := Open(path)
@@ -113,7 +113,7 @@ func TestRefusedKindChangeKeepsData(t *testing.T) {
 	s.Close()
 
 	s = startWith(t, path, categoryType, v1)
-	got, err := s.GetEntry(ctx, "post", post.ID)
+	got, err := s.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}

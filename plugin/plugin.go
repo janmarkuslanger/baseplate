@@ -35,8 +35,8 @@ type Services struct {
 	Logger *slog.Logger
 	// Media stores uploads in the media library (the admin's uploads).
 	Media Media
-	// Entries saves and deletes content with the same rules and hooks as the
-	// admin. Use it instead of Store.CreateEntry/UpdateEntry.
+	// Entries saves, publishes and deletes content with the same rules and
+	// hooks as the admin. Use it instead of Store.SaveDraft/Publish.
 	Entries *entries.Service
 	// ClientIP returns the visitor's IP, honouring Config.TrustedProxyHeader.
 	// Use it for rate limits instead of r.RemoteAddr.

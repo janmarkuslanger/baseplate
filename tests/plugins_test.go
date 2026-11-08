@@ -98,7 +98,7 @@ func TestPluginContentInAdmin(t *testing.T) {
 
 	save := func(typ string, data map[string]any) {
 		b, _ := json.Marshal(data)
-		res, err := c.PostForm(srv.URL+"/admin/c/"+typ+"/save", url.Values{"csrf": {csrf}, "status": {"published"}, "data": {string(b)}})
+		res, err := c.PostForm(srv.URL+"/admin/c/"+typ+"/save", url.Values{"csrf": {csrf}, "publish": {"1"}, "data": {string(b)}})
 		if err != nil || res.StatusCode != http.StatusSeeOther {
 			t.Fatalf("save %s: %v %v", typ, res.StatusCode, err)
 		}

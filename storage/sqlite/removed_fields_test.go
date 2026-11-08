@@ -71,7 +71,7 @@ func TestRemovedFieldsKeepDataAcrossSave(t *testing.T) {
 
 	v1 := startWith(t, path, categoryType, full)
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	if err := v1.CreateEntry(ctx, cat); err != nil {
+	if err := v1.SaveDraft(ctx, cat); err != nil {
 		t.Fatal(err)
 	}
 	post := &storage.Entry{Type: "post", Data: map[string]any{
@@ -81,29 +81,29 @@ func TestRemovedFieldsKeepDataAcrossSave(t *testing.T) {
 		"links": []any{map[string]any{"label": "bleibt", "ref": cat.ID}},
 		"body":  []any{map[string]any{"_type": "heading", "text": "H"}},
 	}}
-	if err := v1.CreateEntry(ctx, post); err != nil {
+	if err := v1.SaveDraft(ctx, post); err != nil {
 		t.Fatal(err)
 	}
 	v1.Close()
 
 	v2 := startWith(t, path, categoryType, reduced)
-	got, err := v2.GetEntry(ctx, "post", post.ID)
+	got, err := v2.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got.Data["title"] = "Neu"
-	if err := v2.UpdateEntry(ctx, got); err != nil {
+	if err := v2.SaveDraft(ctx, got); err != nil {
 		t.Fatal(err)
 	}
 	// A page edit must not touch the post's blocks in the shared cb_heading.
 	page := &storage.Entry{Type: "page", Slug: "p", Data: map[string]any{"title": "P", "body": []any{map[string]any{"_type": "heading", "text": "Seite"}}}}
-	if err := v2.CreateEntry(ctx, page); err != nil {
+	if err := v2.SaveDraft(ctx, page); err != nil {
 		t.Fatal(err)
 	}
 	v2.Close()
 
 	v3 := startWith(t, path, categoryType, full)
-	back, err := v3.GetEntry(ctx, "post", post.ID)
+	back, err := v3.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,19 +144,19 @@ func TestRemovedItemTakesRemovedFieldData(t *testing.T) {
 
 	v1 := startWith(t, path, categoryType, full)
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	v1.CreateEntry(ctx, cat)
+	v1.SaveDraft(ctx, cat)
 	post := &storage.Entry{Type: "post", Data: map[string]any{"links": []any{
 		map[string]any{"label": "weg", "ref": cat.ID, "extra": map[string]any{"note": "n"}},
 	}}}
-	if err := v1.CreateEntry(ctx, post); err != nil {
+	if err := v1.SaveDraft(ctx, post); err != nil {
 		t.Fatal(err)
 	}
 	v1.Close()
 
 	v2 := startWith(t, path, categoryType, reduced)
-	got, _ := v2.GetEntry(ctx, "post", post.ID)
+	got, _ := v2.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	got.Data["links"] = []any{}
-	if err := v2.UpdateEntry(ctx, got); err != nil {
+	if err := v2.SaveDraft(ctx, got); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []string{

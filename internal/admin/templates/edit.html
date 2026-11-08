@@ -12,28 +12,23 @@
   <input type="hidden" name="id" value="{{if not $p.IsNew}}{{$p.Entry.ID}}{{end}}">
   <input type="hidden" name="data" x-ref="data">
   {{/* First submit button = default for Enter (and the Ctrl/Cmd+S target):
-       saves without changing the status. */}}
-  <button type="submit" name="status" value="{{if or $t.Singleton (eq $p.Entry.Status "published")}}published{{else}}draft{{end}}" class="default-submit" tabindex="-1" aria-hidden="true" data-save>{{t "edit.save"}}</button>
+       saves the draft; the site changes only on publish. */}}
+  <button type="submit" class="default-submit" tabindex="-1" aria-hidden="true" data-save>{{t "edit.save"}}</button>
 
   <header class="page-head page-head--sticky">
     <div>
       {{if not $t.Singleton}}<a class="back" href="/admin/c/{{$t.Name}}">← {{t $t.LabelPlural}}</a>{{end}}
       <h1 x-text="(data[{{json $t.Title}}] || '') || {{json .Title}}">{{.Title}}</h1>
-      {{if not $t.Singleton}}
       <p class="muted">
-        {{if $p.IsNew}}{{t "edit.new"}}{{else if eq $p.Entry.Status "published"}}<span class="pill pill--ok">{{t "status.published"}}</span>{{else}}<span class="pill">{{t "status.draft"}}</span>{{end}}
+        {{if $p.IsNew}}{{t "edit.new"}}{{else}}{{template "status" $p.Entry}}{{end}}
         {{if not $p.IsNew}}· {{t "edit.updated" (ago $p.Entry.UpdatedAt)}}{{end}}
         <span class="dirty" x-show="dirty" x-cloak>· {{t "edit.dirty"}}</span>
       </p>
-      {{end}}
     </div>
     <div class="actions">
-      {{if $t.Singleton}}
-        <button class="btn btn--primary" name="status" value="published">{{t "edit.save"}}</button>
-      {{else}}
-        <button class="btn" name="status" value="draft">{{if eq $p.Entry.Status "published"}}{{t "edit.unpublish"}}{{else}}{{t "edit.saveDraft"}}{{end}}</button>
-        <button class="btn btn--primary" name="status" value="published">{{if eq $p.Entry.Status "published"}}{{t "edit.update"}}{{else}}{{t "edit.publish"}}{{end}}</button>
-      {{end}}
+      {{if and $p.Entry.Published (not $t.Singleton)}}<button class="btn" type="submit" form="unpublish">{{t "edit.unpublish"}}</button>{{end}}
+      <button class="btn" type="submit">{{t "edit.saveDraft"}}</button>
+      <button class="btn btn--primary" type="submit" name="publish" value="1">{{if $p.Entry.Published}}{{t "edit.update"}}{{else}}{{t "edit.publish"}}{{end}}</button>
     </div>
   </header>
 
@@ -77,6 +72,10 @@
 </section>
 {{end}}
 {{template "block-templates"}}
+
+{{if and (not $t.Singleton) $p.Entry.Published}}
+<form id="unpublish" method="post" action="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/unpublish" hidden><input type="hidden" name="csrf" value="{{.CSRF}}"></form>
+{{end}}
 
 {{if and (not $p.IsNew) (not $t.Singleton)}}
 {{if $p.UsedIn}}

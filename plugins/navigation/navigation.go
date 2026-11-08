@@ -99,7 +99,7 @@ func (p *Plugin) check(ctx context.Context, e *entries.Event) error {
 	if !keyRe.MatchString(key) {
 		return i18n.M("navigation.keyInvalid")
 	}
-	all, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName})
+	all, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName, Version: storage.Draft})
 	if err != nil {
 		return err
 	}

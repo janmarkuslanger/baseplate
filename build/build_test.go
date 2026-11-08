@@ -44,11 +44,17 @@ func setup(t *testing.T) (*Builder, storage.Store) {
 	return &Builder{Reg: reg, Theme: theme, DistDir: filepath.Join(dir, "dist"), MediaDir: filepath.Join(dir, "media")}, st
 }
 
-func add(t *testing.T, st storage.Store, typ, slug, status string, data map[string]any) int64 {
+// add stores a draft and, for v Published, publishes it.
+func add(t *testing.T, st storage.Store, typ, slug string, v storage.Version, data map[string]any) int64 {
 	t.Helper()
-	e := &storage.Entry{Type: typ, Slug: slug, Status: status, Data: data}
-	if err := st.CreateEntry(context.Background(), e); err != nil {
+	e := &storage.Entry{Type: typ, Slug: slug, Data: data}
+	if err := st.SaveDraft(context.Background(), e); err != nil {
 		t.Fatal(err)
+	}
+	if v == storage.Published {
+		if err := st.Publish(context.Background(), typ, e.ID, ""); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return e.ID
 }
@@ -70,22 +76,22 @@ func TestBuild(t *testing.T) {
 		t.Fatalf("want missing baseURL error, got %v", err)
 	}
 
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{
 		"siteName": "Acme", "baseURL": "https://acme.test/", "llmsTxt": true, "llmsContent": "> Acme baut Dinge.",
 	})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{
 		"title": "Willkommen", "seo": map[string]any{"metaDescription": "Startseite von Acme"},
 		"body": []any{
 			map[string]any{"_type": "heading", "text": "Hallo <Welt>"},
 			map[string]any{"_type": "richtext", "html": "<p>Text <strong>fett</strong></p>"},
 		},
 	})
-	about := add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{
+	about := add(t, st, fields.PageType, "ueber-uns", storage.Published, map[string]any{
 		"title": "Über uns", "seo": map[string]any{"metaDescription": "Team und Geschichte"},
 	})
-	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": about})
-	add(t, st, fields.PageType, "geheim", storage.StatusPublished, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
-	add(t, st, fields.PageType, "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf"})
+	add(t, st, fields.PageType, "team", storage.Published, map[string]any{"title": "Team", "parent": about})
+	add(t, st, fields.PageType, "geheim", storage.Published, map[string]any{"title": "Intern", "seo": map[string]any{"noindex": true}})
+	add(t, st, fields.PageType, "entwurf", storage.Draft, map[string]any{"title": "Entwurf"})
 
 	res, err := b.Build(ctx)
 	if err != nil {
@@ -144,8 +150,8 @@ func TestBuild(t *testing.T) {
 
 func TestLLMsTxtDisabled(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -158,12 +164,12 @@ func TestLLMsTxtDisabled(t *testing.T) {
 func TestBuildFailureKeepsOldSite(t *testing.T) {
 	b, st := setup(t)
 	ctx := context.Background()
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
 	}
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Duplicate"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "Duplicate"})
 	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "doppelt") {
 		t.Fatalf("want duplicate URL error, got %v", err)
 	}
@@ -186,8 +192,8 @@ func TestNestedArticles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, data)
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, data)
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -204,10 +210,10 @@ func TestNestedArticles(t *testing.T) {
 func TestRelationsResolved(t *testing.T) {
 	b, st := setup(t)
 	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.parent}}parent={{.Data.title}}@{{.URL}}{{end}}][{{range .Data.children}}child={{.Data.title}}@{{.URL}};{{end}}]{{end}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	about := add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{"title": "Über uns"})
-	add(t, st, fields.PageType, "team", storage.StatusPublished, map[string]any{"title": "Team", "parent": about})
-	add(t, st, fields.PageType, "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf", "parent": about})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	about := add(t, st, fields.PageType, "ueber-uns", storage.Published, map[string]any{"title": "Über uns"})
+	add(t, st, fields.PageType, "team", storage.Published, map[string]any{"title": "Team", "parent": about})
+	add(t, st, fields.PageType, "entwurf", storage.Draft, map[string]any{"title": "Entwurf", "parent": about})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -222,8 +228,8 @@ func TestRelationsResolved(t *testing.T) {
 func TestBuildDistDirTrailingSlash(t *testing.T) {
 	b, st := setup(t)
 	b.DistDir += "/"
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
 	for i := 0; i < 2; i++ { // second build swaps an existing dist
 		if _, err := b.Build(context.Background()); err != nil {
 			t.Fatalf("build %d: %v", i, err)
@@ -240,8 +246,8 @@ func TestMarkdownBlocksInGroupsAndLists(t *testing.T) {
 	)})
 	b.Reg.Store.UseSchema(context.Background(), b.Reg.Schema)
 	b.Theme = fstest.MapFS{"templates/landing.html": {Data: []byte(`{{define "landing"}}x{{end}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, "landing", "start", storage.StatusPublished, map[string]any{"title": "L", "slug": "start",
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, "landing", "start", storage.Published, map[string]any{"title": "L", "slug": "start",
 		"hero":     map[string]any{"blocks": []any{map[string]any{"_type": "heading", "text": "Im Hero"}}},
 		"sections": []any{map[string]any{"blocks": []any{map[string]any{"_type": "heading", "text": "In Liste"}}}},
 	})
@@ -260,11 +266,11 @@ type failingStore struct {
 	typ string
 }
 
-func (f failingStore) GetEntry(ctx context.Context, typ string, id int64) (*storage.Entry, error) {
+func (f failingStore) GetEntry(ctx context.Context, typ string, id int64, locale string, v storage.Version) (*storage.Entry, error) {
 	if typ == f.typ {
 		return nil, errors.New("disk on fire")
 	}
-	return f.Store.GetEntry(ctx, typ, id)
+	return f.Store.GetEntry(ctx, typ, id, locale, v)
 }
 
 func TestRelationErrorsFailTheBuild(t *testing.T) {
@@ -274,9 +280,9 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 	b.Reg.Extend(fields.PageType, content.Field{Name: "author", Kind: fields.Relation, Ref: "author"})
 	st.UseSchema(ctx, b.Reg.Schema)
 	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.author}}{{.Data.name}}{{end}}]{{end}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	ada := add(t, st, "author", "", storage.StatusPublished, map[string]any{"name": "Ada"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A", "author": ada})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	ada := add(t, st, "author", "", storage.Published, map[string]any{"name": "Ada"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A", "author": ada})
 
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
@@ -287,7 +293,7 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 
 	// A missing target is not an error. DeleteEntry refuses referenced
 	// entries, so remove the row the way a data migration could.
-	if _, err := st.DB().ExecContext(ctx, `DELETE FROM `+storage.EntryTable("author")+` WHERE id = ?`, ada); err != nil {
+	if _, err := st.DB().ExecContext(ctx, `DELETE FROM `+storage.EntryTable("author")+` WHERE document_id = ?`, ada); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.Build(ctx); err != nil {
@@ -295,8 +301,8 @@ func TestRelationErrorsFailTheBuild(t *testing.T) {
 	}
 
 	// A storage error is.
-	ada2 := add(t, st, "author", "", storage.StatusPublished, map[string]any{"name": "Ada"})
-	add(t, st, fields.PageType, "zwei", storage.StatusPublished, map[string]any{"title": "B", "author": ada2})
+	ada2 := add(t, st, "author", "", storage.Published, map[string]any{"name": "Ada"})
+	add(t, st, fields.PageType, "zwei", storage.Published, map[string]any{"title": "B", "author": ada2})
 	b.Reg.Store = failingStore{Store: st, typ: "author"}
 	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "disk on fire") {
 		t.Fatalf("want storage error, got %v", err)
@@ -317,10 +323,10 @@ func TestDraftRelationTargetsNotRendered(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}[{{with .Data.category}}{{.Data.name}}{{end}}][{{range .Data.categories}}{{.Data.name}};{{end}}]{{end}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	draft := add(t, st, "category", "", storage.StatusDraft, map[string]any{"name": "Geheim"})
-	pub := add(t, st, "category", "", storage.StatusPublished, map[string]any{"name": "News"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A", "category": draft, "categories": []any{draft, pub}})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	draft := add(t, st, "category", "", storage.Draft, map[string]any{"name": "Geheim"})
+	pub := add(t, st, "category", "", storage.Published, map[string]any{"name": "News"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A", "category": draft, "categories": []any{draft, pub}})
 
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
@@ -340,8 +346,8 @@ func TestPublicFiles(t *testing.T) {
 		"public/.well-known/security.txt": {Data: []byte("Contact: x")},
 	}
 	b.Reg.Public(fstest.MapFS{"google123.html": {Data: []byte("verify")}})
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
 
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
@@ -363,9 +369,9 @@ func TestPublicFiles(t *testing.T) {
 			b, st := setup(t)
 			b.Theme = fstest.MapFS{"templates/page.html": tmpl, "public/favicon.ico": {Data: []byte("ico")}}
 			b.Reg.Public(f)
-			add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-			add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A"})
-			add(t, st, fields.PageType, "ueber-uns", storage.StatusPublished, map[string]any{"title": "B"})
+			add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+			add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A"})
+			add(t, st, fields.PageType, "ueber-uns", storage.Published, map[string]any{"title": "B"})
 			_, err := b.Build(ctx)
 			var m i18n.Msg
 			if !errors.As(err, &m) || m.Key != MsgPublicConflict {
@@ -380,7 +386,7 @@ func TestPublicFiles(t *testing.T) {
 
 func TestNoPublicDir(t *testing.T) {
 	b, st := setup(t) // theme without public/
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -403,13 +409,13 @@ func TestTypePath(t *testing.T) {
 		"templates/post.html": {Data: tmpl},
 		"templates/doc.html":  {Data: tmpl},
 	}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
-	post := add(t, st, "post", "hallo", storage.StatusPublished, map[string]any{"title": "Hallo"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Start", "featured": post})
-	guide := add(t, st, "doc", "guide", storage.StatusPublished, map[string]any{"title": "Guide"})
-	draft := add(t, st, "doc", "entwurf", storage.StatusDraft, map[string]any{"title": "Entwurf", "parent": guide})
-	add(t, st, "doc", "install", storage.StatusPublished, map[string]any{"title": "Install", "parent": guide})
-	add(t, st, "doc", "linux", storage.StatusPublished, map[string]any{"title": "Linux", "parent": draft})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	post := add(t, st, "post", "hallo", storage.Published, map[string]any{"title": "Hallo"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "Start", "featured": post})
+	guide := add(t, st, "doc", "guide", storage.Published, map[string]any{"title": "Guide"})
+	draft := add(t, st, "doc", "entwurf", storage.Draft, map[string]any{"title": "Entwurf", "parent": guide})
+	add(t, st, "doc", "install", storage.Published, map[string]any{"title": "Install", "parent": guide})
+	add(t, st, "doc", "linux", storage.Published, map[string]any{"title": "Linux", "parent": draft})
 
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
@@ -425,11 +431,14 @@ func TestTypePath(t *testing.T) {
 	}
 
 	// A parent cycle fails the build.
-	a := add(t, st, "doc", "a", storage.StatusPublished, map[string]any{"title": "A"})
-	c := add(t, st, "doc", "c", storage.StatusPublished, map[string]any{"title": "C", "parent": a})
-	e, _ := st.GetEntry(ctx, "doc", a)
+	a := add(t, st, "doc", "a", storage.Published, map[string]any{"title": "A"})
+	c := add(t, st, "doc", "c", storage.Published, map[string]any{"title": "C", "parent": a})
+	e, _ := st.GetEntry(ctx, "doc", a, "", storage.Draft)
 	e.Data["parent"] = c
-	if err := st.UpdateEntry(ctx, e); err != nil {
+	if err := st.SaveDraft(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Publish(ctx, "doc", a, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "zyklisch") {
@@ -443,10 +452,10 @@ func TestDatesUseSiteTimezone(t *testing.T) {
 	b.Reg.ContentType(content.Type{Name: "event", Fields: []content.Field{{Name: "name", Kind: fields.Text}, {Name: "when", Kind: fields.DateTime}}})
 	st.UseSchema(ctx, b.Reg.Schema)
 	b.Theme = fstest.MapFS{"templates/page.html": {Data: []byte(`{{define "page"}}{{range entries "event" "sort" "when"}}{{.Data.name}} {{date .Data.when "datetime"}};{{end}}{{end}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test", "language": "de", "timezone": "America/New_York"})
-	add(t, st, "event", "", storage.StatusPublished, map[string]any{"name": "B", "when": int64(1714600800)}) // 2024-05-01 22:00 UTC
-	add(t, st, "event", "", storage.StatusPublished, map[string]any{"name": "A", "when": int64(1714514400)}) // 2024-04-30 22:00 UTC
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test", "language": "de", "timezone": "America/New_York"})
+	add(t, st, "event", "", storage.Published, map[string]any{"name": "B", "when": int64(1714600800)}) // 2024-05-01 22:00 UTC
+	add(t, st, "event", "", storage.Published, map[string]any{"name": "A", "when": int64(1714514400)}) // 2024-04-30 22:00 UTC
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "S"})
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -470,9 +479,9 @@ func TestOutputTemplates(t *testing.T) {
 		"output/plugin.txt": {Data: []byte("plugin")},
 		"output/extra.txt":  {Data: []byte("from {{.Site.siteName}}")},
 	})
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"siteName": "A & B", "baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "Start & Ziel"})
-	add(t, st, fields.PageType, "intern", storage.StatusPublished, map[string]any{"title": "Intern"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"siteName": "A & B", "baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "Start & Ziel"})
+	add(t, st, fields.PageType, "intern", storage.Published, map[string]any{"title": "Intern"})
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +509,7 @@ func TestOutputTemplates(t *testing.T) {
 func TestOutputTemplateError(t *testing.T) {
 	b, st := setup(t)
 	b.Theme = fstest.MapFS{"templates/page.html": theme["templates/page.html"], "templates/output/x.txt": {Data: []byte(`{{entries "nope"}}`)}}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	if _, err := b.Build(context.Background()); err == nil || !strings.Contains(err.Error(), "output x.txt") {
 		t.Fatalf("want output error, got %v", err)
 	}
@@ -510,7 +519,7 @@ func TestGeneratorsDoNotOverwrite(t *testing.T) {
 	b, st := setup(t)
 	b.Reg.Generator(func(s plugin.Site) error { return s.WriteFile("feed.xml", []byte("ok")) })
 	b.Reg.Generator(func(s plugin.Site) error { return s.WriteFile("robots.txt", []byte("mine")) })
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	_, err := b.Build(context.Background())
 	var m i18n.Msg
 	if !errors.As(err, &m) || m.Key != MsgPathConflict || m.Args[0] != "/robots.txt" {
@@ -540,10 +549,10 @@ func TestLayouts(t *testing.T) {
 	b.Reg.Generator(func(s plugin.Site) error {
 		return s.Render("plain.html", "404", &render.Page{Data: map[string]any{"text": "ohne"}})
 	})
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"siteName": "Acme", "baseURL": "https://a.test"})
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "A & B"})
-	add(t, st, "landing", "l", storage.StatusPublished, map[string]any{"title": "L"})
-	add(t, st, "raw", "r", storage.StatusPublished, map[string]any{"title": "R"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"siteName": "Acme", "baseURL": "https://a.test"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "A & B"})
+	add(t, st, "landing", "l", storage.Published, map[string]any{"title": "L"})
+	add(t, st, "raw", "r", storage.Published, map[string]any{"title": "R"})
 	if _, err := b.Build(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -559,7 +568,7 @@ func TestLayouts(t *testing.T) {
 		}
 	}
 
-	add(t, st, "broken", "x", storage.StatusPublished, map[string]any{"title": "X"})
+	add(t, st, "broken", "x", storage.Published, map[string]any{"title": "X"})
 	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), `layout "nope" not defined`) {
 		t.Fatalf("want missing layout error, got %v", err)
 	}

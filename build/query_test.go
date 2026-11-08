@@ -38,23 +38,23 @@ func listSetup(t *testing.T, tmpl string) (*Builder, storage.Store, map[string]i
 		"templates/page.html": {Data: []byte(`{{define "page"}}` + tmpl + `{{end}}`)},
 		"templates/post.html": {Data: []byte(`{{define "post"}}{{end}}`)},
 	}
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	ids := map[string]int64{
-		"yoga": add(t, st, "category", "", storage.StatusPublished, map[string]any{"name": "Yoga"}),
-		"food": add(t, st, "category", "", storage.StatusPublished, map[string]any{"name": "Food"}),
+		"yoga": add(t, st, "category", "", storage.Published, map[string]any{"name": "Yoga"}),
+		"food": add(t, st, "category", "", storage.Published, map[string]any{"name": "Food"}),
 	}
 	for _, p := range []struct {
 		slug, date string
 		views      int
 		featured   bool
 		cats       []any
-		status     string
+		status     storage.Version
 	}{
-		{"b", "2024-02-01", 5, true, []any{ids["yoga"]}, storage.StatusPublished},
-		{"a", "2024-03-01", 20, false, []any{ids["food"]}, storage.StatusPublished},
-		{"c", "2024-01-01", 100, true, []any{ids["yoga"], ids["food"]}, storage.StatusPublished},
-		{"d", "", 1, false, nil, storage.StatusPublished},
-		{"x", "2025-01-01", 0, true, []any{ids["yoga"]}, storage.StatusDraft},
+		{"b", "2024-02-01", 5, true, []any{ids["yoga"]}, storage.Published},
+		{"a", "2024-03-01", 20, false, []any{ids["food"]}, storage.Published},
+		{"c", "2024-01-01", 100, true, []any{ids["yoga"], ids["food"]}, storage.Published},
+		{"d", "", 1, false, nil, storage.Published},
+		{"x", "2025-01-01", 0, true, []any{ids["yoga"]}, storage.Draft},
 	} {
 		ids[p.slug] = add(t, st, "post", p.slug, p.status, map[string]any{
 			"title": strings.ToUpper(p.slug), "date": p.date, "views": p.views, "featured": p.featured, "categories": p.cats,
@@ -83,7 +83,7 @@ func TestEntries(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, st, ids := listSetup(t, `{{$q := `+c.query+`}}`+item)
-			add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S", "picked": []any{ids["food"]}})
+			add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "S", "picked": []any{ids["food"]}})
 			if _, err := b.Build(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestEntries(t *testing.T) {
 
 func TestEntriesResult(t *testing.T) {
 	b, st, _ := listSetup(t, `{{range entries "post" "where" "views" 100}}{{.URL}}|{{range .Data.categories}}{{.Data.name}},{{end}}{{end}}`)
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S"})
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "S"})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestEntriesInBlock(t *testing.T) {
 	b.Theme.(fstest.MapFS)["templates/blocks.html"] = &fstest.MapFile{Data: []byte(
 		`{{define "block/post_list"}}{{range entries "post" "sort" "-date" "limit" .Block.limit "has" "categories" .Block.categories}}<a href="{{.URL}}">{{.Data.title}}</a>{{end}}{{end}}`)}
 	b.Reg.AllowBlocks(fields.PageType, "body", "post_list")
-	add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S", "body": []any{
+	add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "S", "body": []any{
 		map[string]any{"_type": "post_list", "limit": 1, "categories": []any{ids["yoga"]}},
 		map[string]any{"_type": "post_list"},
 	}})
@@ -141,7 +141,7 @@ func TestEntriesErrors(t *testing.T) {
 		{`entries "post" "has" "featured" true`, `use "where" for plain fields`},
 	} {
 		b, st, _ := listSetup(t, `{{range `+c.query+`}}{{end}}`)
-		add(t, st, fields.PageType, "index", storage.StatusPublished, map[string]any{"title": "S"})
+		add(t, st, fields.PageType, "index", storage.Published, map[string]any{"title": "S"})
 		if _, err := b.Build(context.Background()); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: want %q, got %v", c.query, c.want, err)
 		}

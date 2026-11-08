@@ -16,7 +16,11 @@ func TestBuildOnPublish(t *testing.T) {
 	c.login()
 	save := func(typ, status string, data map[string]any) {
 		b, _ := json.Marshal(data)
-		if res, _ := c.do("POST", "/admin/c/"+typ+"/save", url.Values{"csrf": {c.csrf}, "status": {status}, "data": {string(b)}}); res.StatusCode != 303 {
+		form := url.Values{"csrf": {c.csrf}, "data": {string(b)}}
+		if status == "published" {
+			form.Set("publish", "1")
+		}
+		if res, _ := c.do("POST", "/admin/c/"+typ+"/save", form); res.StatusCode != 303 {
 			t.Fatalf("save %s: %d", typ, res.StatusCode)
 		}
 	}
@@ -37,6 +41,6 @@ func TestBuildOnPublish(t *testing.T) {
 	}
 	save("page", "published", map[string]any{"title": "Erste Fassung", "slug": "neu"})
 	b, _ := json.Marshal(map[string]any{"title": "Live", "slug": "index"})
-	c.do("POST", "/admin/c/page/save", url.Values{"csrf": {c.csrf}, "status": {"published"}, "id": {"1"}, "data": {string(b)}})
+	c.do("POST", "/admin/c/page/save", url.Values{"csrf": {c.csrf}, "publish": {"1"}, "id": {"1"}, "data": {string(b)}})
 	wait("<h1>Live</h1>")
 }

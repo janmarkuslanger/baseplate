@@ -63,10 +63,16 @@ func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
 // The SQLite adapter begins transactions IMMEDIATE, so writers queue up
 // before their first read, across connections and processes.
 func (s *SQLStore) Atomic(ctx context.Context, fn func(Entries) error) error {
+	return s.inView(ctx, func(v *SQLStore, _ querier) error { return fn(v) })
+}
+
+// inView runs fn in a transaction (or the surrounding one) with a view of
+// the store whose queries all use it.
+func (s *SQLStore) inView(ctx context.Context, fn func(v *SQLStore, q querier) error) error {
 	return s.tx(ctx, func(q querier) error {
 		view := *s
 		view.q = q
-		return fn(&view)
+		return fn(&view, q)
 	})
 }
 
