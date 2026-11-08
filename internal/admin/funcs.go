@@ -74,7 +74,6 @@ func (a *Admin) funcs() template.FuncMap {
 		"blockField": func(f content.Field) fieldArgs {
 			return fieldArgs{F: f, M: "item." + f.Name, E: "path+'." + f.Name + "'"}
 		},
-		"emptyField": func() content.Field { return content.Field{} },
 		// kindField renders the AdminTemplate of a plugin kind.
 		"kindField": func(args fieldArgs) (template.HTML, error) {
 			t := a.base.Lookup("kind/" + args.F.Kind)
@@ -88,6 +87,7 @@ func (a *Admin) funcs() template.FuncMap {
 			return template.HTML(buf.String()), nil
 		},
 		"blocksFor": func(f content.Field) []content.Block { return a.Reg.Schema.Blocks(f) },
+		"allBlocks": a.Reg.Schema.AllBlocks,
 		"skeleton":  func(fs []content.Field) map[string]any { return skeleton(fs, nil) },
 		"isContainer": func(kind string) bool {
 			k, _ := a.Reg.Schema.Kind(kind)

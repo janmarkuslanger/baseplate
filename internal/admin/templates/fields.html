@@ -166,9 +166,10 @@
 </div>
 {{end}}
 
-{{/* One editor template per block type; fields bind to "item" / "path". */}}
+{{/* One editor template per block type, restricted ones included (the
+     fields that offer them insert them); fields bind to "item" / "path". */}}
 {{define "block-templates"}}
-{{range blocksFor (emptyField)}}{{$b := .}}
+{{range allBlocks}}{{$b := .}}
 <template id="bp-block-{{$b.Name}}">{{range $b.Fields}}{{template "field" (blockField .)}}{{end}}</template>
 {{end}}
 {{end}}
