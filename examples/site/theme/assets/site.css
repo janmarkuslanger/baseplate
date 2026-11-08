@@ -1,4 +1,4 @@
-:root { --ink: #1d1d2b; --muted: #5c5c77; --accent: #4945ff; --bg: #fff; }
+:root { --ink: #1d1c1a; --muted: #65625b; --accent: #7d5800; --accent-fill: #f0b400; --on-accent: #1d1c1a; --accent-soft: #fdf2cc; --line: #c8c6c0; --bg: #fff; }
 * { box-sizing: border-box; }
 body { margin: 0; font: 18px/1.65 system-ui, sans-serif; color: var(--ink); background: var(--bg); }
 a { color: var(--accent); }
@@ -12,10 +12,10 @@ a { color: var(--accent); }
 .bp-image { margin: 32px 0; }
 .bp-image img { width: 100%; height: auto; border-radius: 12px; }
 .bp-image figcaption { color: var(--muted); font-size: 15px; margin-top: 8px; }
-.bp-cta { margin: 32px 0; padding: 32px; border-radius: 16px; background: #f0f0ff; }
-.bp-button { display: inline-block; padding: 12px 22px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+.bp-cta { margin: 32px 0; padding: 32px; border-radius: 16px; background: var(--accent-soft); }
+.bp-button { display: inline-block; padding: 12px 22px; border: 0; border-radius: 8px; background: var(--accent-fill); color: var(--on-accent); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
 .bp-form { display: grid; gap: 16px; margin: 32px 0; }
 .bp-form label { display: block; font-weight: 600; font-size: 15px; margin-bottom: 4px; }
-.bp-form input:not([type=checkbox]), .bp-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #c9c9d9; border-radius: 8px; font: inherit; }
+.bp-form input:not([type=checkbox]), .bp-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
 .bp-form__field--checkbox label { font-weight: 400; }
 .site-footer { max-width: 960px; margin: 0 auto; padding: 24px; color: var(--muted); font-size: 15px; }
