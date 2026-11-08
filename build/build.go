@@ -16,7 +16,6 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
-	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/settings"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -72,15 +71,9 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	}
 	defer unlock()
 
-	cfg, err := settings.Load(ctx, b.Reg.Store)
+	cfg, err := b.settings(ctx)
 	if err != nil {
 		return Result{}, err
-	}
-	if cfg.BaseURL == "" {
-		return Result{}, ErrBaseURLMissing
-	}
-	if !settings.ValidBaseURL(cfg.BaseURL) {
-		return Result{}, ErrBaseURLInvalid
 	}
 
 	tmp := dist + ".tmp"
@@ -97,8 +90,7 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	s.r, err = render.New(b.Reg, b.Theme, render.Options{Entries: s.entries, Lang: cfg.Language, Location: cfg.Location})
-	if err != nil {
+	if err := s.newRenderer(); err != nil {
 		return Result{}, err
 	}
 	if err := s.write(pages); err != nil {
@@ -112,6 +104,21 @@ func (b *Builder) Build(ctx context.Context) (Result, error) {
 		b.Reg.Logger.Error("build hook", "err", err)
 	}
 	return Result{Pages: len(pages), Duration: time.Since(start), Finished: time.Now()}, nil
+}
+
+// settings loads the published settings a build needs.
+func (b *Builder) settings(ctx context.Context) (settings.Settings, error) {
+	cfg, err := settings.Load(ctx, b.Reg.Store)
+	if err != nil {
+		return settings.Settings{}, err
+	}
+	if cfg.BaseURL == "" {
+		return settings.Settings{}, ErrBaseURLMissing
+	}
+	if !settings.ValidBaseURL(cfg.BaseURL) {
+		return settings.Settings{}, ErrBaseURLInvalid
+	}
+	return cfg, nil
 }
 
 // EntryURL builds an entry's URL from its type's path pattern. parent

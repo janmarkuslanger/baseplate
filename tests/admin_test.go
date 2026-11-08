@@ -225,6 +225,20 @@ func TestAdminFlow(t *testing.T) {
 		t.Errorf("draft changes reached the site: %s", body)
 	}
 
+	// The preview shows the saved draft, uncached and not for search engines.
+	if _, edit := c.do("GET", pageURL, nil); !strings.Contains(edit, pageURL+"/preview") {
+		t.Error("edit page must link to the preview")
+	}
+	res, prev := c.do("GET", pageURL+"/preview", nil)
+	if res.StatusCode != 200 || !strings.Contains(prev, "<h1>Neu</h1>") || res.Header.Get("Cache-Control") != "no-store" || res.Header.Get("X-Robots-Tag") != "noindex" {
+		t.Errorf("preview: %d %v\n%s", res.StatusCode, res.Header, prev)
+	}
+	for _, p := range []string{"/admin/c/page/999/preview", "/admin/c/settings/1/preview"} {
+		if res, _ := c.do("GET", p, nil); res.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s: %d, want 404", p, res.StatusCode)
+		}
+	}
+
 	// Unpublishing takes the page off the next build.
 	if res, _ := c.do("POST", pageURL+"/unpublish", url.Values{"csrf": {c.csrf}}); res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("unpublish: %d", res.StatusCode)

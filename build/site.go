@@ -49,6 +49,15 @@ type site struct {
 	out string
 	cfg settings.Settings
 	res *resolver // set by collect
+	// overlay is an entry shown in place of its published version (a
+	// previewed draft); nil in a build.
+	overlay *storage.Entry
+}
+
+func (s *site) newRenderer() error {
+	r, err := render.New(s.b.Reg, s.b.Theme, render.Options{Entries: s.entries, Lang: s.cfg.Language, Location: s.cfg.Location})
+	s.r = r
+	return err
 }
 
 func (s *site) Context() context.Context { return s.ctx }
@@ -57,7 +66,15 @@ func (s *site) Settings() map[string]any { return s.cfg.Data }
 
 func (s *site) Published(typ string) ([]storage.Entry, error) {
 	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Version: storage.Published})
-	return list, err
+	if err != nil || s.overlay == nil || s.overlay.Type != typ {
+		return list, err
+	}
+	if i := slices.IndexFunc(list, func(e storage.Entry) bool { return e.ID == s.overlay.ID }); i >= 0 {
+		list[i] = *s.overlay
+	} else {
+		list = append(list, *s.overlay)
+	}
+	return list, nil
 }
 
 func (s *site) Render(p, tmpl string, data any) error {
@@ -149,11 +166,17 @@ func (s *site) collect() ([]*render.Page, error) {
 	return pages, nil
 }
 
-func (s *site) renderPage(p *render.Page) error {
+// pageTemplate names the template of a page's type.
+func (s *site) pageTemplate(p *render.Page) string {
 	name := p.Type.TemplateName()
 	if !s.r.Has(name) && s.r.Has(name+".html") {
 		name += ".html"
 	}
+	return name
+}
+
+func (s *site) renderPage(p *render.Page) error {
+	name := s.pageTemplate(p)
 	// The Markdown variant renders first: a page without one (noindex, or
 	// an empty templates/markdown.md) must not link to it.
 	var md []byte

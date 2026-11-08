@@ -26,6 +26,7 @@
       </p>
     </div>
     <div class="actions">
+      {{if and $t.Routable (not $p.IsNew)}}<a class="btn btn--ghost" href="/admin/c/{{$t.Name}}/{{$p.Entry.ID}}/preview" target="_blank" rel="noopener" title="{{t "edit.preview.help"}}">{{t "edit.preview"}}</a>{{end}}
       {{if and $p.Entry.Published (not $t.Singleton)}}<button class="btn" type="submit" form="unpublish">{{t "edit.unpublish"}}</button>{{end}}
       <button class="btn" type="submit">{{t "edit.saveDraft"}}</button>
       <button class="btn btn--primary" type="submit" name="publish" value="1">{{if $p.Entry.Published}}{{t "edit.update"}}{{else}}{{t "edit.publish"}}{{end}}</button>

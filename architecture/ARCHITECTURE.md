@@ -44,7 +44,7 @@ Public API = every package outside `internal/`. Each package's contract is its p
 | `storage` | persistence port + SQL implementation | `Store`, `Entry`, `EntryTable`, `Column` |
 | `storage/sqlite` | SQLite adapter | `Open` |
 | `render` | theme data contract and rendering | `Page`, `Ref`, `Meta` |
-| `build` | static site build | `Builder.Build` |
+| `build` | static site build, draft preview | `Builder.Build`, `Builder.Preview` |
 | `mail` | outgoing mail | `Mailer`, `SMTP`, `LogMailer` |
 | `i18n` | translations | `Bundle`, `Catalog`, `Catalogs`, `M` |
 | `markdown` | escaping for Markdown output (`.md` variants, `llms.txt`, `Block.Markdown`) | `EscapeText`, `EscapeURL` |

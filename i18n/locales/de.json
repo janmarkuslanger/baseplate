@@ -90,6 +90,8 @@
   "edit.dirty": "ungespeicherte Änderungen",
   "edit.errors": "Bitte prüfe die markierten Felder.",
   "edit.new": "Neu",
+  "edit.preview": "Vorschau",
+  "edit.preview.help": "Zeigt den gespeicherten Entwurf so, wie er veröffentlicht aussähe",
   "edit.publish": "Veröffentlichen",
   "edit.save": "Speichern",
   "edit.saveDraft": "Entwurf speichern",
