@@ -45,13 +45,13 @@ func TestSaveRules(t *testing.T) {
 	ctx := context.Background()
 
 	res, err := svc.Save(ctx, entries.Save{Type: "page", Data: page("team", 0)})
-	if err != nil || res.Entry.Status != storage.StatusDraft || res.Changed {
+	if err != nil || res.Entry.Published() || res.Changed {
 		t.Fatalf("draft: %+v %v", res, err)
 	}
 	draftID := res.Entry.ID
 
 	about, err := svc.Save(ctx, entries.Save{Type: "page", Data: page("about", 0), Publish: true})
-	if err != nil || !about.Changed || about.Entry.Slug != "about" {
+	if err != nil || !about.Changed || about.Entry.Slug != "about" || !about.Entry.Published() || about.Entry.Changed {
 		t.Fatalf("publish: %+v %v", about, err)
 	}
 
@@ -76,9 +76,9 @@ func TestSaveRules(t *testing.T) {
 		t.Errorf("invalid relation: %v", err)
 	}
 
-	unpub, err := svc.Save(ctx, entries.Save{Type: "page", ID: about.Entry.ID, Data: page("about", 0)})
-	if err != nil || unpub.Entry.Status != storage.StatusDraft || !unpub.Changed {
-		t.Errorf("unpublishing changes published content: %+v %v", unpub, err)
+	edit, err := svc.Save(ctx, entries.Save{Type: "page", ID: about.Entry.ID, Data: page("about", 0)})
+	if err != nil || !edit.Entry.Published() || edit.Changed {
+		t.Errorf("saving the draft of a published entry keeps it published: %+v %v", edit, err)
 	}
 	if _, err := svc.Save(ctx, entries.Save{Type: "nope"}); !errors.Is(err, entries.ErrNotFound) {
 		t.Errorf("unknown type: %v", err)
@@ -92,13 +92,17 @@ func TestSingleton(t *testing.T) {
 	svc, reg := service(t)
 	ctx := context.Background()
 	for _, name := range []string{"Erst", "Dann"} {
-		if _, err := svc.Save(ctx, entries.Save{Type: "settings", Data: map[string]any{"siteName": name, "baseURL": "https://a.test"}}); err != nil {
+		if _, err := svc.Save(ctx, entries.Save{Type: "settings", Data: map[string]any{"siteName": name, "baseURL": "https://a.test"}, Publish: name == "Erst"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	list, total, _ := reg.Store.ListEntries(ctx, storage.ListQuery{Type: "settings"})
-	if total != 1 || list[0].Data["siteName"] != "Dann" || list[0].Status != storage.StatusPublished {
-		t.Errorf("singleton: %d %+v", total, list)
+	list, total, _ := reg.Store.ListEntries(ctx, storage.ListQuery{Type: "settings", Version: storage.Draft})
+	if total != 1 || list[0].Data["siteName"] != "Dann" || !list[0].Changed {
+		t.Errorf("singleton draft: %d %+v", total, list)
+	}
+	pub, err := reg.Store.GetEntryBySlug(ctx, "settings", "settings", "", storage.Published)
+	if err != nil || pub.Data["siteName"] != "Erst" {
+		t.Errorf("singleton published: %+v %v", pub, err)
 	}
 }
 
@@ -157,5 +161,34 @@ func TestDeleteReferencedPage(t *testing.T) {
 	var ref *storage.ReferencedError
 	if !errors.As(err, &ref) || changed || len(ref.Referrers) != 1 || ref.Referrers[0].ID != child.Entry.ID {
 		t.Fatalf("delete parent: changed=%v err=%v", changed, err)
+	}
+}
+
+// Slugs are unique per version: a draft may take the slug the published
+// version of another entry gives up in its draft, but publishing it waits
+// until that entry is published under its new slug.
+func TestSlugUniquePerVersion(t *testing.T) {
+	svc, _ := service(t)
+	ctx := context.Background()
+	a, err := svc.Save(ctx, entries.Save{Type: "page", Data: page("x", 0), Publish: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Save(ctx, entries.Save{Type: "page", ID: a.Entry.ID, Data: page("y", 0)}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.Save(ctx, entries.Save{Type: "page", Data: page("x", 0)})
+	if err != nil {
+		t.Fatalf("slug free among drafts: %v", err)
+	}
+	var errs content.Errors
+	if _, err := svc.Save(ctx, entries.Save{Type: "page", ID: b.Entry.ID, Data: page("x", 0), Publish: true}); !errors.As(err, &errs) || errs["slug"] == nil {
+		t.Errorf("slug still published elsewhere: %v", err)
+	}
+	if _, err := svc.Save(ctx, entries.Save{Type: "page", ID: a.Entry.ID, Data: page("y", 0), Publish: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Save(ctx, entries.Save{Type: "page", ID: b.Entry.ID, Data: page("x", 0), Publish: true}); err != nil {
+		t.Errorf("slug free after the other entry moved: %v", err)
 	}
 }

@@ -145,6 +145,7 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	authed.HandleFunc("GET /admin/c/{type}/new", a.edit)
 	authed.HandleFunc("GET /admin/c/{type}/{id}", a.edit)
 	authed.HandleFunc("POST /admin/c/{type}/save", a.save)
+	authed.HandleFunc("POST /admin/c/{type}/{id}/unpublish", a.unpublish)
 	authed.HandleFunc("POST /admin/c/{type}/{id}/delete", a.delete)
 	authed.HandleFunc("GET /admin/media", a.mediaPage)
 	authed.HandleFunc("GET /admin/media.json", a.mediaJSON)

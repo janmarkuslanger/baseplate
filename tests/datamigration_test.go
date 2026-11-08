@@ -44,7 +44,7 @@ func TestDataMigration(t *testing.T) {
 	if err := v1.Setup(ctx); err != nil {
 		t.Fatal(err)
 	}
-	v1.Registry.Store.CreateEntry(ctx, &storage.Entry{Type: "news", Data: map[string]any{"teaser": "Kurz"}})
+	v1.Registry.Store.SaveDraft(ctx, &storage.Entry{Type: "news", Data: map[string]any{"teaser": "Kurz"}})
 	v1.Close()
 
 	runs := 0
@@ -53,7 +53,7 @@ func TestDataMigration(t *testing.T) {
 		if err := v2.Setup(ctx); err != nil {
 			t.Fatal(err)
 		}
-		list, _, _ := v2.Registry.Store.ListEntries(ctx, storage.ListQuery{Type: "news"})
+		list, _, _ := v2.Registry.Store.ListEntries(ctx, storage.ListQuery{Type: "news", Version: storage.Draft})
 		if len(list) != 1 || list[0].Data["summary"] != "Kurz" {
 			t.Fatalf("start %d: %v", i, list)
 		}

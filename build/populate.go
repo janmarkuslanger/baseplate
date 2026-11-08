@@ -61,15 +61,13 @@ func (r *resolver) ref(typ string, id int64) *render.Ref {
 			}
 		}
 	} else {
-		// Like routable targets, drafts resolve to nothing.
-		e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id)
+		// Like routable targets, unpublished entries resolve to nothing.
+		e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id, "", storage.Published)
 		switch {
-		case err != nil:
-			if !errors.Is(err, storage.ErrNotFound) {
-				r.fail(err)
-			}
-		case e.Status == storage.StatusPublished:
+		case err == nil:
 			ref = &render.Ref{ID: id, Type: typ, Data: e.Data}
+		case !errors.Is(err, storage.ErrNotFound):
+			r.fail(err)
 		}
 	}
 	r.cache[k] = ref

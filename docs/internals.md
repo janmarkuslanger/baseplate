@@ -52,11 +52,11 @@ plugins/* ─▶ public packages only
 
 | Table | Content |
 |---|---|
-| `ct_<type>` | one row per entry, one column per scalar field |
+| `ct_<type>` | one row per entry version: `document_id` (the entry ID), `locale` (`''` = site language), `version` (`draft`/`published`), `revision`; one column per scalar field |
 | `cb_<block>` | one row per block instance |
 | `<owner>__<field>` | group and list items |
 | `components` | ordered links owner row → component row |
-| `relations` | ordered links owner row → target entry (one, many, inverse) |
+| `relations` | ordered links owner row → target document ID (one, many, inverse) |
 | `users`, `sessions` | admin access |
 | plugin tables | via plugin migrations |
 | `DataDir/media` | uploads |
@@ -64,10 +64,12 @@ plugins/* ─▶ public packages only
 - tables follow the code schema; created/extended on start, never dropped
 - kind change of a field with stored data → startup error (column ↔ component ↔ relation storage, other component tables, relation `Ref`, several rows under a single field); checked in the schema-sync transaction
 - `RenamedFrom` moves data on start, once per rename (recorded in `schema_migrations` as `rename:<table>.<old>><new>`); renames and table/column creation run in one transaction; table/column names are stable API (`storage.EntryTable` …)
-- save = one transaction (row, components, relations); `entries.Service` runs the slug check (same type and parent) and the write in one `Store.Atomic` transaction, which the SQLite adapter begins `IMMEDIATE`, so concurrent saves — also from other processes — are serialized
-- a singleton table holds at most one row (unique index `ct_<type>_single`); several existing rows → startup error naming them
+- save = one transaction (row, components, relations); `entries.Service` runs the slug check (same type, locale, parent and version; drafts always, published rows when publishing) and the writes in one `Store.Atomic` transaction, which the SQLite adapter begins `IMMEDIATE`, so concurrent saves — also from other processes — are serialized
+- versions: unique index `ct_<type>_version` on (`document_id`, `locale`, `version`); saves write the draft, publish copies it with its own component rows to the published row, unpublish deletes the published row; drafts count saves in `revision`, the published row keeps the revision it came from (→ `Entry.Changed`); build, template lists, navigations and forms read published rows only
+- an entry table without `document_id` (v0.3 and older) → startup error
+- a singleton table holds at most one document (unique index `ct_<type>_single` on `locale`, `version`); several existing documents → startup error naming them
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
-- delete is refused while relation fields of other entries point at the entry (`ReferencedError`); otherwise it removes the entry, its components and all relations from/to it
+- delete is refused while relation fields (any version) of other entries point at the entry (`ReferencedError`); otherwise it removes all versions, their components and all relations from/to it
 - build resolves relations one level deep (+ inverse fields)
 - date fields = Unix seconds; the admin converts in the site time zone (browser `Intl`), the build formats in it
 - pages = type template → `.Content` of the layout (`Type.Layout`, default `layout` if defined)

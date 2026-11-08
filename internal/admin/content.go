@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strconv"
 
 	"github.com/janmarkuslanger/baseplate/build"
@@ -48,7 +47,14 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 	if pageNo < 1 {
 		pageNo = 1
 	}
-	q := storage.ListQuery{Type: t.Name, Status: r.URL.Query().Get("status"), Search: r.URL.Query().Get("q"), Limit: perPage, Offset: (pageNo - 1) * perPage}
+	status := r.URL.Query().Get("status")
+	q := storage.ListQuery{Type: t.Name, Version: storage.Draft, Search: r.URL.Query().Get("q"), Limit: perPage, Offset: (pageNo - 1) * perPage}
+	switch status {
+	case "published":
+		q.Published = storage.OnlyPublished
+	case "draft":
+		q.Published = storage.OnlyUnpublished
+	}
 	entries, total, err := a.store().ListEntries(r.Context(), q)
 	if err != nil {
 		a.fail(w, err)
@@ -62,7 +68,7 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.render(w, r, http.StatusOK, a.pages["list"], view{Title: a.t(t.LabelPlural), Active: "c/" + t.Name, Flash: a.flash(r), Page: map[string]any{
-		"Type": t, "Rows": rows, "Total": total, "Query": q, "PageNo": pageNo,
+		"Type": t, "Rows": rows, "Total": total, "Query": q, "Status": status, "PageNo": pageNo,
 		"HasNext": pageNo*perPage < total, "HasPrev": pageNo > 1, "Prev": pageNo - 1, "Next": pageNo + 1,
 	}})
 }
@@ -70,8 +76,8 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 // publishedParent looks up parents like the build does: published only.
 func (a *Admin) publishedParent(ctx context.Context, typ string) func(int64) *storage.Entry {
 	return func(id int64) *storage.Entry {
-		e, err := a.store().GetEntry(ctx, typ, id)
-		if err != nil || e.Status != storage.StatusPublished {
+		e, err := a.store().GetEntry(ctx, typ, id, "", storage.Published)
+		if err != nil {
 			return nil
 		}
 		return e
@@ -87,7 +93,7 @@ func (a *Admin) orDash(v any) any {
 
 func (a *Admin) flash(r *http.Request) string {
 	switch f := r.URL.Query().Get("flash"); f {
-	case "saved", "published", "deleted":
+	case "saved", "published", "unpublished", "deleted":
 		return a.t("flash." + f)
 	}
 	return ""
@@ -149,7 +155,7 @@ func (a *Admin) usedIn(r *http.Request, t *content.Type, e *storage.Entry) []use
 		}
 		u := usedIn{Type: a.t(rt.Label), Field: ref.Field, URL: fmt.Sprintf("/admin/c/%s/%d", rt.Name, ref.ID), Nested: ref.Nested}
 		u.Field = a.relationLabel(rt, ref)
-		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID); err == nil {
+		if src, err := a.store().GetEntry(r.Context(), rt.Name, ref.ID, "", storage.Draft); err == nil {
 			u.Title = fmt.Sprint(a.orDash(src.Data[rt.Title()]))
 		}
 		out = append(out, u)
@@ -162,10 +168,10 @@ func (a *Admin) edit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	e := &storage.Entry{Type: t.Name, Status: storage.StatusDraft, Data: map[string]any{}}
+	e := &storage.Entry{Type: t.Name, Version: storage.Draft, Data: map[string]any{}}
 	switch {
 	case t.Singleton:
-		got, err := a.store().GetEntryBySlug(r.Context(), t.Name, t.Name)
+		got, err := a.store().GetEntryBySlug(r.Context(), t.Name, t.Name, "", storage.Draft)
 		if err == nil {
 			e = got
 		} else if !errors.Is(err, storage.ErrNotFound) {
@@ -174,7 +180,7 @@ func (a *Admin) edit(w http.ResponseWriter, r *http.Request) {
 		}
 	case r.PathValue("id") != "":
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		got, err := a.store().GetEntry(r.Context(), t.Name, id)
+		got, err := a.store().GetEntry(r.Context(), t.Name, id, "", storage.Draft)
 		if errors.Is(err, storage.ErrNotFound) || (err == nil && got.Type != t.Name) {
 			http.NotFound(w, r)
 			return
@@ -259,7 +265,7 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, a.t("error.badData"), http.StatusBadRequest)
 		return
 	}
-	in := entries.Save{Type: t.Name, Data: raw, Publish: r.FormValue("status") == storage.StatusPublished}
+	in := entries.Save{Type: t.Name, Data: raw, Publish: r.FormValue("publish") != ""}
 	in.ID, _ = strconv.ParseInt(r.FormValue("id"), 10, 64)
 	if cur := auth.FromContext(r.Context()); cur != nil {
 		in.UserID = cur.User.ID
@@ -272,10 +278,10 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.As(err, &errs):
 		// Re-render with what the editor typed.
-		e := &storage.Entry{Type: t.Name, ID: in.ID, Status: storage.StatusDraft, Data: raw}
+		e := &storage.Entry{Type: t.Name, ID: in.ID, Version: storage.Draft, Data: raw}
 		if in.ID > 0 {
-			if got, err := a.store().GetEntry(r.Context(), t.Name, in.ID); err == nil {
-				e.Status, e.UpdatedAt = got.Status, got.UpdatedAt
+			if got, err := a.store().GetEntry(r.Context(), t.Name, in.ID, "", storage.Draft); err == nil {
+				e.PublishedAt, e.Changed, e.UpdatedAt = got.PublishedAt, got.Changed, got.UpdatedAt
 			}
 		}
 		a.renderEdit(w, r, http.StatusUnprocessableEntity, t, e, raw, errs)
@@ -284,16 +290,34 @@ func (a *Admin) save(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, err)
 		return
 	}
-	e := res.Entry
 	fl := "saved"
-	if e.Status == storage.StatusPublished && !t.Singleton {
+	if in.Publish {
 		fl = "published"
 	}
-	target := fmt.Sprintf("/admin/c/%s/%d?flash=%s", t.Name, e.ID, fl)
+	target := fmt.Sprintf("/admin/c/%s/%d?flash=%s", t.Name, res.Entry.ID, fl)
 	if t.Singleton {
-		target = "/admin/c/" + t.Name + "?flash=saved"
+		target = "/admin/c/" + t.Name + "?flash=" + fl
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// unpublish takes an entry off the site; its draft stays.
+func (a *Admin) unpublish(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.contentType(w, r)
+	if !ok {
+		return
+	}
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	_, err := a.Reg.Entries.Unpublish(r.Context(), t.Name, id, "")
+	if errors.Is(err, entries.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		a.fail(w, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/c/%s/%d?flash=unpublished", t.Name, id), http.StatusSeeOther)
 }
 
 func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +333,7 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 	}
 	if ref, ok := errors.AsType[*storage.ReferencedError](err); ok {
 		// Still in use: show the editor with the referrers instead.
-		e, gerr := a.store().GetEntry(r.Context(), t.Name, id)
+		e, gerr := a.store().GetEntry(r.Context(), t.Name, id, "", storage.Draft)
 		if gerr != nil {
 			a.fail(w, gerr)
 			return
@@ -322,53 +346,4 @@ func (a *Admin) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/c/"+t.Name+"?flash=deleted", http.StatusSeeOther)
-}
-
-// refOptions lists the choices of every relation picker the editor of t can
-// show (also inside groups, lists and blocks), one query per target type.
-func (a *Admin) refOptions(ctx context.Context, t *content.Type) map[string][]content.Option {
-	targets := map[string]bool{}
-	seenBlocks := map[string]bool{}
-	var walk func(fs []content.Field)
-	walk = func(fs []content.Field) {
-		for _, f := range fs {
-			if f.Kind == fields.Relation {
-				targets[f.Ref] = true
-			}
-			walk(f.Fields)
-			if f.Kind == fields.Blocks {
-				for _, b := range a.Reg.Schema.Blocks(f) {
-					if !seenBlocks[b.Name] {
-						seenBlocks[b.Name] = true
-						walk(b.Fields)
-					}
-				}
-			}
-		}
-	}
-	walk(t.Fields)
-	out := make(map[string][]content.Option, len(targets))
-	for typ := range targets {
-		out[typ] = a.entryOptions(ctx, typ)
-	}
-	return out
-}
-
-// entryOptions lists the entries of a type, sorted by title.
-func (a *Admin) entryOptions(ctx context.Context, typ string) []content.Option {
-	t, ok := a.Reg.Schema.Type(typ)
-	if !ok {
-		return nil
-	}
-	list, _, err := a.store().ListEntries(ctx, storage.ListQuery{Type: typ})
-	if err != nil {
-		a.Logger.Error("relation options", "type", typ, "err", err)
-		return nil
-	}
-	out := make([]content.Option, 0, len(list))
-	for _, e := range list {
-		out = append(out, content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(a.orDash(e.Data[t.Title()]))})
-	}
-	slices.SortFunc(out, func(x, y content.Option) int { return cmp.Compare(x.Label, y.Label) })
-	return out
 }

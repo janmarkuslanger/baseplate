@@ -19,7 +19,7 @@ func TestReferrersDistinguishSimilarOwners(t *testing.T) {
 		content.Type{Name: "a", Fields: ref}, content.Type{Name: "a1", Fields: ref})
 
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	if err := s.CreateEntry(ctx, cat); err != nil {
+	if err := s.SaveDraft(ctx, cat); err != nil {
 		t.Fatal(err)
 	}
 	var a12 *storage.Entry
@@ -28,13 +28,13 @@ func TestReferrersDistinguishSimilarOwners(t *testing.T) {
 		if i == 11 {
 			a12.Data["cat"] = cat.ID
 		}
-		if err := s.CreateEntry(ctx, a12); err != nil {
+		if err := s.SaveDraft(ctx, a12); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s.CreateEntry(ctx, &storage.Entry{Type: "a1", Data: map[string]any{}})
+	s.SaveDraft(ctx, &storage.Entry{Type: "a1", Data: map[string]any{}})
 	a1n2 := &storage.Entry{Type: "a1", Data: map[string]any{"cat": cat.ID}}
-	if err := s.CreateEntry(ctx, a1n2); err != nil {
+	if err := s.SaveDraft(ctx, a1n2); err != nil {
 		t.Fatal(err)
 	}
 	if a12.ID != 12 || a1n2.ID != 2 {

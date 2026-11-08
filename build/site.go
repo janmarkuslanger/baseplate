@@ -56,7 +56,7 @@ func (s *site) Context() context.Context { return s.ctx }
 func (s *site) Settings() map[string]any { return s.cfg.Data }
 
 func (s *site) Published(typ string) ([]storage.Entry, error) {
-	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Status: storage.StatusPublished})
+	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Version: storage.Published})
 	return list, err
 }
 

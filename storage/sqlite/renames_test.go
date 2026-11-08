@@ -47,10 +47,10 @@ func TestRenameRunsOnce(t *testing.T) {
 			s := startWith(t, path, categoryType, post(c.field("a", "")))
 			c1 := &storage.Entry{Type: "category", Data: map[string]any{"title": "eins"}}
 			c2 := &storage.Entry{Type: "category", Data: map[string]any{"title": "zwei"}}
-			s.CreateEntry(ctx, c1)
-			s.CreateEntry(ctx, c2)
+			s.SaveDraft(ctx, c1)
+			s.SaveDraft(ctx, c2)
 			e := &storage.Entry{Type: "post", Data: map[string]any{"a": c.old(c1, c2)}}
-			if err := s.CreateEntry(ctx, e); err != nil {
+			if err := s.SaveDraft(ctx, e); err != nil {
 				t.Fatal(err)
 			}
 			s.Close()
@@ -60,16 +60,16 @@ func TestRenameRunsOnce(t *testing.T) {
 
 			reused := post(c.field("b", "a"), c.field("a", ""))
 			s = startWith(t, path, categoryType, reused)
-			got, _ := s.GetEntry(ctx, "post", e.ID)
+			got, _ := s.GetEntry(ctx, "post", e.ID, "", storage.Draft)
 			got.Data["a"] = c.new(c1, c2)
-			if err := s.UpdateEntry(ctx, got); err != nil {
+			if err := s.SaveDraft(ctx, got); err != nil {
 				t.Fatal(err)
 			}
 			s.Close()
 
 			for i := 0; i < 2; i++ {
 				s = startWith(t, path, categoryType, reused)
-				got, err := s.GetEntry(ctx, "post", e.ID)
+				got, err := s.GetEntry(ctx, "post", e.ID, "", storage.Draft)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -124,7 +124,7 @@ func TestFailedSyncRollsBackRenames(t *testing.T) {
 
 	s := startWith(t, path, v1)
 	n := &storage.Entry{Type: "news", Data: map[string]any{"teaser": "Kurz", "links": []any{map[string]any{"label": "L"}}, "rating": 3.0}}
-	if err := s.CreateEntry(ctx, n); err != nil {
+	if err := s.SaveDraft(ctx, n); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
@@ -153,7 +153,7 @@ func TestFailedSyncRollsBackRenames(t *testing.T) {
 	s.Close()
 
 	s = startWith(t, path, v2(fields.Number))
-	got, err := s.GetEntry(ctx, "news", n.ID)
+	got, err := s.GetEntry(ctx, "news", n.ID, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}

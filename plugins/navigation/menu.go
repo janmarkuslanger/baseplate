@@ -32,7 +32,7 @@ type Item struct {
 // their items. Page URLs come from the page's .Nav, so pass the page (in a
 // layout: .Page).
 func (p *Plugin) navigation(key string, page any) ([]*Item, error) {
-	navs, _, err := p.reg.Store.ListEntries(context.Background(), storage.ListQuery{Type: TypeName, Status: storage.StatusPublished})
+	navs, _, err := p.reg.Store.ListEntries(context.Background(), storage.ListQuery{Type: TypeName, Version: storage.Published})
 	if err != nil {
 		return nil, fmt.Errorf("navigation %q: %w", key, err)
 	}

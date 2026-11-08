@@ -159,8 +159,6 @@ type formDef struct {
 	ID     int64
 	Data   map[string]any
 	Fields []fieldDef
-
-	published bool
 }
 
 type fieldDef struct {
@@ -168,15 +166,15 @@ type fieldDef struct {
 	Required          bool
 }
 
-func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
-	e, err := p.reg.Store.GetEntry(ctx, TypeName, id)
+func (p *Plugin) load(ctx context.Context, id int64, v storage.Version) (*formDef, error) {
+	e, err := p.reg.Store.GetEntry(ctx, TypeName, id, "", v)
 	if err != nil {
 		return nil, err
 	}
 	if e.Type != TypeName {
 		return nil, storage.ErrNotFound
 	}
-	d := &formDef{ID: e.ID, Data: e.Data, published: e.Status == storage.StatusPublished}
+	d := &formDef{ID: e.ID, Data: e.Data}
 	list, _ := e.Data["fields"].([]any)
 	for _, it := range list {
 		m, _ := it.(map[string]any)
@@ -189,11 +187,7 @@ func (p *Plugin) load(ctx context.Context, id int64) (*formDef, error) {
 
 // loadPublished is load for visitors: a draft form does not exist for them.
 func (p *Plugin) loadPublished(ctx context.Context, id int64) (*formDef, error) {
-	d, err := p.load(ctx, id)
-	if err == nil && !d.published {
-		return nil, storage.ErrNotFound
-	}
-	return d, err
+	return p.load(ctx, id, storage.Published)
 }
 
 // formByID is available in frontend templates: {{with formByID .Block.form}}.

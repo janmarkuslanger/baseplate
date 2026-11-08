@@ -13,8 +13,8 @@ import (
 func TestLLMsTxtHeadingInSiteLanguage(t *testing.T) {
 	for lang, want := range map[string]string{"": "## Seiten\n", "de-AT": "## Seiten\n", "en": "## Pages\n"} {
 		b, st := setup(t)
-		add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test", "llmsTxt": true, "language": lang})
-		add(t, st, fields.PageType, "a", storage.StatusPublished, map[string]any{"title": "A"})
+		add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test", "llmsTxt": true, "language": lang})
+		add(t, st, fields.PageType, "a", storage.Published, map[string]any{"title": "A"})
 		if _, err := b.Build(context.Background()); err != nil {
 			t.Fatal(err)
 		}

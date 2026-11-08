@@ -12,13 +12,13 @@ import (
 
 func TestCanonicalURLs(t *testing.T) {
 	b, st := setup(t)
-	add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "https://a.test"})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
 	canon := func(c string) map[string]any { return map[string]any{"canonical": c} }
-	add(t, st, fields.PageType, "plain", storage.StatusPublished, map[string]any{"title": "Plain"})
-	add(t, st, fields.PageType, "rel", storage.StatusPublished, map[string]any{"title": "Rel", "seo": canon("/plain/")})
-	add(t, st, fields.PageType, "self", storage.StatusPublished, map[string]any{"title": "Self", "seo": canon("https://a.test/self/")})
-	add(t, st, fields.PageType, "self-rel", storage.StatusPublished, map[string]any{"title": "SelfRel", "seo": canon("/self-rel/")})
-	add(t, st, fields.PageType, "foreign", storage.StatusPublished, map[string]any{"title": "Foreign", "seo": canon("https://x.test/orig/")})
+	add(t, st, fields.PageType, "plain", storage.Published, map[string]any{"title": "Plain"})
+	add(t, st, fields.PageType, "rel", storage.Published, map[string]any{"title": "Rel", "seo": canon("/plain/")})
+	add(t, st, fields.PageType, "self", storage.Published, map[string]any{"title": "Self", "seo": canon("https://a.test/self/")})
+	add(t, st, fields.PageType, "self-rel", storage.Published, map[string]any{"title": "SelfRel", "seo": canon("/self-rel/")})
+	add(t, st, fields.PageType, "foreign", storage.Published, map[string]any{"title": "Foreign", "seo": canon("https://x.test/orig/")})
 	if _, err := b.Build(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -49,20 +49,23 @@ func TestCanonicalURLs(t *testing.T) {
 func TestInvalidStoredSEOURLsFailTheBuild(t *testing.T) {
 	b, st := setup(t)
 	ctx := context.Background()
-	settingsID := add(t, st, fields.SettingsType, fields.SettingsType, storage.StatusPublished, map[string]any{"baseURL": "/site"})
+	settingsID := add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "/site"})
 	if _, err := b.Build(ctx); !errors.Is(err, ErrBaseURLInvalid) {
 		t.Fatalf("relative base URL: want ErrBaseURLInvalid, got %v", err)
 	}
 
-	e, err := st.GetEntry(ctx, fields.SettingsType, settingsID)
+	e, err := st.GetEntry(ctx, fields.SettingsType, settingsID, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e.Data["baseURL"] = "https://a.test"
-	if err := st.UpdateEntry(ctx, e); err != nil {
+	if err := st.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	add(t, st, fields.PageType, "x", storage.StatusPublished, map[string]any{"title": "X", "seo": map[string]any{"canonical": "mailto:a@a.test"}})
+	if err := st.Publish(ctx, fields.SettingsType, settingsID, ""); err != nil {
+		t.Fatal(err)
+	}
+	add(t, st, fields.PageType, "x", storage.Published, map[string]any{"title": "X", "seo": map[string]any{"canonical": "mailto:a@a.test"}})
 	if _, err := b.Build(ctx); err == nil || !strings.Contains(err.Error(), "/x/") || !strings.Contains(err.Error(), "mailto:a@a.test") {
 		t.Fatalf("invalid canonical: want an error naming page and value, got %v", err)
 	}

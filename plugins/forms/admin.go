@@ -42,7 +42,7 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 		return
 	}
 
-	forms, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName})
+	forms, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName, Version: storage.Draft})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -131,7 +131,7 @@ func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	// of the preview.
 	seen := map[string]bool{}
 	checkbox := map[string]bool{}
-	if def, err := p.load(context.Background(), s.FormID); err == nil {
+	if def, err := p.load(context.Background(), s.FormID, storage.Draft); err == nil {
 		for _, f := range def.Fields {
 			if v, ok := values[f.Name]; ok {
 				s.Values = append(s.Values, labeled{f.Label, v})

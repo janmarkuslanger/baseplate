@@ -10,84 +10,6 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 )
 
-func (s *SQLStore) CreateEntry(ctx context.Context, e *Entry) error {
-	t, err := s.entryTable(e.Type)
-	if err != nil {
-		return err
-	}
-	if e.Status == "" {
-		e.Status = StatusDraft
-	}
-	now := s.now()
-	e.CreatedAt, e.UpdatedAt = now, now
-	return s.tx(ctx, func(q querier) error {
-		cols := []string{"slug", "status", "locale", "created_at", "updated_at"}
-		args := []any{e.Slug, e.Status, e.Locale, now.Unix(), now.Unix()}
-		for _, c := range t.Columns {
-			cols = append(cols, s.col(c.Name))
-			args = append(args, scalarArg(c, e.Data[c.Field.Name]))
-		}
-		res, err := q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, t.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
-		if err != nil {
-			return err
-		}
-		if e.ID, err = res.LastInsertId(); err != nil {
-			return err
-		}
-		return s.writeChildren(ctx, q, t, e.ID, e.Data)
-	})
-}
-
-func (s *SQLStore) UpdateEntry(ctx context.Context, e *Entry) error {
-	t, err := s.entryTable(e.Type)
-	if err != nil {
-		return err
-	}
-	e.UpdatedAt = s.now()
-	return s.tx(ctx, func(q querier) error {
-		sets := []string{"slug = ?", "status = ?", "locale = ?", "updated_at = ?"}
-		args := []any{e.Slug, e.Status, e.Locale, e.UpdatedAt.Unix()}
-		for _, c := range t.Columns {
-			sets = append(sets, s.col(c.Name)+" = ?")
-			args = append(args, scalarArg(c, e.Data[c.Field.Name]))
-		}
-		res, err := q.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET %s WHERE id = ?`, t.Name, strings.Join(sets, ", ")), append(args, e.ID)...)
-		if err != nil {
-			return err
-		}
-		if err := mustAffect(res); err != nil {
-			return err
-		}
-		// Components keep their IDs: items carrying the key of a component
-		// of this entry are updated (wherever they moved), others are new,
-		// and components no longer present are deleted.
-		tree := map[compRef]bool{}
-		if err := s.collectTree(ctx, q, t.Name, e.ID, tree); err != nil {
-			return err
-		}
-		if err := s.unlink(ctx, q, t.Name, e.ID, tree); err != nil {
-			return err
-		}
-		r := &reuse{tree: tree, used: map[compRef]bool{}}
-		if err := s.writeChildrenReuse(ctx, q, t, e.ID, e.Data, r); err != nil {
-			return err
-		}
-		for c := range tree {
-			if !r.used[c] {
-				// A removed component takes along what is still linked to
-				// it: data of fields no longer in the schema.
-				if err := s.deleteChildren(ctx, q, c.table, c.id); err != nil {
-					return err
-				}
-				if _, err := q.ExecContext(ctx, `DELETE FROM `+c.table+` WHERE id = ?`, c.id); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
-}
-
 func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error {
 	t, err := s.entryTable(typ)
 	if err != nil {
@@ -101,21 +23,120 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 		if len(refs) > 0 {
 			return &ReferencedError{Type: typ, ID: id, Referrers: refs}
 		}
-		res, err := q.ExecContext(ctx, `DELETE FROM `+t.Name+` WHERE id = ?`, id)
+		rows, err := scanIDs(q.QueryContext(ctx, `SELECT id FROM `+t.Name+` WHERE document_id = ?`, id))
 		if err != nil {
 			return err
 		}
-		if err := mustAffect(res); err != nil {
-			return err
+		if len(rows) == 0 {
+			return ErrNotFound
 		}
-		if err := s.deleteChildren(ctx, q, t.Name, id); err != nil {
-			return err
+		for _, rowID := range rows {
+			if err := s.deleteRow(ctx, q, t, rowID); err != nil {
+				return err
+			}
 		}
 		// What still points here is not counted as a referrer: relations
 		// of fields removed from the schema, and the entry's own.
 		_, err = q.ExecContext(ctx, `DELETE FROM relations WHERE target_type = ? AND target_id = ?`, typ, id)
 		return err
 	})
+}
+
+// insertRow stores a new version row with its components and relations.
+// ID 0 starts a new document, identified by the row's own ID.
+func (s *SQLStore) insertRow(ctx context.Context, q querier, t *table, e *Entry, rev int64) error {
+	e.UpdatedAt = s.now()
+	cols := []string{"document_id", "locale", "version", "revision", "slug", "created_at", "updated_at"}
+	args := []any{e.ID, e.Locale, e.Version, rev, e.Slug, e.CreatedAt.Unix(), e.UpdatedAt.Unix()}
+	for _, c := range t.Columns {
+		cols = append(cols, s.col(c.Name))
+		args = append(args, scalarArg(c, e.Data[c.Field.Name]))
+	}
+	res, err := q.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, t.Name, strings.Join(cols, ", "), placeholders(len(cols))), args...)
+	if err != nil {
+		return err
+	}
+	rowID, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	if e.ID == 0 {
+		e.ID = rowID
+		if _, err := q.ExecContext(ctx, `UPDATE `+t.Name+` SET document_id = ? WHERE id = ?`, rowID, rowID); err != nil {
+			return err
+		}
+	}
+	return s.writeChildren(ctx, q, t, rowID, e.Data)
+}
+
+// updateRow rewrites a version row with its components and relations.
+func (s *SQLStore) updateRow(ctx context.Context, q querier, t *table, rowID int64, e *Entry, rev int64) error {
+	e.UpdatedAt = s.now()
+	sets := []string{"revision = ?", "slug = ?", "updated_at = ?"}
+	args := []any{rev, e.Slug, e.UpdatedAt.Unix()}
+	for _, c := range t.Columns {
+		sets = append(sets, s.col(c.Name)+" = ?")
+		args = append(args, scalarArg(c, e.Data[c.Field.Name]))
+	}
+	res, err := q.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET %s WHERE id = ?`, t.Name, strings.Join(sets, ", ")), append(args, rowID)...)
+	if err != nil {
+		return err
+	}
+	if err := mustAffect(res); err != nil {
+		return err
+	}
+	// Components keep their IDs: items carrying the key of a component
+	// of this row are updated (wherever they moved), others are new,
+	// and components no longer present are deleted.
+	tree := map[compRef]bool{}
+	if err := s.collectTree(ctx, q, t.Name, rowID, tree); err != nil {
+		return err
+	}
+	if err := s.unlink(ctx, q, t.Name, rowID, tree); err != nil {
+		return err
+	}
+	r := &reuse{tree: tree, used: map[compRef]bool{}}
+	if err := s.writeChildrenReuse(ctx, q, t, rowID, e.Data, r); err != nil {
+		return err
+	}
+	for c := range tree {
+		if !r.used[c] {
+			// A removed component takes along what is still linked to
+			// it: data of fields no longer in the schema.
+			if err := s.deleteChildren(ctx, q, c.table, c.id); err != nil {
+				return err
+			}
+			if _, err := q.ExecContext(ctx, `DELETE FROM `+c.table+` WHERE id = ?`, c.id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// deleteRow removes one version row with its components and relations.
+func (s *SQLStore) deleteRow(ctx context.Context, q querier, t *table, rowID int64) error {
+	if err := s.deleteChildren(ctx, q, t.Name, rowID); err != nil {
+		return err
+	}
+	_, err := q.ExecContext(ctx, `DELETE FROM `+t.Name+` WHERE id = ?`, rowID)
+	return err
+}
+
+func scanIDs(rows *sql.Rows, err error) ([]int64, error) {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // writeChildren stores the components and relations of one owner row.
@@ -152,7 +173,7 @@ func (s *SQLStore) writeChildrenReuse(ctx context.Context, q querier, t *table, 
 		case content.StoreRelation:
 			for i, target := range relationIDs(v) {
 				var one int
-				err := q.QueryRowContext(ctx, `SELECT 1 FROM `+entryTable(f.Ref)+` WHERE id = ?`, target).Scan(&one)
+				err := q.QueryRowContext(ctx, `SELECT 1 FROM `+entryTable(f.Ref)+` WHERE document_id = ? LIMIT 1`, target).Scan(&one)
 				if errors.Is(err, sql.ErrNoRows) {
 					return fmt.Errorf("%w (%s → %s #%d)", ErrInvalidRelation, f.Name, f.Ref, target)
 				}

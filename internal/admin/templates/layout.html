@@ -33,3 +33,6 @@
 <body class="auth">{{template "content" .}}</body>
 {{end}}
 </html>{{end}}
+
+{{/* status shows the publication state of a draft entry. */}}
+{{define "status"}}{{if .Published}}<span class="pill pill--ok">{{t "status.published"}}</span>{{if .Changed}} <span class="pill">{{t "status.changed"}}</span>{{end}}{{else}}<span class="pill">{{t "status.draft"}}</span>{{end}}{{end}}

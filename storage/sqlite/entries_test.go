@@ -52,10 +52,10 @@ func TestEntryRoundTrip(t *testing.T) {
 	s, _ := schemaStore(t)
 
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	if err := s.CreateEntry(ctx, cat); err != nil {
+	if err := s.SaveDraft(ctx, cat); err != nil {
 		t.Fatal(err)
 	}
-	page := &storage.Entry{Type: "page", Slug: "index", Status: storage.StatusPublished, Data: map[string]any{
+	page := &storage.Entry{Type: "page", Slug: "index", Data: map[string]any{
 		"title": "Start", "slug": "index",
 		"seo": map[string]any{"metaTitle": "Meta", "noindex": true},
 		"body": []any{
@@ -66,10 +66,10 @@ func TestEntryRoundTrip(t *testing.T) {
 			}},
 		},
 	}}
-	if err := s.CreateEntry(ctx, page); err != nil {
+	if err := s.SaveDraft(ctx, page); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.GetEntryBySlug(ctx, "page", "index")
+	got, err := s.GetEntryBySlug(ctx, "page", "index", "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +95,10 @@ func TestEntryRoundTrip(t *testing.T) {
 		"categories": []any{cat.ID},
 		"links":      []any{map[string]any{"label": "eins"}, map[string]any{"label": "zwei"}},
 	}}
-	if err := s.CreateEntry(ctx, post); err != nil {
+	if err := s.SaveDraft(ctx, post); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := s.GetEntry(ctx, "post", post.ID)
+	p, _ := s.GetEntry(ctx, "post", post.ID, "", storage.Draft)
 	if p.Data["views"] != 3.5 || p.Data["featured"] != true || len(p.Data["links"].([]any)) != 2 {
 		t.Errorf("post: %v", p.Data)
 	}
@@ -109,14 +109,14 @@ func TestEntryRoundTrip(t *testing.T) {
 	// Updates rewrite components instead of piling them up.
 	before := count(t, s, `SELECT COUNT(*) FROM components`)
 	p.Data["links"] = []any{map[string]any{"label": "nur eins"}}
-	if err := s.UpdateEntry(ctx, p); err != nil {
+	if err := s.SaveDraft(ctx, p); err != nil {
 		t.Fatal(err)
 	}
 	if after := count(t, s, `SELECT COUNT(*) FROM components`); after != before-1 {
 		t.Errorf("components after update: %d, want %d", after, before-1)
 	}
 
-	list, total, err := s.ListEntries(ctx, storage.ListQuery{Type: "post", Search: "Welt"})
+	list, total, err := s.ListEntries(ctx, storage.ListQuery{Type: "post", Version: storage.Draft, Search: "Welt"})
 	if err != nil || total != 1 || list[0].Data["title"] != "Hallo Welt" {
 		t.Errorf("search: %v %d %v", list, total, err)
 	}
@@ -125,7 +125,7 @@ func TestEntryRoundTrip(t *testing.T) {
 func TestRelationIntegrity(t *testing.T) {
 	ctx := context.Background()
 	s, _ := schemaStore(t)
-	err := s.CreateEntry(ctx, &storage.Entry{Type: "post", Data: map[string]any{"categories": []any{int64(99)}}})
+	err := s.SaveDraft(ctx, &storage.Entry{Type: "post", Data: map[string]any{"categories": []any{int64(99)}}})
 	if !errors.Is(err, storage.ErrInvalidRelation) {
 		t.Fatalf("want ErrInvalidRelation, got %v", err)
 	}
@@ -134,9 +134,9 @@ func TestRelationIntegrity(t *testing.T) {
 	}
 
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	s.CreateEntry(ctx, cat)
+	s.SaveDraft(ctx, cat)
 	post := &storage.Entry{Type: "post", Data: map[string]any{"categories": []any{cat.ID}}}
-	s.CreateEntry(ctx, post)
+	s.SaveDraft(ctx, post)
 
 	refs, err := s.Referrers(ctx, "category", cat.ID)
 	if err != nil || len(refs) != 1 || refs[0].Type != "post" || refs[0].ID != post.ID || refs[0].Field != "categories" {
@@ -166,14 +166,14 @@ func TestNestedReferrer(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := &storage.Entry{Type: "form", Data: map[string]any{"title": "Kontakt"}}
-	s.CreateEntry(ctx, f)
+	s.SaveDraft(ctx, f)
 	page := &storage.Entry{Type: "page", Slug: "kontakt", Data: map[string]any{"title": "K", "body": []any{
 		map[string]any{"_type": "article", "children": []any{map[string]any{"_type": "form", "form": f.ID}}},
 	}}}
-	if err := s.CreateEntry(ctx, page); err != nil {
+	if err := s.SaveDraft(ctx, page); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := s.GetEntry(ctx, "page", page.ID)
+	got, _ := s.GetEntry(ctx, "page", page.ID, "", storage.Draft)
 	block := got.Data["body"].([]any)[0].(map[string]any)["children"].([]any)[0].(map[string]any)
 	if block["form"] != f.ID {
 		t.Errorf("block relation: %v", block)
@@ -200,12 +200,12 @@ func TestSchemaSync(t *testing.T) {
 	if err := s.UseSchema(ctx, mk(fields.Number)); err != nil {
 		t.Fatal(err)
 	}
-	s.CreateEntry(ctx, &storage.Entry{Type: "news", Data: map[string]any{"rating": 4.0}})
+	s.SaveDraft(ctx, &storage.Entry{Type: "news", Data: map[string]any{"rating": 4.0}})
 	// Adding a field adds a column; existing rows keep their data.
 	if err := s.UseSchema(ctx, mk(fields.Number, content.Field{Name: "subTitle", Kind: fields.Text})); err != nil {
 		t.Fatal(err)
 	}
-	list, _, _ := s.ListEntries(ctx, storage.ListQuery{Type: "news"})
+	list, _, _ := s.ListEntries(ctx, storage.ListQuery{Type: "news", Version: storage.Draft})
 	if list[0].Data["rating"] != 4.0 {
 		t.Errorf("data lost after sync: %v", list[0].Data)
 	}
@@ -226,15 +226,15 @@ func TestStableComponentIDs(t *testing.T) {
 				map[string]any{"_type": "richtext", "html": "<p>innen</p>"},
 			}},
 		}}}
-	if err := s.CreateEntry(ctx, page); err != nil {
+	if err := s.SaveDraft(ctx, page); err != nil {
 		t.Fatal(err)
 	}
 	other := &storage.Entry{Type: "page", Slug: "y", Data: map[string]any{"title": "Y", "body": []any{map[string]any{"_type": "heading", "text": "fremd"}}}}
-	s.CreateEntry(ctx, other)
-	o, _ := s.GetEntry(ctx, "page", other.ID)
+	s.SaveDraft(ctx, other)
+	o, _ := s.GetEntry(ctx, "page", other.ID, "", storage.Draft)
 	foreignKey := o.Data["body"].([]any)[0].(map[string]any)["_key"]
 
-	got, _ := s.GetEntry(ctx, "page", page.ID)
+	got, _ := s.GetEntry(ctx, "page", page.ID, "", storage.Draft)
 	body := got.Data["body"].([]any)
 	heading, article := body[0].(map[string]any), body[1].(map[string]any)
 	inner := article["children"].([]any)[0].(map[string]any)
@@ -246,11 +246,11 @@ func TestStableComponentIDs(t *testing.T) {
 	inner["html"] = "<p>jetzt oben</p>"
 	article["children"] = []any{}
 	got.Data["body"] = []any{inner, article, map[string]any{"_type": "heading", "text": "geklaut", "_key": foreignKey}}
-	if err := s.UpdateEntry(ctx, got); err != nil {
+	if err := s.SaveDraft(ctx, got); err != nil {
 		t.Fatal(err)
 	}
 
-	after, _ := s.GetEntry(ctx, "page", page.ID)
+	after, _ := s.GetEntry(ctx, "page", page.ID, "", storage.Draft)
 	nb := after.Data["body"].([]any)
 	key := func(v any) any { return v.(map[string]any)["_key"] }
 	if key(nb[0]) != inner["_key"] || nb[0].(map[string]any)["html"] != "<p>jetzt oben</p>" {
@@ -268,7 +268,7 @@ func TestStableComponentIDs(t *testing.T) {
 	if n := count(t, s, `SELECT COUNT(*) FROM cb_heading`); n != 2 { // other's + new one; deleted one is gone
 		t.Errorf("heading rows = %d, want 2", n)
 	}
-	o2, _ := s.GetEntry(ctx, "page", other.ID)
+	o2, _ := s.GetEntry(ctx, "page", other.ID, "", storage.Draft)
 	if o2.Data["body"].([]any)[0].(map[string]any)["text"] != "fremd" {
 		t.Error("other entry was modified")
 	}
@@ -308,7 +308,7 @@ func TestRenamedFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := &storage.Entry{Type: "category", Data: map[string]any{"title": "Go"}}
-	s.CreateEntry(ctx, cat)
+	s.SaveDraft(ctx, cat)
 	n := &storage.Entry{Type: "news", Data: map[string]any{
 		"teaser": "Kurz",
 		"links":  []any{map[string]any{"label": "L", "extra": map[string]any{"note": "tief"}}},
@@ -316,14 +316,14 @@ func TestRenamedFrom(t *testing.T) {
 		"cats":   []any{cat.ID},
 		"body":   []any{map[string]any{"_type": "heading", "text": "H"}},
 	}}
-	if err := s.CreateEntry(ctx, n); err != nil {
+	if err := s.SaveDraft(ctx, n); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ { // second start: rename is a no-op
 		if err := s.UseSchema(ctx, schema(true)); err != nil {
 			t.Fatalf("start %d: %v", i, err)
 		}
-		got, err := s.GetEntry(ctx, "news", n.ID)
+		got, err := s.GetEntry(ctx, "news", n.ID, "", storage.Draft)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -356,17 +356,17 @@ func TestKeywordColumnNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := &storage.Entry{Type: "listing", Data: map[string]any{"limit": 3.0, "order": "desc", "group": []any{map[string]any{"select": "x"}}}}
-	if err := s.CreateEntry(ctx, e); err != nil {
+	if err := s.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.UseSchema(ctx, mk(content.Field{Name: "where", Kind: fields.Text})); err != nil { // ADD COLUMN
 		t.Fatal(err)
 	}
 	e.Data["where"] = "hier"
-	if err := s.UpdateEntry(ctx, e); err != nil {
+	if err := s.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	list, _, err := s.ListEntries(ctx, storage.ListQuery{Type: "listing", Search: "desc"})
+	list, _, err := s.ListEntries(ctx, storage.ListQuery{Type: "listing", Version: storage.Draft, Search: "desc"})
 	if err != nil || len(list) != 1 || list[0].Data["limit"] != 3.0 || list[0].Data["where"] != "hier" {
 		t.Fatalf("roundtrip: %v %v", list, err)
 	}

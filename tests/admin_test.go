@@ -134,9 +134,14 @@ func (c *client) login() {
 	c.csrf = m[1]
 }
 
+// save posts the editor form; status "published" also publishes.
 func (c *client) save(typ string, status string, data map[string]any) (*http.Response, string) {
 	b, _ := json.Marshal(data)
-	return c.do("POST", "/admin/c/"+typ+"/save", url.Values{"csrf": {c.csrf}, "status": {status}, "data": {string(b)}})
+	form := url.Values{"csrf": {c.csrf}, "data": {string(b)}}
+	if status == "published" {
+		form.Set("publish", "1")
+	}
+	return c.do("POST", "/admin/c/"+typ+"/save", form)
 }
 
 func TestAdminFlow(t *testing.T) {
@@ -168,7 +173,7 @@ func TestAdminFlow(t *testing.T) {
 		t.Fatalf("no csrf: %d", res.StatusCode)
 	}
 
-	res, _ = c.save("settings", "", map[string]any{"siteName": "Acme", "baseURL": "https://acme.test"})
+	res, _ = c.save("settings", "published", map[string]any{"siteName": "Acme", "baseURL": "https://acme.test"})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("save settings: %d", res.StatusCode)
 	}
@@ -179,11 +184,13 @@ func TestAdminFlow(t *testing.T) {
 	if res.StatusCode != http.StatusSeeOther || !strings.Contains(res.Header.Get("Location"), "flash=published") {
 		t.Fatalf("save page: %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
+	pageURL, _, _ := strings.Cut(res.Header.Get("Location"), "?")
+	pageID := strings.TrimPrefix(pageURL, "/admin/c/page/")
 	if res, body := c.do("GET", res.Header.Get("Location"), nil); res.StatusCode != 200 || !strings.Contains(body, "Veröffentlicht") {
 		t.Fatalf("edit page after save: %d", res.StatusCode)
-	} else if m := regexp.MustCompile(`name="status" value="(\w+)"`).FindStringSubmatch(body); m == nil || m[1] != "published" {
-		// Enter submits the first submit button; it must keep the status.
-		t.Errorf("default submit button of a published entry: %v", m)
+	} else if m := regexp.MustCompile(`<button type="submit" class="default-submit"[^>]*>`).FindString(body); m == "" || strings.Contains(m, "publish") {
+		// Enter submits the first submit button; it must only save the draft.
+		t.Errorf("default submit button: %q", m)
 	}
 	res, body = c.save("page", "published", map[string]any{"title": "Doppelt", "slug": "index"})
 	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "bereits vergeben") {
@@ -203,6 +210,31 @@ func TestAdminFlow(t *testing.T) {
 	}
 	if _, body := c.do("GET", "/", nil); !strings.Contains(body, "<h1>Start</h1>") {
 		t.Errorf("preview of dist not served")
+	}
+
+	// Saving the draft of a published page leaves the site as it is.
+	res, _ = c.do("POST", "/admin/c/page/save", url.Values{"csrf": {c.csrf}, "id": {pageID}, "data": {`{"title":"Neu","slug":"index"}`}})
+	if res.StatusCode != http.StatusSeeOther || !strings.Contains(res.Header.Get("Location"), "flash=saved") {
+		t.Fatalf("save draft: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+	if _, body := c.do("GET", pageURL, nil); !strings.Contains(body, "Unveröffentlichte Änderungen") || !strings.Contains(body, "Zurückziehen") {
+		t.Error("edit page must show unpublished changes and offer to unpublish")
+	}
+	c.do("POST", "/admin/build", url.Values{"csrf": {c.csrf}})
+	if _, body := c.do("GET", "/", nil); !strings.Contains(body, "<h1>Start</h1>") {
+		t.Errorf("draft changes reached the site: %s", body)
+	}
+
+	// Unpublishing takes the page off the next build.
+	if res, _ := c.do("POST", pageURL+"/unpublish", url.Values{"csrf": {c.csrf}}); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("unpublish: %d", res.StatusCode)
+	}
+	if _, body := c.do("GET", "/admin/c/page", nil); strings.Contains(body, "Veröffentlicht</span>") {
+		t.Error("unpublished page still listed as published")
+	}
+	c.do("POST", "/admin/build", url.Values{"csrf": {c.csrf}})
+	if _, err := os.Stat(filepath.Join(dist, "index.html")); err == nil {
+		t.Error("unpublished page still built")
 	}
 }
 
@@ -291,7 +323,7 @@ func TestTimezoneSetting(t *testing.T) {
 	if res, _ := c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "Mars/Olympus"}); res.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid time zone saved: %d", res.StatusCode)
 	}
-	c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "America/New_York"})
+	c.save("settings", "published", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "America/New_York"})
 	if _, html := c.do("GET", "/admin/", nil); !strings.Contains(html, `data-tz="America/New_York"`) {
 		t.Error("saved time zone not passed to date inputs")
 	}

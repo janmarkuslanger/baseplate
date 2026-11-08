@@ -9,20 +9,20 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 )
 
-func (s *SQLStore) GetEntry(ctx context.Context, typ string, id int64) (*Entry, error) {
-	return s.getOne(ctx, typ, `id = ?`, id)
+func (s *SQLStore) GetEntry(ctx context.Context, typ string, id int64, locale string, v Version) (*Entry, error) {
+	return s.getOne(ctx, typ, `document_id = ? AND locale = ? AND version = ?`, id, locale, v)
 }
 
-func (s *SQLStore) GetEntryBySlug(ctx context.Context, typ, slug string) (*Entry, error) {
-	return s.getOne(ctx, typ, `slug = ?`, slug)
+func (s *SQLStore) GetEntryBySlug(ctx context.Context, typ, slug, locale string, v Version) (*Entry, error) {
+	return s.getOne(ctx, typ, `slug = ? AND locale = ? AND version = ?`, slug, locale, v)
 }
 
-func (s *SQLStore) getOne(ctx context.Context, typ, cond string, arg any) (*Entry, error) {
+func (s *SQLStore) getOne(ctx context.Context, typ, cond string, args ...any) (*Entry, error) {
 	t, err := s.entryTable(typ)
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.selectEntries(ctx, t, ` WHERE `+cond+` ORDER BY id LIMIT 1`, arg)
+	list, err := s.selectEntries(ctx, t, ` WHERE `+cond+` ORDER BY id LIMIT 1`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -37,11 +37,18 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 	if err != nil {
 		return nil, 0, err
 	}
-	var where []string
-	var args []any
-	if lq.Status != "" {
-		where = append(where, "status = ?")
-		args = append(args, lq.Status)
+	if lq.Version != Draft && lq.Version != Published {
+		return nil, 0, fmt.Errorf("storage: ListQuery.Version must be %q or %q, got %q", Draft, Published, lq.Version)
+	}
+	where := []string{"version = ?", "locale = ?"}
+	args := []any{lq.Version, lq.Locale}
+	if lq.Published != AnyPublished {
+		exists := `EXISTS (SELECT 1 FROM ` + t.Name + ` AS p WHERE p.document_id = ` + t.Name + `.document_id AND p.locale = ` + t.Name + `.locale AND p.version = ?)`
+		if lq.Published == OnlyUnpublished {
+			exists = "NOT " + exists
+		}
+		where = append(where, exists)
+		args = append(args, Published)
 	}
 	if lq.Search != "" {
 		like := "%" + lq.Search + "%"
@@ -55,10 +62,7 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		}
 		where = append(where, "("+strings.Join(ors, " OR ")+")")
 	}
-	cond := ""
-	if len(where) > 0 {
-		cond = " WHERE " + strings.Join(where, " AND ")
-	}
+	cond := " WHERE " + strings.Join(where, " AND ")
 	var total int
 	if err := s.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM `+t.Name+cond, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -74,7 +78,7 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 // selectEntries loads entry rows and hydrates their components and
 // relations with a fixed number of queries per nesting level.
 func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, args ...any) ([]Entry, error) {
-	cols := []string{"id", "slug", "status", "locale", "created_at", "updated_at"}
+	cols := []string{"id", "document_id", "slug", "locale", "version", "revision", "created_at", "updated_at"}
 	for _, c := range t.Columns {
 		cols = append(cols, s.col(c.Name))
 	}
@@ -83,10 +87,11 @@ func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, arg
 		return nil, err
 	}
 	var list []Entry
+	var rowIDs, revs []int64
 	for rows.Next() {
 		var e Entry
-		var created, updated int64
-		dest := []any{&e.ID, &e.Slug, &e.Status, &e.Locale, &created, &updated}
+		var rowID, rev, created, updated int64
+		dest := []any{&rowID, &e.ID, &e.Slug, &e.Locale, &e.Version, &rev, &created, &updated}
 		vals := scalarDests(t)
 		if err := rows.Scan(append(dest, vals...)...); err != nil {
 			rows.Close()
@@ -101,6 +106,8 @@ func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, arg
 			}
 		}
 		list = append(list, e)
+		rowIDs = append(rowIDs, rowID)
+		revs = append(revs, rev)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -108,12 +115,12 @@ func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, arg
 	}
 	owners := make(map[int64]map[string]any, len(list))
 	for i := range list {
-		owners[list[i].ID] = list[i].Data
+		owners[rowIDs[i]] = list[i].Data
 	}
 	if err := s.hydrate(ctx, t, owners); err != nil {
 		return nil, err
 	}
-	return list, nil
+	return list, s.publication(ctx, t, list, revs)
 }
 
 // hydrate fills container and relation fields of the given rows of t.

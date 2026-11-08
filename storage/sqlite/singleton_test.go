@@ -22,10 +22,10 @@ func TestSingletonTableRefusesSecondRow(t *testing.T) {
 	s := startWith(t, filepath.Join(t.TempDir(), "db.sqlite"), siteType(true))
 	mustCreate(t, s, &storage.Entry{Type: "site", Slug: "site", Data: map[string]any{"title": "a"}})
 
-	if err := s.CreateEntry(ctx, &storage.Entry{Type: "site", Slug: "site", Data: map[string]any{"title": "b"}}); err == nil {
+	if err := s.SaveDraft(ctx, &storage.Entry{Type: "site", Slug: "site", Data: map[string]any{"title": "b"}}); err == nil {
 		t.Fatal("a second row in a singleton table was stored")
 	}
-	if _, total, _ := s.ListEntries(ctx, storage.ListQuery{Type: "site"}); total != 1 {
+	if _, total, _ := s.ListEntries(ctx, storage.ListQuery{Type: "site", Version: storage.Draft}); total != 1 {
 		t.Errorf("singleton has %d entries, want 1", total)
 	}
 }
@@ -70,10 +70,10 @@ func TestAtomicRollsBackOnError(t *testing.T) {
 	boom := errors.New("boom")
 
 	err := s.Atomic(ctx, func(st storage.Entries) error {
-		if err := st.CreateEntry(ctx, &storage.Entry{Type: "site", Slug: "x", Data: map[string]any{}}); err != nil {
+		if err := st.SaveDraft(ctx, &storage.Entry{Type: "site", Slug: "x", Data: map[string]any{}}); err != nil {
 			return err
 		}
-		if _, total, err := st.ListEntries(ctx, storage.ListQuery{Type: "site"}); err != nil || total != 1 {
+		if _, total, err := st.ListEntries(ctx, storage.ListQuery{Type: "site", Version: storage.Draft}); err != nil || total != 1 {
 			t.Errorf("the view does not see its own write: %d %v", total, err)
 		}
 		return boom
@@ -81,7 +81,7 @@ func TestAtomicRollsBackOnError(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("Atomic returned %v, want fn's error", err)
 	}
-	if _, total, _ := s.ListEntries(ctx, storage.ListQuery{Type: "site"}); total != 0 {
+	if _, total, _ := s.ListEntries(ctx, storage.ListQuery{Type: "site", Version: storage.Draft}); total != 0 {
 		t.Errorf("%d entries survived the failed Atomic, want 0", total)
 	}
 }

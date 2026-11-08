@@ -3,6 +3,8 @@ package forms
 import (
 	"context"
 	"testing"
+
+	"github.com/janmarkuslanger/baseplate/storage"
 )
 
 // The submissions preview leaves out checkbox values in any site language,
@@ -10,12 +12,12 @@ import (
 func TestSubmissionPreviewSkipsCheckboxes(t *testing.T) {
 	reg, p, _, id := setup(t)
 	ctx := context.Background()
-	e, err := reg.Store.GetEntry(ctx, TypeName, id)
+	e, err := reg.Store.GetEntry(ctx, TypeName, id, "", storage.Draft)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e.Data["fields"] = append(e.Data["fields"].([]any), map[string]any{"label": "Rückruf?", "name": "rueckruf", "type": "text"})
-	if err := reg.Store.UpdateEntry(ctx, e); err != nil {
+	if err := reg.Store.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
 	s := p.label(rawSubmission{formID: id, data: `{"name":"Ada","dsgvo":"yes","rueckruf":"ja"}`}, map[int64]string{id: "Kontakt"})

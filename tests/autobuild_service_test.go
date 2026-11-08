@@ -69,7 +69,7 @@ func TestBuildOnPublishThroughEntriesService(t *testing.T) {
 	ctx := context.Background()
 	svc := app.Registry.Entries
 
-	if _, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Data: map[string]any{"siteName": "Acme", "baseURL": "https://acme.test"}}); err != nil {
+	if _, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Data: map[string]any{"siteName": "Acme", "baseURL": "https://acme.test"}, Publish: true}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := svc.Save(ctx, entries.Save{Type: fields.PageType, Data: map[string]any{"title": "Live", "slug": "news"}, Publish: true})
@@ -97,7 +97,7 @@ func TestCloseStopsAutoBuildBeforeStore(t *testing.T) {
 	c.login()
 	save := func(typ string, data map[string]any) {
 		b, _ := json.Marshal(data)
-		if res, _ := c.do("POST", "/admin/c/"+typ+"/save", url.Values{"csrf": {c.csrf}, "status": {"published"}, "data": {string(b)}}); res.StatusCode != 303 {
+		if res, _ := c.do("POST", "/admin/c/"+typ+"/save", url.Values{"csrf": {c.csrf}, "publish": {"1"}, "data": {string(b)}}); res.StatusCode != 303 {
 			t.Fatalf("save %s: %d", typ, res.StatusCode)
 		}
 	}

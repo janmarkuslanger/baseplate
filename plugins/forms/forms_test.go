@@ -80,11 +80,21 @@ func setup(t *testing.T) (*plugin.Registry, *Plugin, *fakeMailer, int64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &storage.Entry{Type: TypeName, Status: storage.StatusPublished, Data: data}
-	if err := st.CreateEntry(ctx, e); err != nil {
+	e := &storage.Entry{Type: TypeName, Data: data}
+	publish(t, st, e)
+	return reg, p, m, e.ID
+}
+
+// publish stores e as a draft and publishes it.
+func publish(t *testing.T, st storage.Entries, e *storage.Entry) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	return reg, p, m, e.ID
+	if err := st.Publish(ctx, e.Type, e.ID, e.Locale); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func post(t *testing.T, reg *plugin.Registry, id int64, form url.Values) *httptest.ResponseRecorder {
@@ -207,9 +217,9 @@ func TestRateLimit(t *testing.T) {
 
 func TestSuccessRedirect(t *testing.T) {
 	reg, _, _, id := setup(t)
-	e, _ := reg.Store.GetEntry(context.Background(), TypeName, id)
+	e, _ := reg.Store.GetEntry(context.Background(), TypeName, id, "", storage.Draft)
 	e.Data["successURL"] = "/danke/"
-	reg.Store.UpdateEntry(context.Background(), e)
+	publish(t, reg.Store, e)
 	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/danke/" {
 		t.Fatalf("redirect: %d %s", w.Code, w.Header().Get("Location"))
@@ -219,9 +229,9 @@ func TestSuccessRedirect(t *testing.T) {
 func TestFormBlockInBuild(t *testing.T) {
 	reg, _, _, id := setup(t)
 	ctx := context.Background()
-	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.SettingsType, Slug: fields.SettingsType, Status: storage.StatusPublished,
+	publish(t, reg.Store, &storage.Entry{Type: fields.SettingsType, Slug: fields.SettingsType,
 		Data: map[string]any{"baseURL": "https://acme.test", "serverURL": "https://cms.acme.test"}})
-	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.PageType, Slug: "kontakt", Status: storage.StatusPublished, Data: map[string]any{
+	publish(t, reg.Store, &storage.Entry{Type: fields.PageType, Slug: "kontakt", Data: map[string]any{
 		"title": "Kontakt", "body": []any{map[string]any{"_type": BlockName, "form": float64(id)}},
 	}})
 	dist := filepath.Join(t.TempDir(), "dist")
@@ -267,16 +277,10 @@ func TestRateLimitBehindProxy(t *testing.T) {
 	}
 }
 
-// unpublish turns the form into a draft, as the admin's "save as draft" does.
+// unpublish takes the form off the site; its draft stays.
 func unpublish(t *testing.T, reg *plugin.Registry, id int64) {
 	t.Helper()
-	ctx := context.Background()
-	e, err := reg.Store.GetEntry(ctx, TypeName, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e.Status = storage.StatusDraft
-	if err := reg.Store.UpdateEntry(ctx, e); err != nil {
+	if err := reg.Store.Unpublish(context.Background(), TypeName, id, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -297,9 +301,9 @@ func TestDraftFormNotRendered(t *testing.T) {
 	reg, _, _, id := setup(t)
 	unpublish(t, reg, id)
 	ctx := context.Background()
-	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.SettingsType, Slug: fields.SettingsType, Status: storage.StatusPublished,
+	publish(t, reg.Store, &storage.Entry{Type: fields.SettingsType, Slug: fields.SettingsType,
 		Data: map[string]any{"baseURL": "https://acme.test"}})
-	reg.Store.CreateEntry(ctx, &storage.Entry{Type: fields.PageType, Slug: "kontakt", Status: storage.StatusPublished, Data: map[string]any{
+	publish(t, reg.Store, &storage.Entry{Type: fields.PageType, Slug: "kontakt", Data: map[string]any{
 		"title": "Kontakt", "body": []any{map[string]any{"_type": BlockName, "form": float64(id)}},
 	}})
 	dist := filepath.Join(t.TempDir(), "dist")

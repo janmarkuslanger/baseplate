@@ -11,17 +11,19 @@ import (
 
 // Table layout derived from the content schema:
 //
-//	ct_<type>            one row per entry; one column per scalar field
+//	ct_<type>            one row per entry version (document_id, locale,
+//	                     version); one column per scalar field
 //	cb_<block>           one row per block instance
 //	<owner>__<field>     one row per group/list item of <owner>
 //	components           ordered links owner row → component row
 //	relations            ordered links owner row → target entry
 //
-// Entry and component rows can both own components and relations.
+// Entry and component rows can both own components and relations. Each
+// version row owns its own components; relations point at document IDs.
 
 // baseColumns exist on every entry table; fields must not reuse them,
 // except "slug", which maps onto the slug column.
-var baseColumns = map[string]bool{"id": true, "slug": true, "status": true, "locale": true, "created_at": true, "updated_at": true}
+var baseColumns = map[string]bool{"id": true, "document_id": true, "slug": true, "locale": true, "version": true, "revision": true, "created_at": true, "updated_at": true}
 
 var identRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,59}$`)
 
