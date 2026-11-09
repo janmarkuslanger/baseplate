@@ -32,24 +32,62 @@ type Item struct {
 // their items. Page URLs come from the page's .Nav, so pass the page (in a
 // layout: .Page).
 func (p *Plugin) navigation(key string, page any) ([]*Item, error) {
-	navs, _, err := p.reg.Store.ListEntries(context.Background(), storage.ListQuery{Type: TypeName, Version: storage.Published})
+	pg, _ := page.(*render.Page)
+	snap, err := p.snapshot(pg)
 	if err != nil {
 		return nil, fmt.Errorf("navigation %q: %w", key, err)
 	}
-	for _, n := range navs {
-		if n.Data["key"] != key {
-			continue
-		}
-		b := builder{pages: map[int64]string{}}
-		if pg, ok := page.(*render.Page); ok && pg != nil {
-			b.cur = pg.URL
-			for _, l := range pg.Nav {
-				b.pages[l.ID] = l.URL
+	items, ok := snap.navs[key]
+	if !ok {
+		return nil, nil
+	}
+	b := builder{pages: snap.pages}
+	if pg != nil {
+		b.cur = pg.URL
+	}
+	return b.build(items), nil
+}
+
+// snapshot is what navigation reads besides the rendered page: the items of
+// the published navigations by key and the URLs of the published pages.
+type snapshot struct {
+	navs  map[string]any
+	pages map[int64]string
+}
+
+// snapshot returns the snapshot for the build that rendered pg. All pages of
+// a build share one .Nav slice, so the last snapshot is reused while that
+// slice is the same; loading the navigations and indexing every page once
+// per rendered page would make a build quadratic in its page count.
+func (p *Plugin) snapshot(pg *render.Page) (*snapshot, error) {
+	var nav []render.Link
+	if pg != nil {
+		nav = pg.Nav
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(nav) > 0 && p.last != nil && len(p.lastNav) == len(nav) && &p.lastNav[0] == &nav[0] {
+		return p.last, nil
+	}
+	list, _, err := p.reg.Store.ListEntries(context.Background(), storage.ListQuery{Type: TypeName, Version: storage.Published})
+	if err != nil {
+		return nil, err
+	}
+	s := &snapshot{navs: map[string]any{}, pages: make(map[int64]string, len(nav))}
+	for _, n := range list {
+		if k, ok := n.Data["key"].(string); ok {
+			if _, dup := s.navs[k]; !dup {
+				s.navs[k] = n.Data["items"]
 			}
 		}
-		return b.build(n.Data["items"]), nil
 	}
-	return nil, nil
+	for _, l := range nav {
+		s.pages[l.ID] = l.URL
+	}
+	if len(nav) > 0 {
+		p.last, p.lastNav = s, nav
+	}
+	return s, nil
 }
 
 type builder struct {
