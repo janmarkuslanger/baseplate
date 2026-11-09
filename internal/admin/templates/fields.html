@@ -82,7 +82,7 @@
         </ul>
       </template>
       <div class="rel__picker">
-        <input class="input" type="search" x-model="q" x-on:focus="open = true" x-on:keydown.escape="open = false"
+        <input class="input" type="search" x-model="q" x-on:focus="open = true; search()" x-on:keydown.escape="open = false"
                x-bind:placeholder="many ? {{json (t "relation.add")}} : (value ? label(value) : {{json (t "relation.choose")}})">
         <button type="button" class="btn btn--ghost btn--sm" x-show="!many && value" x-on:click="value = null">{{t "common.remove"}}</button>
         <div class="rel__menu" x-show="open" x-cloak>

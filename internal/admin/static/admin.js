@@ -44,12 +44,6 @@
     };
   })();
 
-  let refs = null;
-  const refOptions = () => {
-    if (!refs) refs = JSON.parse(document.getElementById('editor')?.dataset.refs || '{}');
-    return refs;
-  };
-
   // New items get "n…" keys; stored items keep the server's "<table>:<id>".
   const uid = () => 'n' + Math.random().toString(36).slice(2, 10);
 
@@ -218,27 +212,62 @@
       },
     }));
 
-    // relationField edits one target ID (or a list of IDs when many); the
-    // choices per target type come from the editor's data-refs.
+    // relationField edits one target ID (or a list of IDs when many). The
+    // choices are searched on the server; only the labels of the selected
+    // entries are loaded.
     Alpine.data('relationField', (ref, many) => ({
       value: many ? [] : null,
-      options: refOptions()[ref] || [],
       many,
+      labels: {},
+      results: [],
       q: '',
       open: false,
+      timer: null,
+      seq: 0,
+      init() {
+        this.$watch('value', () => this.load());
+        this.$watch('q', () => {
+          clearTimeout(this.timer);
+          this.timer = setTimeout(() => this.search(), 200);
+        });
+        this.load();
+      },
+      ids() {
+        return (this.many ? this.value || [] : [this.value]).filter(Boolean).map(Number);
+      },
       label(id) {
-        const o = this.options.find((o) => Number(o.Value) === Number(id));
-        return o ? o.Label : tr('js.relationMissing', id);
+        if (!(id in this.labels)) return '…';
+        return this.labels[id] ?? tr('js.relationMissing', id);
+      },
+      async fetchOptions(query) {
+        try {
+          const res = await fetch(`/admin/c/${encodeURIComponent(ref)}/options?${query}`, { headers: { Accept: 'application/json' } });
+          return res.ok ? await res.json() : [];
+        } catch {
+          return [];
+        }
+      },
+      async load() {
+        const missing = this.ids().filter((id) => !(id in this.labels));
+        if (!missing.length) return;
+        const found = await this.fetchOptions('ids=' + missing.join(','));
+        const labels = { ...this.labels };
+        missing.forEach((id) => { labels[id] = null; });
+        found.forEach((o) => { labels[Number(o.Value)] = o.Label; });
+        this.labels = labels;
+      },
+      async search() {
+        const seq = ++this.seq;
+        const found = await this.fetchOptions('q=' + encodeURIComponent(this.q));
+        if (seq === this.seq) this.results = found;
       },
       matches() {
-        const q = this.q.toLowerCase();
-        const taken = this.many ? (this.value || []).map(Number) : [];
-        return this.options
-          .filter((o) => !taken.includes(Number(o.Value)) && o.Label.toLowerCase().includes(q))
-          .slice(0, 50);
+        const taken = this.many ? this.ids() : [];
+        return this.results.filter((o) => !taken.includes(Number(o.Value)));
       },
       pick(o) {
         const id = Number(o.Value);
+        this.labels = { ...this.labels, [id]: o.Label };
         if (this.many) this.value = [...(this.value || []), id];
         else this.value = id;
         this.q = '';

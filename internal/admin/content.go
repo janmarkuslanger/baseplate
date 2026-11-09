@@ -107,10 +107,8 @@ type editPage struct {
 	Blocks   map[string]any    // block name -> empty item, for the "add block" menu
 	Labels   map[string]string
 	Settings map[string]any
-	// RefOptions are the choices of the relation pickers, by target type.
-	RefOptions map[string][]content.Option
-	IsNew      bool
-	UsedIn     []usedIn
+	IsNew    bool
+	UsedIn   []usedIn
 }
 
 // relationLabel names the relation field of a referrer: its label, or
@@ -212,7 +210,7 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 	}
 	a.render(w, r, status, a.pages["edit"], view{Title: title, Active: "c/" + t.Name, Flash: a.flash(r), Page: editPage{
 		Type: t, Entry: e, Data: skeleton(t.Fields, data), Errors: a.translateErrors(errs), Blocks: blocks, Labels: labels,
-		Settings: cfg.Data, RefOptions: a.refOptions(r.Context(), t), IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
+		Settings: cfg.Data, IsNew: e.ID == 0, UsedIn: a.usedIn(r, t, e),
 	}})
 }
 

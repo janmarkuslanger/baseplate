@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	stdhtml "html"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -32,21 +31,21 @@ var testTheme = fstest.MapFS{
 }
 
 type client struct {
-	t    *testing.T
+	t    testing.TB
 	srv  *httptest.Server
 	http *http.Client
 	csrf string
 }
 
 // newTestApp starts a server with an admin user; it returns the dist dir.
-func newTestApp(t *testing.T, plugins ...plugin.Plugin) (string, *client) {
+func newTestApp(t testing.TB, plugins ...plugin.Plugin) (string, *client) {
 	t.Helper()
 	_, dist, c := startApp(t, io.Discard, plugins...)
 	return dist, c
 }
 
 // startApp is newTestApp that also returns the app and logs to logs.
-func startApp(t *testing.T, logs io.Writer, plugins ...plugin.Plugin) (*baseplate.App, string, *client) {
+func startApp(t testing.TB, logs io.Writer, plugins ...plugin.Plugin) (*baseplate.App, string, *client) {
 	t.Helper()
 	dir := t.TempDir()
 	app := baseplate.New(baseplate.Config{DataDir: filepath.Join(dir, "data"), DistDir: filepath.Join(dir, "dist"), Theme: testTheme,
@@ -99,7 +98,7 @@ func credentials(email, pw string) url.Values {
 
 // postLogin submits the login form like a browser: it loads the form first
 // for its CSRF token and cookie.
-func postLogin(t *testing.T, c *http.Client, base string, form url.Values) *http.Response {
+func postLogin(t testing.TB, c *http.Client, base string, form url.Values) *http.Response {
 	t.Helper()
 	res, err := c.Get(base + "/admin/login")
 	if err != nil {
@@ -356,26 +355,45 @@ func (tagPlugin) Register(r *plugin.Registry) error {
 	return r.Block(content.Block{Name: "teaser", Fields: []content.Field{{Name: "author", Kind: fields.Relation, Ref: "author"}}})
 }
 
-// The editor gets the choices of all relation pickers, also inside blocks.
+// The relation pickers search on the server: a page never carries a whole
+// type, a search returns a bounded number of matches, and ids resolve to
+// labels.
 func TestRelationOptions(t *testing.T) {
-	_, c := newTestApp(t, tagPlugin{}, extendPage{content.Field{Name: "tags", Kind: fields.Relation, Ref: "tag", Many: true}})
+	_, c := newTestApp(t, tagPlugin{})
 	c.login()
+	for i := 0; i < 30; i++ {
+		c.save("tag", "published", map[string]any{"title": fmt.Sprintf("Tag %02d", i)})
+	}
 	c.save("tag", "published", map[string]any{"title": "Yoga"})
-	c.save("author", "published", map[string]any{"title": "Julia"})
-	_, html := c.do("GET", "/admin/c/page/new", nil)
-	m := regexp.MustCompile(`data-refs="([^"]*)"`).FindStringSubmatch(html)
-	if m == nil {
-		t.Fatal("no data-refs on the editor")
+
+	options := func(query string) []struct{ Value, Label string } {
+		t.Helper()
+		res, body := c.do("GET", "/admin/c/tag/options?"+query, nil)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("options?%s: %d", query, res.StatusCode)
+		}
+		var out []struct{ Value, Label string }
+		if err := json.Unmarshal([]byte(body), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
 	}
-	var refs map[string][]struct{ Value, Label string }
-	if err := json.Unmarshal([]byte(stdhtml.UnescapeString(m[1])), &refs); err != nil {
-		t.Fatal(err)
+
+	if got := options("q="); len(got) != 20 {
+		t.Errorf("empty search returned %d options, want 20", len(got))
 	}
-	if len(refs["tag"]) != 1 || refs["tag"][0].Label != "Yoga" || len(refs["author"]) != 1 || refs["author"][0].Label != "Julia" {
-		t.Errorf("refs: %+v", refs)
+	if got := options("q=yog"); len(got) != 1 || got[0].Label != "Yoga" {
+		t.Errorf("search: %+v", got)
 	}
-	if _, ok := refs["page"]; !ok {
-		t.Error("core relation (parent page) missing")
+	yoga := options("q=yoga")[0].Value
+	if got := options("ids=" + yoga + ",999999,x"); len(got) != 1 || got[0].Label != "Yoga" {
+		t.Errorf("ids (unknown and malformed skipped): %+v", got)
+	}
+	if res, _ := c.do("GET", "/admin/c/nope/options?q=", nil); res.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown type: %d", res.StatusCode)
+	}
+	if _, html := c.do("GET", "/admin/c/page/new", nil); strings.Contains(html, "Yoga") {
+		t.Error("editor page carries relation options")
 	}
 }
 
