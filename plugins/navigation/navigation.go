@@ -16,12 +16,14 @@ import (
 	"context"
 	"embed"
 	"regexp"
+	"sync"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/entries"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/i18n"
 	"github.com/janmarkuslanger/baseplate/plugin"
+	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -42,6 +44,10 @@ var localesFS embed.FS
 // template function.
 type Plugin struct {
 	reg *plugin.Registry
+
+	mu      sync.Mutex
+	last    *snapshot // for the build whose .Nav is lastNav
+	lastNav []render.Link
 }
 
 // New returns the plugin.

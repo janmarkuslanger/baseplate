@@ -146,7 +146,7 @@ func (s *site) collect() ([]*render.Page, error) {
 		}
 	}
 	// Resolve relations once all URLs are known.
-	res := &resolver{s: s, urls: map[refKey]string{}, cache: map[refKey]*render.Ref{}, lists: map[string][]storage.Entry{}}
+	res := &resolver{s: s, urls: map[refKey]string{}, cache: map[refKey]*render.Ref{}, lists: map[string][]storage.Entry{}, byID: map[refKey]*storage.Entry{}, inv: map[invKey]map[int64][]int64{}}
 	s.res = res
 	for _, p := range pages {
 		res.urls[refKey{p.Type.Name, p.Entry.ID}] = p.URL

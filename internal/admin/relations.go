@@ -1,62 +1,60 @@
 package admin
 
 import (
-	"cmp"
-	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"slices"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/janmarkuslanger/baseplate/content"
-	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
-// refOptions lists the choices of every relation picker the editor of t can
-// show (also inside groups, lists and blocks), one query per target type.
-func (a *Admin) refOptions(ctx context.Context, t *content.Type) map[string][]content.Option {
-	targets := map[string]bool{}
-	seenBlocks := map[string]bool{}
-	var walk func(fs []content.Field)
-	walk = func(fs []content.Field) {
-		for _, f := range fs {
-			if f.Kind == fields.Relation {
-				targets[f.Ref] = true
+const (
+	optionLimit = 20  // matches per search
+	maxOptionID = 200 // IDs per label lookup
+)
+
+// relationOptions feeds the relation pickers, which never hold a whole
+// type in the page. With ids it returns the labels of those entries; with
+// q (possibly empty) the first optionLimit entries matching the search.
+func (a *Admin) relationOptions(w http.ResponseWriter, r *http.Request) {
+	t, ok := a.contentType(w, r)
+	if !ok {
+		return
+	}
+	label := func(e storage.Entry) content.Option {
+		return content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(a.orDash(e.Data[t.Title()]))}
+	}
+	out := []content.Option{}
+	if raw := r.URL.Query().Get("ids"); raw != "" {
+		for i, s := range strings.Split(raw, ",") {
+			id, err := strconv.ParseInt(s, 10, 64)
+			if err != nil || id <= 0 || i >= maxOptionID {
+				continue
 			}
-			walk(f.Fields)
-			if f.Kind == fields.Blocks {
-				for _, b := range a.Reg.Schema.Blocks(f) {
-					if !seenBlocks[b.Name] {
-						seenBlocks[b.Name] = true
-						walk(b.Fields)
-					}
-				}
+			e, err := a.store().GetEntry(r.Context(), t.Name, id, "", storage.Draft)
+			if errors.Is(err, storage.ErrNotFound) {
+				continue
 			}
+			if err != nil {
+				a.fail(w, err)
+				return
+			}
+			out = append(out, label(*e))
+		}
+	} else {
+		list, _, err := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Version: storage.Draft, Search: r.URL.Query().Get("q"), Limit: optionLimit})
+		if err != nil {
+			a.fail(w, err)
+			return
+		}
+		for _, e := range list {
+			out = append(out, label(e))
 		}
 	}
-	walk(t.Fields)
-	out := make(map[string][]content.Option, len(targets))
-	for typ := range targets {
-		out[typ] = a.entryOptions(ctx, typ)
-	}
-	return out
-}
-
-// entryOptions lists the entries of a type, sorted by title.
-func (a *Admin) entryOptions(ctx context.Context, typ string) []content.Option {
-	t, ok := a.Reg.Schema.Type(typ)
-	if !ok {
-		return nil
-	}
-	list, _, err := a.store().ListEntries(ctx, storage.ListQuery{Type: typ, Version: storage.Draft})
-	if err != nil {
-		a.Logger.Error("relation options", "type", typ, "err", err)
-		return nil
-	}
-	out := make([]content.Option, 0, len(list))
-	for _, e := range list {
-		out = append(out, content.Option{Value: strconv.FormatInt(e.ID, 10), Label: fmt.Sprint(a.orDash(e.Data[t.Title()]))})
-	}
-	slices.SortFunc(out, func(x, y content.Option) int { return cmp.Compare(x.Label, y.Label) })
-	return out
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }

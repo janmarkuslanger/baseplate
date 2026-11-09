@@ -2,6 +2,7 @@ package build
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/render"
@@ -21,8 +22,13 @@ type resolver struct {
 	urls  map[refKey]string // published routable entries
 	cache map[refKey]*render.Ref
 	lists map[string][]storage.Entry
+	byID  map[refKey]*storage.Entry // index of lists
+	inv   map[invKey]map[int64][]int64
 	err   error
 }
+
+// invKey names one inverse relation: the source type and its field.
+type invKey struct{ src, field string }
 
 func (r *resolver) fail(err error) {
 	if r.err == nil {
@@ -39,6 +45,9 @@ func (r *resolver) published(typ string) []storage.Entry {
 		r.fail(err)
 	}
 	r.lists[typ] = l
+	for i := range l {
+		r.byID[refKey{typ, l[i].ID}] = &l[i]
+	}
 	return l
 }
 
@@ -53,11 +62,9 @@ func (r *resolver) ref(typ string, id int64) *render.Ref {
 		// Routable targets only resolve when published, so templates never
 		// link to pages missing from the build. They are already loaded.
 		if u, ok := r.urls[k]; ok {
-			for _, e := range r.published(typ) {
-				if e.ID == id {
-					ref = &render.Ref{ID: id, Type: typ, URL: u, Data: e.Data}
-					break
-				}
+			r.published(typ)
+			if e := r.byID[k]; e != nil {
+				ref = &render.Ref{ID: id, Type: typ, URL: u, Data: e.Data}
 			}
 		}
 	} else {
@@ -136,11 +143,9 @@ func (r *resolver) inverse(p *render.Page) {
 				continue
 			}
 			refs := []*render.Ref{}
-			for _, e := range r.published(src.Name) {
-				if points(e, f, p.Entry.ID) {
-					if ref := r.ref(src.Name, e.ID); ref != nil {
-						refs = append(refs, ref)
-					}
+			for _, id := range r.sources(src.Name, f)[p.Entry.ID] {
+				if ref := r.ref(src.Name, id); ref != nil {
+					refs = append(refs, ref)
 				}
 			}
 			p.Data[f.Inverse] = refs
@@ -148,15 +153,39 @@ func (r *resolver) inverse(p *render.Page) {
 	}
 }
 
-func points(e storage.Entry, f content.Field, id int64) bool {
-	if n, ok := content.RefID(e.Data[f.Name]); ok {
-		return n == id
+// sources maps each target ID to the IDs of the published entries of src
+// whose field f points at it, in list order. Built once per field, so
+// inverse stays linear in the number of entries.
+func (r *resolver) sources(src string, f content.Field) map[int64][]int64 {
+	k := invKey{src, f.Name}
+	if m, ok := r.inv[k]; ok {
+		return m
 	}
-	list, _ := e.Data[f.Name].([]any)
-	for _, it := range list {
-		if n, _ := content.RefID(it); n == id {
-			return true
+	m := map[int64][]int64{}
+	for _, e := range r.published(src) {
+		for _, id := range targets(e, f) {
+			m[id] = append(m[id], e.ID)
 		}
 	}
-	return false
+	r.inv[k] = m
+	return m
+}
+
+// targets returns the distinct IDs the relation field f of e points at.
+func targets(e storage.Entry, f content.Field) []int64 {
+	if n, ok := content.RefID(e.Data[f.Name]); ok {
+		return []int64{n}
+	}
+	list, _ := e.Data[f.Name].([]any)
+	var ids []int64
+	for _, it := range list {
+		if n, _ := content.RefID(it); n != 0 && !slices.Contains(ids, n) {
+			ids = append(ids, n)
+		}
+	}
+	return ids
+}
+
+func points(e storage.Entry, f content.Field, id int64) bool {
+	return slices.Contains(targets(e, f), id)
 }

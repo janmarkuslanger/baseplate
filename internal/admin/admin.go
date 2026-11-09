@@ -143,6 +143,7 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	authed.HandleFunc("GET /admin/{$}", a.dashboard)
 	authed.HandleFunc("GET /admin/c/{type}", a.list)
 	authed.HandleFunc("GET /admin/c/{type}/new", a.edit)
+	authed.HandleFunc("GET /admin/c/{type}/options", a.relationOptions)
 	authed.HandleFunc("GET /admin/c/{type}/{id}", a.edit)
 	authed.HandleFunc("POST /admin/c/{type}/save", a.save)
 	authed.HandleFunc("GET /admin/c/{type}/{id}/preview", a.preview)
