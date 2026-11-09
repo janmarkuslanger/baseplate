@@ -242,15 +242,16 @@
       async fetchOptions(query) {
         try {
           const res = await fetch(`/admin/c/${encodeURIComponent(ref)}/options?${query}`, { headers: { Accept: 'application/json' } });
-          return res.ok ? await res.json() : [];
+          return res.ok ? await res.json() : null;
         } catch {
-          return [];
+          return null;
         }
       },
       async load() {
         const missing = this.ids().filter((id) => !(id in this.labels));
         if (!missing.length) return;
         const found = await this.fetchOptions('ids=' + missing.join(','));
+        if (!found) return; // failed: not "missing", retried on the next change
         const labels = { ...this.labels };
         missing.forEach((id) => { labels[id] = null; });
         found.forEach((o) => { labels[Number(o.Value)] = o.Label; });
@@ -259,7 +260,7 @@
       async search() {
         const seq = ++this.seq;
         const found = await this.fetchOptions('q=' + encodeURIComponent(this.q));
-        if (seq === this.seq) this.results = found;
+        if (found && seq === this.seq) this.results = found;
       },
       matches() {
         const taken = this.many ? this.ids() : [];
