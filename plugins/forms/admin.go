@@ -119,10 +119,8 @@ type rawSubmission struct {
 func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	s := submission{ID: rs.id, FormID: rs.formID, Mailed: rs.mailed == 1, CreatedAt: time.Unix(rs.created, 0)}
 	data := rs.data
+	// Empty for a deleted form; the template shows a placeholder then.
 	s.FormTitle = titles[s.FormID]
-	if s.FormTitle == "" {
-		s.FormTitle = "forms.deletedForm"
-	}
 	values := map[string]string{}
 	json.Unmarshal([]byte(data), &values)
 
