@@ -249,7 +249,7 @@ func (r *Renderer) blocks(items any, page *Page) (template.HTML, error) {
 // Markdown renders a page as Markdown for the .md variant.
 func (r *Renderer) Markdown(p *Page) string {
 	var b strings.Builder
-	b.WriteString("# " + markdown.EscapeText(fmt.Sprint(p.Data["title"])) + "\n\n")
+	b.WriteString("# " + markdown.EscapeText(fmt.Sprint(p.Data[p.Type.Title()])) + "\n\n")
 	if p.Meta.Description != "" {
 		b.WriteString("> " + markdown.EscapeText(p.Meta.Description) + "\n\n")
 	}
