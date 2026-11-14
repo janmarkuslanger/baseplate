@@ -20,7 +20,10 @@ func TestSubmissionPreviewSkipsCheckboxes(t *testing.T) {
 	if err := reg.Store.SaveDraft(ctx, e); err != nil {
 		t.Fatal(err)
 	}
-	s := p.label(rawSubmission{formID: id, data: `{"name":"Ada","dsgvo":"yes","rueckruf":"ja"}`}, map[int64]string{id: "Kontakt"})
+	s, err := p.label(ctx, rawSubmission{formID: id, data: `{"name":"Ada","dsgvo":"yes","rueckruf":"ja"}`}, map[int64]string{id: "Kontakt"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if s.Preview != "Ada · ja" {
 		t.Errorf("preview = %q, want %q", s.Preview, "Ada · ja")
 	}
