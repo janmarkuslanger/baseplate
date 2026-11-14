@@ -52,8 +52,10 @@ func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
 	if err != nil {
 		return err
 	}
+	// Rolls back on error and on panic, which would otherwise hold the
+	// single connection forever; a no-op after Commit.
+	defer tx.Rollback()
 	if err := fn(tx); err != nil {
-		tx.Rollback()
 		return err
 	}
 	return tx.Commit()
