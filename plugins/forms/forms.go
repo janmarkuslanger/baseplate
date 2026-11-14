@@ -60,7 +60,8 @@ var fieldTypes = []content.Option{
 
 // Plugin is the forms plugin; create it with New.
 type Plugin struct {
-	// Limit is the number of submissions per IP per Window (default 5 / 10 min).
+	// Limit is the number of submissions per IP (per /64 for IPv6) per Window
+	// (default 5 / 10 min).
 	Limit  int
 	Window time.Duration
 

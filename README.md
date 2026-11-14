@@ -289,7 +289,7 @@ come from the page passed in (its `.Nav`).
 Static pages post to the CMS server (`POST /api/forms/{id}`). Set
 **Settings → CMS-Server-URL** to the server's public URL. Submissions are
 stored (admin: *Anfragen*) and sent to the form's recipient. Spam protection
-comes from a honeypot field and a per-IP rate limit.
+comes from a honeypot field and a per-IP rate limit (per /64 for IPv6).
 
 ## Documentation
 
