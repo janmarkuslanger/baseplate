@@ -19,7 +19,7 @@ func markdownURL(u string) string {
 
 func meta(p *render.Page, cfg settings.Settings) (render.Meta, error) {
 	seo, _ := p.Data["seo"].(map[string]any)
-	title := str(p.Data["title"])
+	title := str(p.Data[p.Type.Title()])
 	m := render.Meta{
 		Title:       cmp.Or(str(seo["metaTitle"]), title),
 		Description: str(seo["metaDescription"]),
