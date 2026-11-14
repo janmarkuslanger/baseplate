@@ -58,3 +58,28 @@ func TestListFailsWhenParentLookupFails(t *testing.T) {
 		t.Errorf("error not logged: %q", logs.String())
 	}
 }
+
+// failingPublishedList fails every listing of published entries.
+type failingPublishedList struct{ storage.Store }
+
+func (s failingPublishedList) ListEntries(ctx context.Context, q storage.ListQuery) ([]storage.Entry, int, error) {
+	if q.Version == storage.Published {
+		return nil, 0, errors.New("index corrupt")
+	}
+	return s.Store.ListEntries(ctx, q)
+}
+
+// TestDashboardFailsWhenPublishedCountFails checks that a failing count of
+// published entries is reported instead of showing zero.
+func TestDashboardFailsWhenPublishedCountFails(t *testing.T) {
+	var logs bytes.Buffer
+	app, _, c := startApp(t, &logs, blogPlugin{})
+	c.login()
+	app.Registry.Store = failingPublishedList{app.Registry.Store}
+	if res, _ := c.do("GET", "/admin/", nil); res.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status %d, want 500", res.StatusCode)
+	}
+	if !strings.Contains(logs.String(), "index corrupt") {
+		t.Errorf("error not logged: %q", logs.String())
+	}
+}
