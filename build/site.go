@@ -131,10 +131,11 @@ func (s *site) collect() ([]*render.Page, error) {
 		if err != nil {
 			return nil, err
 		}
+		title := str(p.Data[p.Type.Title()])
 		if other, dup := seen[u]; dup {
-			return nil, i18n.M("build.duplicateURL", u, other, str(p.Data["title"]))
+			return nil, i18n.M("build.duplicateURL", u, other, title)
 		}
-		seen[u] = str(p.Data["title"])
+		seen[u] = title
 		p.URL, p.AbsURL = u, base+u
 		p.MarkdownURL = markdownURL(u)
 		if p.Meta, err = meta(p, s.cfg); err != nil {
@@ -142,7 +143,7 @@ func (s *site) collect() ([]*render.Page, error) {
 		}
 		if p.Type.Name == fields.PageType {
 			parent, _ := content.RefID(p.Data["parent"])
-			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: str(p.Data["title"]), URL: u})
+			nav = append(nav, render.Link{ID: p.Entry.ID, Parent: parent, Title: title, URL: u})
 		}
 	}
 	// Resolve relations once all URLs are known.
