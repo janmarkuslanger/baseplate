@@ -22,7 +22,11 @@ func (s *SQLStore) getOne(ctx context.Context, typ, cond string, args ...any) (*
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.selectEntries(ctx, t, ` WHERE `+cond+` ORDER BY id LIMIT 1`, args...)
+	var list []Entry
+	err = s.read(ctx, func(v *SQLStore) error {
+		list, err = v.selectEntries(ctx, t, ` WHERE `+cond+` ORDER BY id LIMIT 1`, args...)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -66,20 +70,28 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		where = append(where, "("+strings.Join(ors, " OR ")+")")
 	}
 	cond := " WHERE " + strings.Join(where, " AND ")
-	var total int
-	if err := s.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM `+t.Name+cond, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
 	tail := cond + ` ORDER BY updated_at DESC, id DESC`
 	if lq.Limit > 0 {
 		tail += fmt.Sprintf(" LIMIT %d OFFSET %d", lq.Limit, lq.Offset)
 	}
-	list, err := s.selectEntries(ctx, t, tail, args...)
-	return list, total, err
+	var list []Entry
+	var total int
+	err = s.read(ctx, func(v *SQLStore) error {
+		if err := v.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM `+t.Name+cond, args...).Scan(&total); err != nil {
+			return err
+		}
+		list, err = v.selectEntries(ctx, t, tail, args...)
+		return err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
 }
 
 // selectEntries loads entry rows and hydrates their components and
-// relations with a fixed number of queries per nesting level.
+// relations with a fixed number of queries per nesting level. Callers run
+// it inside read, so all of them see one snapshot.
 func (s *SQLStore) selectEntries(ctx context.Context, t *table, tail string, args ...any) ([]Entry, error) {
 	cols := []string{"id", "document_id", "slug", "locale", "version", "revision", "created_at", "updated_at"}
 	for _, c := range t.Columns {

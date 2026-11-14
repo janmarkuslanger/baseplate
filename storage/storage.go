@@ -177,6 +177,8 @@ type Entries interface {
 	GetEntry(ctx context.Context, typ string, id int64, locale string, v Version) (*Entry, error)
 	GetEntryBySlug(ctx context.Context, typ, slug, locale string, v Version) (*Entry, error)
 	// ListEntries returns one page of matching entries and the total count.
+	// Reads see one snapshot: a write committed meanwhile shows up in all
+	// of the result or in none of it.
 	ListEntries(ctx context.Context, q ListQuery) ([]Entry, int, error)
 	// DeleteEntry removes the document (all locales and versions), its
 	// components and its relations. It fails with *ReferencedError while
