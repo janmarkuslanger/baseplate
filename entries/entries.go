@@ -113,12 +113,16 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	// concurrent saves cannot both pass the check. Hooks run before it:
 	// they may use the store, which the transaction holds.
 	err = s.Store.Atomic(ctx, func(st storage.Entries) error {
-		if t.Singleton && e.ID == 0 {
+		if t.Singleton {
+			// One document per locale: a save without ID updates it, a
+			// save into another document's locale is refused.
 			cur, err := st.GetEntryBySlug(ctx, t.Name, t.Name, e.Locale, storage.Draft)
 			switch {
-			case err == nil:
+			case err == nil && e.ID == 0:
 				e.ID, e.CreatedAt = cur.ID, cur.CreatedAt
-			case !errors.Is(err, storage.ErrNotFound):
+			case err == nil && cur.ID != e.ID:
+				return storage.ErrNotFound // reported as ErrNotFound below
+			case err != nil && !errors.Is(err, storage.ErrNotFound):
 				return err
 			}
 		}

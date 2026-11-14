@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/janmarkuslanger/baseplate/entries"
+	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -88,5 +89,32 @@ func TestDeleteAnyLocale(t *testing.T) {
 	}
 	if _, err := svc.Delete(ctx, "page", de.Entry.ID); !errors.Is(err, entries.ErrNotFound) {
 		t.Errorf("delete twice: %v", err)
+	}
+}
+
+// A singleton holds one document per locale. Adding a locale to one
+// document while another document holds that locale is refused like an
+// unknown entry, and the other document stays as it is.
+func TestSaveSingletonLocaleTaken(t *testing.T) {
+	svc, reg := service(t)
+	ctx := context.Background()
+	de, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Data: map[string]any{"siteName": "DE", "baseURL": "https://a.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	en, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Locale: "en", Data: map[string]any{"siteName": "EN", "baseURL": "https://a.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if en.Entry.ID == de.Entry.ID {
+		t.Fatal("want a separate document per locale for this test")
+	}
+	_, err = svc.Save(ctx, entries.Save{Type: fields.SettingsType, ID: de.Entry.ID, Locale: "en", Data: map[string]any{"siteName": "X", "baseURL": "https://a.test"}})
+	if !errors.Is(err, entries.ErrNotFound) {
+		t.Errorf("locale held by another document: %v", err)
+	}
+	got, err := reg.Store.GetEntry(ctx, fields.SettingsType, en.Entry.ID, "en", storage.Draft)
+	if err != nil || got.Data["siteName"] != "EN" {
+		t.Errorf("other document changed: %+v %v", got, err)
 	}
 }
