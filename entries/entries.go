@@ -53,8 +53,9 @@ type Service struct {
 	Logger Logger
 }
 
-// Save input. ID 0 creates (singletons update their single entry). Locale
-// "" is the site language. Publish also publishes the saved draft.
+// Save input. ID 0 creates (singletons update their single entry); the ID
+// of an entry without a draft in Locale adds that locale to it. Locale ""
+// is the site language. Publish also publishes the saved draft.
 type Save struct {
 	Type    string
 	ID      int64
@@ -144,6 +145,9 @@ func (s *Service) Save(ctx context.Context, in Save) (*Result, error) {
 	if errors.Is(err, storage.ErrInvalidRelation) {
 		return nil, content.Errors{"_": err}
 	}
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound // a new locale of an unknown entry
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -216,13 +220,15 @@ func (s *Service) Delete(ctx context.Context, typ string, id int64) (changed boo
 	return changed, nil
 }
 
-// load returns the draft to update, or a new one.
+// load returns the draft to update, or a new one. An ID without a draft in
+// locale gets a new draft of that locale; SaveDraft adds it to the document
+// or, if the document does not exist, fails with storage.ErrNotFound.
 func (s *Service) load(ctx context.Context, t *content.Type, id int64, locale string) (*storage.Entry, error) {
 	switch {
 	case id > 0:
 		e, err := s.Store.GetEntry(ctx, t.Name, id, locale, storage.Draft)
 		if errors.Is(err, storage.ErrNotFound) {
-			return nil, ErrNotFound
+			return &storage.Entry{Type: t.Name, ID: id, Locale: locale, Version: storage.Draft}, nil
 		}
 		return e, err
 	case t.Singleton:
