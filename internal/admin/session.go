@@ -37,6 +37,9 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Admin) logout(w http.ResponseWriter, r *http.Request) {
-	a.Auth.Logout(w, r)
+	if err := a.Auth.Logout(w, r); err != nil {
+		a.fail(w, err)
+		return
+	}
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }

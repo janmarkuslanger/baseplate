@@ -178,18 +178,33 @@ func (m *Manager) CheckLoginCSRF(r *http.Request) bool {
 
 // SetCookie sends the session cookie.
 func (m *Manager) SetCookie(w http.ResponseWriter, r *http.Request, s *storage.Session) {
-	http.SetCookie(w, &http.Cookie{
-		Name: CookieName, Value: s.Token, Path: "/", Expires: s.ExpiresAt,
-		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: m.SecureCookies || r.TLS != nil,
-	})
+	c := m.sessionCookie(r, s.Token)
+	c.Expires = s.ExpiresAt
+	http.SetCookie(w, c)
 }
 
-// Logout deletes the current session and its cookie.
-func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) {
+// Logout deletes the current session and its cookie. If the session cannot
+// be deleted, the cookie is kept and the error returned: the token would
+// stay valid, so the user must not be told they are logged out.
+func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) error {
 	if c, err := r.Cookie(CookieName); err == nil {
-		m.Store.DeleteSession(r.Context(), c.Value)
+		if err := m.Store.DeleteSession(r.Context(), c.Value); err != nil {
+			return fmt.Errorf("delete session: %w", err)
+		}
 	}
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
+	c := m.sessionCookie(r, "")
+	c.MaxAge = -1
+	http.SetCookie(w, c)
+	return nil
+}
+
+// sessionCookie returns the session cookie with its security attributes;
+// setting and deleting it must use the same ones.
+func (m *Manager) sessionCookie(r *http.Request, value string) *http.Cookie {
+	return &http.Cookie{
+		Name: CookieName, Value: value, Path: "/",
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: m.SecureCookies || r.TLS != nil,
+	}
 }
 
 type ctxKey struct{}
