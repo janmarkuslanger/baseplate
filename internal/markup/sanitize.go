@@ -22,6 +22,10 @@ var dropTags = map[atom.Atom]bool{
 	atom.Embed: true, atom.Template: true, atom.Noscript: true, atom.Svg: true, atom.Math: true,
 }
 
+// voidDropTags are dropTags without an end tag; they must not open a
+// dropped region, or everything after them would be lost.
+var voidDropTags = map[atom.Atom]bool{atom.Embed: true}
+
 // SanitizeHTML reduces untrusted HTML to the rich-text allowlist. Only
 // href on <a> survives, and only with a safe scheme.
 func SanitizeHTML(in string) string {
@@ -44,7 +48,7 @@ func SanitizeHTML(in string) string {
 		case html.StartTagToken, html.SelfClosingTagToken:
 			t := z.Token()
 			if dropTags[t.DataAtom] {
-				if tt == html.StartTagToken {
+				if tt == html.StartTagToken && !voidDropTags[t.DataAtom] {
 					drop++
 				}
 				continue
@@ -69,7 +73,8 @@ func SanitizeHTML(in string) string {
 		case html.EndTagToken:
 			t := z.Token()
 			if dropTags[t.DataAtom] {
-				if drop > 0 {
+				// A stray </embed> must not close an enclosing dropped element.
+				if drop > 0 && !voidDropTags[t.DataAtom] {
 					drop--
 				}
 				continue
