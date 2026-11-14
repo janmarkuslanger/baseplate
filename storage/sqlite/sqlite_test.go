@@ -3,7 +3,10 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +30,35 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	s := openTest(t)
 	if err := s.Migrate(context.Background(), storage.CoreMigrations); err != nil {
 		t.Fatalf("second migrate: %v", err)
+	}
+}
+
+// Several processes starting on a fresh database must apply each migration
+// once; the losers of the race skip it instead of failing on CREATE TABLE.
+func TestConcurrentMigrate(t *testing.T) {
+	for round := range 20 {
+		path := filepath.Join(t.TempDir(), fmt.Sprintf("db%d.sqlite", round))
+		stores := make([]*storage.SQLStore, 4)
+		for i := range stores {
+			s, err := Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { s.Close() })
+			stores[i] = s
+		}
+		errs := make(chan error, len(stores))
+		var wg sync.WaitGroup
+		for _, s := range stores {
+			wg.Go(func() { errs <- s.Migrate(context.Background(), storage.CoreMigrations) })
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("round %d: concurrent migrate: %v", round, err)
+			}
+		}
 	}
 }
 

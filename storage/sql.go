@@ -84,38 +84,39 @@ func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 	for _, m := range ms {
-		var n int
-		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, m.Name).Scan(&n); err != nil {
-			return err
-		}
-		if n > 0 {
-			continue
-		}
-		script, ok := m.SQL[s.dialect]
-		if !ok {
-			return fmt.Errorf("migration %s has no SQL for dialect %s", m.Name, s.dialect)
-		}
-		if err := s.applyMigration(ctx, m.Name, script); err != nil {
+		if err := s.applyMigration(ctx, m); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// applyMigration runs one migration script and records it in one
-// transaction.
-func (s *SQLStore) applyMigration(ctx context.Context, name, script string) error {
+// applyMigration runs one migration unless it is recorded as applied. The
+// check shares the transaction with the script, so processes migrating the
+// same database concurrently apply it once (SQLite begins IMMEDIATE).
+func (s *SQLStore) applyMigration(ctx context.Context, m Migration) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() // no-op after Commit
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, m.Name).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	script, ok := m.SQL[s.dialect]
+	if !ok {
+		return fmt.Errorf("migration %s has no SQL for dialect %s", m.Name, s.dialect)
+	}
 	for _, stmt := range splitStatements(script) {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("migration %s: %w", name, err)
+			return fmt.Errorf("migration %s: %w", m.Name, err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, name, s.now().Unix()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, m.Name, s.now().Unix()); err != nil {
 		return err
 	}
 	return tx.Commit()
