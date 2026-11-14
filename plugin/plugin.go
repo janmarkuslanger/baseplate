@@ -103,7 +103,7 @@ type AdminUI interface {
 
 // AdminPage is an extra page in the admin, served at /admin/p/<Path>.
 type AdminPage struct {
-	Path    string // e.g. "forms/submissions"
+	Path    string // e.g. "forms/submissions"; letters, digits, "-", "_", "." and "/"
 	Label   string // nav label; empty hides it from the navigation
 	Handler func(w http.ResponseWriter, r *http.Request, ui AdminUI)
 }
