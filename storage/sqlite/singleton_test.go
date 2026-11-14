@@ -85,3 +85,31 @@ func TestAtomicRollsBackOnError(t *testing.T) {
 		t.Errorf("%d entries survived the failed Atomic, want 0", total)
 	}
 }
+
+// A singleton is one document in every locale: a second document is
+// refused in any locale, another ID is unknown, and the next start (which
+// refuses several documents) still succeeds.
+func TestSingletonIsOneDocumentAcrossLocales(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	s := startWith(t, path, siteType(true))
+	if _, err := s.SingletonID(ctx, "site"); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("empty singleton: %v", err)
+	}
+	a := mustCreate(t, s, &storage.Entry{Type: "site", Slug: "site", Data: map[string]any{"title": "a"}})
+	if id, err := s.SingletonID(ctx, "site"); err != nil || id != a.ID {
+		t.Fatalf("SingletonID = %d, %v; want %d", id, err, a.ID)
+	}
+
+	if err := s.SaveDraft(ctx, &storage.Entry{Type: "site", Slug: "site", Locale: "en", Data: map[string]any{"title": "b"}}); err == nil {
+		t.Fatal("a second document of a singleton was stored in another locale")
+	}
+	if err := s.SaveDraft(ctx, &storage.Entry{Type: "site", ID: a.ID + 1, Slug: "site", Locale: "en", Data: map[string]any{}}); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("other ID: %v", err)
+	}
+	if err := s.SaveDraft(ctx, &storage.Entry{Type: "site", ID: a.ID, Slug: "site", Locale: "en", Data: map[string]any{"title": "en"}}); err != nil {
+		t.Fatalf("add a locale: %v", err)
+	}
+	s.Close()
+	startWith(t, path, siteType(true))
+}

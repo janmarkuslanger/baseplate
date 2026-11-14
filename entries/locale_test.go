@@ -92,29 +92,39 @@ func TestDeleteAnyLocale(t *testing.T) {
 	}
 }
 
-// A singleton holds one document per locale. Adding a locale to one
-// document while another document holds that locale is refused like an
-// unknown entry, and the other document stays as it is.
-func TestSaveSingletonLocaleTaken(t *testing.T) {
+// A singleton is one document: a save without ID in a new locale adds
+// that locale to it, and a save with any other ID is an unknown entry.
+func TestSaveSingletonAddsLocale(t *testing.T) {
 	svc, reg := service(t)
 	ctx := context.Background()
 	de, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Data: map[string]any{"siteName": "DE", "baseURL": "https://a.test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	var hooked []int64
+	entries.BeforeSave.On(reg, func(_ context.Context, e *entries.Event) error {
+		hooked = append(hooked, e.Entry.ID)
+		return nil
+	})
 	en, err := svc.Save(ctx, entries.Save{Type: fields.SettingsType, Locale: "en", Data: map[string]any{"siteName": "EN", "baseURL": "https://a.test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if en.Entry.ID == de.Entry.ID {
-		t.Fatal("want a separate document per locale for this test")
+	if en.Entry.ID != de.Entry.ID || en.Entry.Locale != "en" {
+		t.Errorf("new locale: %+v, want document %d", en.Entry, de.Entry.ID)
 	}
-	_, err = svc.Save(ctx, entries.Save{Type: fields.SettingsType, ID: de.Entry.ID, Locale: "en", Data: map[string]any{"siteName": "X", "baseURL": "https://a.test"}})
+	if len(hooked) != 1 || hooked[0] != de.Entry.ID {
+		t.Errorf("beforeSave saw IDs %v, want [%d]", hooked, de.Entry.ID)
+	}
+	if l, err := reg.Store.Locales(ctx, fields.SettingsType, de.Entry.ID); err != nil || len(l) != 2 {
+		t.Errorf("locales: %q %v", l, err)
+	}
+	_, err = svc.Save(ctx, entries.Save{Type: fields.SettingsType, ID: de.Entry.ID + 1, Locale: "en", Data: map[string]any{"siteName": "X", "baseURL": "https://a.test"}})
 	if !errors.Is(err, entries.ErrNotFound) {
-		t.Errorf("locale held by another document: %v", err)
+		t.Errorf("other ID: %v", err)
 	}
-	got, err := reg.Store.GetEntry(ctx, fields.SettingsType, en.Entry.ID, "en", storage.Draft)
+	got, err := reg.Store.GetEntry(ctx, fields.SettingsType, de.Entry.ID, "en", storage.Draft)
 	if err != nil || got.Data["siteName"] != "EN" {
-		t.Errorf("other document changed: %+v %v", got, err)
+		t.Errorf("singleton changed: %+v %v", got, err)
 	}
 }

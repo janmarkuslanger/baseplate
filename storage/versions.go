@@ -18,6 +18,9 @@ func (s *SQLStore) SaveDraft(ctx context.Context, e *Entry) error {
 	}
 	return s.tx(ctx, func(q Querier) error {
 		e.Version = Draft
+		if err := s.checkSingleton(ctx, q, t, e.ID); err != nil {
+			return err
+		}
 		if e.ID == 0 {
 			e.CreatedAt = s.now()
 			return s.insertRow(ctx, q, t, e, 1)
