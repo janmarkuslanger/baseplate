@@ -224,10 +224,13 @@ func (a *Admin) render(w http.ResponseWriter, r *http.Request, status int, tmpl 
 	if cur := auth.FromContext(r.Context()); cur != nil {
 		v.User, v.CSRF = cur.User, cur.Session.CSRF
 		v.Nav = a.nav()
-		if cfg, err := settings.Load(r.Context(), a.store()); err == nil {
-			v.TZ = cfg.Location.String()
-			a.loc.Store(cfg.Location)
+		cfg, err := settings.Load(r.Context(), a.store())
+		if err != nil {
+			a.fail(w, fmt.Errorf("load settings: %w", err))
+			return
 		}
+		v.TZ = cfg.Location.String()
+		a.loc.Store(cfg.Location)
 	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", v); err != nil {

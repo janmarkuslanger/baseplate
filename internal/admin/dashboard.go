@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -33,10 +34,18 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request) {
 			a.fail(w, err)
 			return
 		}
-		_, pub, _ := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Version: storage.Published, Limit: 1})
+		_, pub, err := a.store().ListEntries(r.Context(), storage.ListQuery{Type: t.Name, Version: storage.Published, Limit: 1})
+		if err != nil {
+			a.fail(w, err)
+			return
+		}
 		counts = append(counts, typeCount{Type: t, Total: total, Published: pub})
 	}
-	cfg, _ := settings.Load(r.Context(), a.store())
+	cfg, err := settings.Load(r.Context(), a.store())
+	if err != nil {
+		a.fail(w, fmt.Errorf("load settings: %w", err))
+		return
+	}
 	last := a.lastBuild.Load()
 	a.render(w, r, http.StatusOK, a.pages["dashboard"], view{Title: a.t("nav.dashboard"), Active: "dashboard", Page: map[string]any{
 		"Counts": counts, "Build": last, "SettingsMissing": cfg.BaseURL == "",

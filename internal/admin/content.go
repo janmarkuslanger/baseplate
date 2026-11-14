@@ -203,7 +203,11 @@ func (a *Admin) renderEdit(w http.ResponseWriter, r *http.Request, status int, t
 		blocks[b.Name] = item
 		labels[b.Name] = a.t(b.Label)
 	}
-	cfg, _ := settings.Load(r.Context(), a.store())
+	cfg, err := settings.Load(r.Context(), a.store())
+	if err != nil {
+		a.fail(w, fmt.Errorf("load settings: %w", err))
+		return
+	}
 	title := a.t(t.Label)
 	if e.ID != 0 && !t.Singleton {
 		title = fmt.Sprint(a.orDash(e.Data[t.Title()]))
