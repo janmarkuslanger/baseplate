@@ -71,7 +71,7 @@ plugins/* ─▶ public packages only
 - preview (`Builder.Preview`, admin `GET /admin/c/{type}/{id}/preview`): the build pipeline with one draft in place of its published version (`site.overlay`, applied in `site.Published`, so URLs, relations, inverse fields and `entries` see it); renders that page into memory, no dist lock; `Cache-Control: no-store`, `X-Robots-Tag: noindex`
 - a singleton table holds at most one document (unique index `ct_<type>_single` on `locale`, `version`); several existing documents → startup error naming them
 - components keep their IDs across saves and moves (`_key` = `<table>:<id>`)
-- delete is refused while relation fields (any version) of other entries point at the entry (`ReferencedError`); otherwise it removes all versions, their components and all relations from/to it
+- delete is refused while relation fields (any version) of other entries point at the entry (`ReferencedError`); otherwise it removes all locales and versions, their components and all relations from/to it; `entries.Service.Delete` finds the locales with `Entries.Locales` and reports the delete as a published change if any locale was published
 - build resolves relations one level deep (+ inverse fields)
 - date fields = Unix seconds; the admin converts in the site time zone (browser `Intl`), the build formats in it
 - pages = type template → `.Content` of the layout (`Type.Layout`, default `layout` if defined)

@@ -197,27 +197,42 @@ func (s *Service) publishedChanged(ctx context.Context, ev *Event) {
 	}
 }
 
-// Delete removes an entry with all its versions. changed reports whether
-// it was published. The event carries the draft of the site language. An
-// entry other entries still point at is not deleted; the error is a
-// *storage.ReferencedError listing them.
+// Delete removes an entry with all its locales and versions. changed
+// reports whether it was published in any locale; the event then carries
+// the draft of the first published locale, the site language if it is
+// published. An entry other entries still point at is not deleted; the
+// error is a *storage.ReferencedError listing them.
 func (s *Service) Delete(ctx context.Context, typ string, id int64) (changed bool, err error) {
-	e, err := s.Store.GetEntry(ctx, typ, id, "", storage.Draft)
-	if errors.Is(err, storage.ErrNotFound) {
-		return false, ErrNotFound
-	}
+	var pub *storage.Entry
+	err = s.Store.Atomic(ctx, func(st storage.Entries) error {
+		locales, err := st.Locales(ctx, typ, id)
+		if err != nil {
+			return err
+		}
+		if len(locales) == 0 {
+			return ErrNotFound
+		}
+		for _, l := range locales {
+			e, err := st.GetEntry(ctx, typ, id, l, storage.Draft)
+			if err != nil {
+				return err
+			}
+			if e.Published() {
+				pub = e
+				break
+			}
+		}
+		return st.DeleteEntry(ctx, typ, id)
+	})
 	if err != nil {
 		return false, err
 	}
-	if err := s.Store.DeleteEntry(ctx, typ, id); err != nil {
-		return false, err
+	if pub == nil {
+		return false, nil
 	}
-	changed = e.Published()
-	if changed {
-		t, _ := s.Schema.Type(typ)
-		s.publishedChanged(ctx, &Event{Entry: e, Type: t})
-	}
-	return changed, nil
+	t, _ := s.Schema.Type(typ)
+	s.publishedChanged(ctx, &Event{Entry: pub, Type: t})
+	return true, nil
 }
 
 // load returns the draft to update, or a new one. An ID without a draft in

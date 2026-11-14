@@ -49,3 +49,44 @@ func TestSaveAddsLocale(t *testing.T) {
 		t.Errorf("unknown entry: %v", err)
 	}
 }
+
+// Delete removes an entry whatever locales it has, and reports it as
+// changed when any of them is published.
+func TestDeleteAnyLocale(t *testing.T) {
+	svc, reg := service(t)
+	ctx := context.Background()
+	var events []string
+	entries.PublishedChanged.On(reg, func(_ context.Context, e *entries.Event) error {
+		events = append(events, e.Entry.Locale+":"+e.Entry.Slug)
+		return nil
+	})
+
+	enOnly, err := svc.Save(ctx, entries.Save{Type: "page", Locale: "en", Data: page("only", 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := svc.Delete(ctx, "page", enOnly.Entry.ID); err != nil || changed {
+		t.Errorf("delete entry without site language: changed %v, %v", changed, err)
+	}
+	if _, err := reg.Store.GetEntry(ctx, "page", enOnly.Entry.ID, "en", storage.Draft); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("entry still there: %v", err)
+	}
+
+	de, err := svc.Save(ctx, entries.Save{Type: "page", Data: page("ueber", 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Save(ctx, entries.Save{Type: "page", ID: de.Entry.ID, Locale: "en", Data: page("about", 0), Publish: true}); err != nil {
+		t.Fatal(err)
+	}
+	events = nil
+	if changed, err := svc.Delete(ctx, "page", de.Entry.ID); err != nil || !changed {
+		t.Errorf("delete entry published in another locale: changed %v, %v", changed, err)
+	}
+	if len(events) != 1 || events[0] != "en:about" {
+		t.Errorf("publishedChanged events: %v", events)
+	}
+	if _, err := svc.Delete(ctx, "page", de.Entry.ID); !errors.Is(err, entries.ErrNotFound) {
+		t.Errorf("delete twice: %v", err)
+	}
+}
