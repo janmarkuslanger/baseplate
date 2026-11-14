@@ -109,7 +109,7 @@ func (a *Admin) funcs() template.FuncMap {
 			}
 			return a.t(tab)
 		},
-		"date": func(t time.Time) string { return t.Local().Format(a.t("format.datetime")) },
+		"date": func(t time.Time) string { return t.In(a.location()).Format(a.t("format.datetime")) },
 		"ago": func(t time.Time) string {
 			d := time.Since(t)
 			switch {
@@ -120,7 +120,7 @@ func (a *Admin) funcs() template.FuncMap {
 			case d < 24*time.Hour:
 				return a.t("ago.hours", int(d.Hours()))
 			}
-			return t.Local().Format(a.t("format.date"))
+			return t.In(a.location()).Format(a.t("format.date"))
 		},
 		"size": func(n int64) string {
 			if n < 1<<20 {
