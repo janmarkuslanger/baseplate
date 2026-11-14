@@ -119,6 +119,41 @@ func TestExpiredSessionDeleteFailure(t *testing.T) {
 	}
 }
 
+// Expired sessions that are never presented again are purged when a new
+// session is created, so the table does not grow forever.
+func TestCreateSessionPurgesExpired(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	for _, ses := range []*storage.Session{
+		{Token: "old", UserID: 1, CSRF: "c", ExpiresAt: time.Now().Add(-time.Hour)},
+		{Token: "live", UserID: 1, CSRF: "c", ExpiresAt: time.Now().Add(time.Hour)},
+		{Token: "new", UserID: 1, CSRF: "c", ExpiresAt: time.Now().Add(time.Hour)},
+	} {
+		if err := s.CreateSession(ctx, ses); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var tokens []string
+	rows, err := s.DB().QueryContext(ctx, `SELECT token FROM sessions ORDER BY token`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tok string
+		if err := rows.Scan(&tok); err != nil {
+			t.Fatal(err)
+		}
+		tokens = append(tokens, tok)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(tokens, ",") != "live,new" {
+		t.Errorf("sessions = %v, want [live new]", tokens)
+	}
+}
+
 // A panic inside Atomic must not leave the transaction open: with a
 // single connection, every later query would block forever.
 func TestAtomicPanicReleasesConnection(t *testing.T) {
