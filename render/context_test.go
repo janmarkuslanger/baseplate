@@ -22,7 +22,9 @@ func TestPluginFuncsGetTheRenderersContext(t *testing.T) {
 			}
 			return prefix + ctx.Value(buildKey{}).(string), nil
 		},
-		"join":  func(ctx context.Context, parts ...string) string { return strings.Join(parts, ctx.Value(buildKey{}).(string)) },
+		"join": func(ctx context.Context, parts ...string) string {
+			return strings.Join(parts, ctx.Value(buildKey{}).(string))
+		},
 		"shout": strings.ToUpper,
 	}); err != nil {
 		t.Fatal(err)
