@@ -55,7 +55,7 @@ type site struct {
 }
 
 func (s *site) newRenderer() error {
-	r, err := render.New(s.b.Reg, s.b.Theme, render.Options{Entries: s.entries, Lang: s.cfg.Language, Location: s.cfg.Location})
+	r, err := render.New(s.b.Reg, s.b.Theme, render.Options{Context: s.ctx, Entries: s.entries, Lang: s.cfg.Language, Location: s.cfg.Location})
 	s.r = r
 	return err
 }

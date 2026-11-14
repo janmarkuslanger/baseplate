@@ -115,6 +115,23 @@ func TestNavigationInBuild(t *testing.T) {
 	}
 }
 
+// The navigation is loaded with the build's context: a build cancelled
+// while rendering fails at the lookup instead of finishing.
+func TestNavigationUsesBuildContext(t *testing.T) {
+	reg := setup(t)
+	save(t, reg, fields.PageType, map[string]any{"title": "Start", "slug": "index"}, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := reg.Funcs(plugin.TemplateFuncs{"cancelBuild": func() string { cancel(); return "" }}); err != nil {
+		t.Fatal(err)
+	}
+	theme := `{{define "page"}}{{cancelBuild}}{{len (navigation "main" .)}}{{end}}`
+	b := &build.Builder{Reg: reg, DistDir: filepath.Join(t.TempDir(), "dist"), Theme: fstest.MapFS{"templates/page.html": {Data: []byte(theme)}}}
+	if _, err := b.Build(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Build = %v, want the navigation lookup to fail with %v", err, context.Canceled)
+	}
+}
+
 func TestItemURLOrPage(t *testing.T) {
 	reg := setup(t)
 	page := save(t, reg, fields.PageType, map[string]any{"title": "A", "slug": "a"}, true)

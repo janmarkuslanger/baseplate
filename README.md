@@ -209,7 +209,7 @@ In every pattern an entry's own slug `index` is empty (`/news/index/` becomes `/
 | `PublicRoute` | dynamic endpoints on the CMS server |
 | `Migration` | plugin-owned tables (SQL per dialect) |
 | `DataMigration` | one-time content changes after schema changes |
-| `Funcs` | frontend template functions |
+| `Funcs` | frontend template functions (a first `context.Context` parameter gets the build's context) |
 | `hook` package | typed hooks, e.g. `entries.BeforeSave.On(r, fn)` — see [docs/plugins.md](docs/plugins.md) |
 
 [`plugins/forms`](plugins/forms) is a complete example that uses most of these.
