@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -372,5 +373,28 @@ func TestKeywordColumnNames(t *testing.T) {
 	}
 	if list[0].Data["group"].([]any)[0].(map[string]any)["select"] != "x" {
 		t.Error("component with keyword column")
+	}
+}
+
+// Search matches its text literally: LIKE wildcards and the escape
+// character in the query are not patterns.
+func TestSearchIsLiteral(t *testing.T) {
+	ctx := context.Background()
+	s, _ := schemaStore(t)
+	for i, title := range []string{"50% off", "500 off", "a_b", "axb", `c\d`, `c\\d`} {
+		mustCreate(t, s, &storage.Entry{Type: "post", Slug: fmt.Sprintf("p%d", i), Data: map[string]any{"title": title}})
+	}
+	for search, want := range map[string]string{"50%": "50% off", "a_b": "a_b", `c\d`: `c\d`} {
+		list, total, err := s.ListEntries(ctx, storage.ListQuery{Type: "post", Version: storage.Draft, Search: search})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != 1 || len(list) != 1 || list[0].Data["title"] != want {
+			var got []any
+			for _, e := range list {
+				got = append(got, e.Data["title"])
+			}
+			t.Errorf("search %q: got %v (total %d), want only %q", search, got, total, want)
+		}
 	}
 }

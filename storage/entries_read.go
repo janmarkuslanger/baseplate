@@ -32,6 +32,9 @@ func (s *SQLStore) getOne(ctx context.Context, typ, cond string, args ...any) (*
 	return &list[0], nil
 }
 
+// likeEscaper makes a search string match literally in LIKE ... ESCAPE '\'.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int, error) {
 	t, err := s.entryTable(lq.Type)
 	if err != nil {
@@ -51,12 +54,12 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		args = append(args, Published)
 	}
 	if lq.Search != "" {
-		like := "%" + lq.Search + "%"
-		ors := []string{"slug LIKE ?"}
+		like := "%" + likeEscaper.Replace(lq.Search) + "%"
+		ors := []string{`slug LIKE ? ESCAPE '\'`}
 		args = append(args, like)
 		for _, c := range t.Columns {
 			if c.Storage == content.StoreText || c.Storage == content.StoreLongText {
-				ors = append(ors, s.col(c.Name)+" LIKE ?")
+				ors = append(ors, s.col(c.Name)+` LIKE ? ESCAPE '\'`)
 				args = append(args, like)
 			}
 		}
