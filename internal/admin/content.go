@@ -61,11 +61,19 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := make([]row, len(entries))
+	var lookupErr error
+	parent := a.publishedParent(r.Context(), t.Name, &lookupErr)
 	for i, e := range entries {
 		rows[i] = row{Entry: e, Title: fmt.Sprint(a.orDash(e.Data[t.Title()]))}
 		if t.Routable {
-			rows[i].URL, _ = build.EntryURL(t, &e, a.publishedParent(r.Context(), t.Name))
+			// The only error is a parent cycle; the row then shows no URL,
+			// so the list stays usable to fix the cycle.
+			rows[i].URL, _ = build.EntryURL(t, &e, parent)
 		}
+	}
+	if lookupErr != nil {
+		a.fail(w, lookupErr)
+		return
 	}
 	a.render(w, r, http.StatusOK, a.pages["list"], view{Title: a.t(t.LabelPlural), Active: "c/" + t.Name, Flash: a.flash(r), Page: map[string]any{
 		"Type": t, "Rows": rows, "Total": total, "Query": q, "Status": status, "PageNo": pageNo,
@@ -74,10 +82,14 @@ func (a *Admin) list(w http.ResponseWriter, r *http.Request) {
 }
 
 // publishedParent looks up parents like the build does: published only.
-func (a *Admin) publishedParent(ctx context.Context, typ string) func(int64) *storage.Entry {
+// A missing parent ends the chain; any other error is kept in *errp.
+func (a *Admin) publishedParent(ctx context.Context, typ string, errp *error) func(int64) *storage.Entry {
 	return func(id int64) *storage.Entry {
 		e, err := a.store().GetEntry(ctx, typ, id, "", storage.Published)
 		if err != nil {
+			if !errors.Is(err, storage.ErrNotFound) && *errp == nil {
+				*errp = fmt.Errorf("parent %d of %s: %w", id, typ, err)
+			}
 			return nil
 		}
 		return e
