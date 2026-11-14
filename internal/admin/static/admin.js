@@ -7,9 +7,8 @@
   let messages = null;
   const tr = (key, ...args) => {
     if (!messages) messages = JSON.parse(document.body.dataset.i18n || '{}');
-    let s = messages[key] || key;
-    args.forEach((a, i) => { s = s.replace('{' + i + '}', a); });
-    return s;
+    // One pass, like i18n.T: an argument containing "{1}" or "$&" stays as is.
+    return (messages[key] || key).replace(/\{(\d+)\}/g, (m, i) => (i < args.length ? String(args[i]) : m));
   };
   // Date fields store Unix seconds; inputs show and take wall time in the
   // site's time zone (data-tz), not the browser's.
