@@ -310,9 +310,17 @@
         }
       },
       async openLibrary() {
-        this.library = true;
-        const res = await fetch('/admin/media.json');
-        this.files = await res.json();
+        this.error = '';
+        try {
+          // An expired session redirects to the login page, whose HTML
+          // makes res.json() throw as well.
+          const res = await fetch('/admin/media.json', { headers: { Accept: 'application/json' } });
+          if (!res.ok) throw new Error(res.statusText);
+          this.files = await res.json();
+          this.library = true;
+        } catch {
+          this.error = tr('js.libraryFailed');
+        }
       },
     }));
   });

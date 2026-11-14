@@ -123,6 +123,7 @@
   "item.duplicate": "duplizieren",
   "item.remove": "entfernen",
   "item.up": "nach oben",
+  "js.libraryFailed": "Mediathek konnte nicht geladen werden",
   "js.linkPrompt": "Link-Adresse (https://…, /pfad oder mailto:…)",
   "js.relationMissing": "#{0} (gelöscht?)",
   "js.uploadFailed": "Upload fehlgeschlagen",
