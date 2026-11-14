@@ -171,7 +171,8 @@ type Tables interface {
 type Entries interface {
 	// SaveDraft creates or updates the draft of e.Locale. ID 0 creates a
 	// new document and sets e.ID; an ID of an existing document without a
-	// draft in e.Locale adds that locale.
+	// draft in e.Locale adds that locale. A singleton type has one document
+	// for all locales: ID 0 fails once it exists, another ID is ErrNotFound.
 	SaveDraft(ctx context.Context, e *Entry) error
 	// Publish copies the draft to the published version, replacing it.
 	Publish(ctx context.Context, typ string, id int64, locale string) error
@@ -179,6 +180,9 @@ type Entries interface {
 	Unpublish(ctx context.Context, typ string, id int64, locale string) error
 	GetEntry(ctx context.Context, typ string, id int64, locale string, v Version) (*Entry, error)
 	GetEntryBySlug(ctx context.Context, typ, slug, locale string, v Version) (*Entry, error)
+	// SingletonID returns the document of a singleton type, which holds
+	// all its locales; ErrNotFound while there is none.
+	SingletonID(ctx context.Context, typ string) (int64, error)
 	// Locales lists the locales the document has a draft in, sorted, so
 	// the site language ("") comes first; none for an unknown document.
 	Locales(ctx context.Context, typ string, id int64) ([]string, error)
