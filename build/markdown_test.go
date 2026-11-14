@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
@@ -71,5 +72,31 @@ func TestDisabledMarkdownVariantIsNotLinked(t *testing.T) {
 	}
 	if llms := read(t, b, "llms.txt"); !strings.Contains(llms, "- [About](https://a.test/about/)") {
 		t.Errorf("llms.txt must link the page itself without a Markdown variant:\n%s", llms)
+	}
+}
+
+// The .md variant and llms.txt take the title from the type's TitleField.
+func TestMarkdownOutputsUseTitleField(t *testing.T) {
+	b, st := setup(t)
+	ctx := context.Background()
+	b.Reg.ContentType(content.Type{Name: "person", Routable: true, Path: "/people/{slug}/", TitleField: "name", Fields: []content.Field{
+		{Name: "name", Kind: fields.Text},
+		{Name: "slug", Kind: fields.Slug},
+		fields.SEOField(),
+	}})
+	if err := st.UseSchema(ctx, b.Reg.Schema); err != nil {
+		t.Fatal(err)
+	}
+	b.Theme.(fstest.MapFS)["templates/person.html"] = &fstest.MapFile{Data: []byte(`{{define "person"}}{{end}}`)}
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test", "llmsTxt": true})
+	add(t, st, "person", "ada", storage.Published, map[string]any{"name": "Ada"})
+	if _, err := b.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if md := read(t, b, "people/ada.md"); !strings.HasPrefix(md, "# Ada\n") {
+		t.Errorf("want the name field as heading in\n%s", md)
+	}
+	if llms := read(t, b, "llms.txt"); !strings.Contains(llms, "- [Ada](https://a.test/people/ada.md)") {
+		t.Errorf("want the name field as link text in\n%s", llms)
 	}
 }

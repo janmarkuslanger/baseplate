@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,9 @@ func setup(t *testing.T) (*Builder, storage.Store) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	return &Builder{Reg: reg, Theme: theme, DistDir: filepath.Join(dir, "dist"), MediaDir: filepath.Join(dir, "media")}, st
+	// A copy, so tests that add or replace theme files do not leak them
+	// into later tests.
+	return &Builder{Reg: reg, Theme: maps.Clone(theme), DistDir: filepath.Join(dir, "dist"), MediaDir: filepath.Join(dir, "media")}, st
 }
 
 // add stores a draft and, for v Published, publishes it.

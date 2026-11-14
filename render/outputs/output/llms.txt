@@ -5,6 +5,6 @@
 
 {{end}}## {{sitetext "llms.pages" "Pages"}}
 
-{{range .Indexable}}- [{{mdtext .Data.title}}]({{$.BaseURL}}{{or .MarkdownURL .URL}}){{with .Meta.Description}}: {{mdtext .}}{{end}}
+{{range .Indexable}}- [{{mdtext (index .Data .Type.Title)}}]({{$.BaseURL}}{{or .MarkdownURL .URL}}){{with .Meta.Description}}: {{mdtext .}}{{end}}
 {{end}}
 {{- end -}}
