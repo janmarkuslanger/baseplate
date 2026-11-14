@@ -198,7 +198,7 @@ func (a *App) Run(ctx context.Context, args []string, stdin io.Reader, stdout io
 // admin. Run calls it; call it yourself only to use Handler directly (custom
 // servers, tests), and Close afterwards. Migrations run on every start so
 // updates apply automatically.
-func (a *App) Setup(ctx context.Context) error {
+func (a *App) Setup(ctx context.Context) (err error) {
 	a.cfg.LoadEnv()
 	a.cfg.defaults()
 	c := &a.cfg
@@ -207,11 +207,20 @@ func (a *App) Setup(ctx context.Context) error {
 	}
 	st := c.Store
 	if st == nil {
-		var err error
 		st, err = sqlite.Open(filepath.Join(c.DataDir, "baseplate.db"))
 		if err != nil {
 			return fmt.Errorf("open database: %w", err)
 		}
+		// Close the database opened here if a later step fails; a store
+		// from Config stays with its owner.
+		defer func() {
+			if err == nil {
+				return
+			}
+			if cerr := st.Close(); cerr != nil {
+				err = errors.Join(err, fmt.Errorf("close database: %w", cerr))
+			}
+		}()
 	}
 	mailer := c.Mailer
 	if mailer == nil {
@@ -251,7 +260,11 @@ func (a *App) Setup(ctx context.Context) error {
 	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies, Logger: c.Logger}
 	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale, BuildOnPublish: c.BuildOnPublish}
-	return a.admin.Init()
+	if err := a.admin.Init(); err != nil {
+		a.admin.Close() // stops background builds Init may have started
+		return err
+	}
+	return nil
 }
 
 // Close stops background builds and releases the storage opened by Setup.
