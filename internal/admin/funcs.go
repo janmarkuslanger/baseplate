@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/janmarkuslanger/baseplate/content"
 )
@@ -128,11 +129,15 @@ func (a *Admin) funcs() template.FuncMap {
 			return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
 		},
 		"hasPrefix": strings.HasPrefix,
-		"initial": func(s string) string {
-			if s == "" {
-				return "?"
-			}
-			return strings.ToUpper(s[:1])
-		},
+		"initial":   initial,
 	}
+}
+
+// initial returns the upper-cased first letter of s for the avatar.
+func initial(s string) string {
+	r, size := utf8.DecodeRuneInString(s)
+	if size == 0 || r == utf8.RuneError {
+		return "?"
+	}
+	return strings.ToUpper(string(r))
 }
