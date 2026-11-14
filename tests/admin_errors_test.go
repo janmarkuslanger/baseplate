@@ -18,7 +18,7 @@ func TestAdminFailsWhenSettingsCannotBeLoaded(t *testing.T) {
 	app, _, c := startApp(t, &logs, blogPlugin{})
 	c.login()
 	db := app.Registry.Store.(storage.Tables).DB()
-	if _, err := db.Exec(`DROP TABLE ` + storage.EntryTable("settings")); err != nil {
+	if _, err := db.ExecContext(context.Background(), `DROP TABLE `+storage.EntryTable("settings")); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/admin/", "/admin/c/post/new", "/admin/media"} {

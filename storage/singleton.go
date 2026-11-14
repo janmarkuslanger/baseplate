@@ -14,7 +14,7 @@ func singletonIndex(table string) string { return table + "_single" }
 // it from types that are no longer singletons. A singleton table that
 // already holds several documents is an error naming them: which one is
 // the real entry is the developer's call, not the store's.
-func (s *SQLStore) syncSingletons(ctx context.Context, q querier, l *layout) error {
+func (s *SQLStore) syncSingletons(ctx context.Context, q Querier, l *layout) error {
 	for _, name := range l.order {
 		t := l.tables[name]
 		if !t.Entry {
@@ -45,6 +45,6 @@ func (s *SQLStore) syncSingletons(ctx context.Context, q querier, l *layout) err
 	return nil
 }
 
-func documentIDs(ctx context.Context, q querier, table string) ([]int64, error) {
+func documentIDs(ctx context.Context, q Querier, table string) ([]int64, error) {
 	return scanIDs(q.QueryContext(ctx, `SELECT DISTINCT document_id FROM `+table+` ORDER BY document_id`))
 }

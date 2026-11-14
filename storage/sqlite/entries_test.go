@@ -42,7 +42,7 @@ func schemaStore(t *testing.T) (*storage.SQLStore, *content.Schema) {
 
 func count(t *testing.T, s *storage.SQLStore, q string) int {
 	var n int
-	if err := s.DB().QueryRow(q).Scan(&n); err != nil {
+	if err := s.DB().QueryRowContext(context.Background(), q).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n

@@ -67,7 +67,7 @@ type SQLStore struct {
 	layout  *layout
 	// q is the transaction of a store view handed out by Atomic; nil on
 	// the store itself.
-	q querier
+	q Querier
 }
 
 // NewSQLStore wraps an open connection; adapters call it with their dialect.
@@ -76,11 +76,20 @@ func NewSQLStore(db *sql.DB, d Dialect) *SQLStore {
 }
 
 func (s *SQLStore) Dialect() Dialect { return s.dialect }
-func (s *SQLStore) DB() *sql.DB      { return s.db }
-func (s *SQLStore) Close() error     { return s.db.Close() }
+
+// DB returns the transaction inside Atomic and RunOnce, the database
+// otherwise.
+func (s *SQLStore) DB() Querier { return s.conn() }
+
+func (s *SQLStore) Close() error {
+	if s.q != nil {
+		return errors.New("storage: Close on a transaction view")
+	}
+	return s.db.Close()
+}
 
 func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
-	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (name VARCHAR(255) PRIMARY KEY, applied_at BIGINT NOT NULL)`); err != nil {
+	if _, err := s.conn().ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (name VARCHAR(255) PRIMARY KEY, applied_at BIGINT NOT NULL)`); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 	for _, m := range ms {
@@ -95,47 +104,47 @@ func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
 // check shares the transaction with the script, so processes migrating the
 // same database concurrently apply it once (SQLite begins IMMEDIATE).
 func (s *SQLStore) applyMigration(ctx context.Context, m Migration) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback() // no-op after Commit
-	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, m.Name).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	script, ok := m.SQL[s.dialect]
-	if !ok {
-		return fmt.Errorf("migration %s has no SQL for dialect %s", m.Name, s.dialect)
-	}
-	for _, stmt := range splitStatements(script) {
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("migration %s: %w", m.Name, err)
+	return s.tx(ctx, func(q Querier) error {
+		var n int
+		if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, m.Name).Scan(&n); err != nil {
+			return err
 		}
-	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, m.Name, s.now().Unix()); err != nil {
+		if n > 0 {
+			return nil
+		}
+		script, ok := m.SQL[s.dialect]
+		if !ok {
+			return fmt.Errorf("migration %s has no SQL for dialect %s", m.Name, s.dialect)
+		}
+		for _, stmt := range splitStatements(script) {
+			if _, err := q.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("migration %s: %w", m.Name, err)
+			}
+		}
+		_, err := q.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, m.Name, s.now().Unix())
 		return err
-	}
-	return tx.Commit()
+	})
 }
 
-func (s *SQLStore) RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error {
+// RunOnce checks, runs and records fn in one transaction: a failed run
+// leaves neither its writes nor a record, and processes starting at the
+// same time run it once (SQLite begins IMMEDIATE).
+func (s *SQLStore) RunOnce(ctx context.Context, name string, fn func(ctx context.Context, st Store) error) error {
 	key := "data:" + name
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, key).Scan(&n); err != nil {
+	return s.inView(ctx, func(v *SQLStore, q Querier) error {
+		var n int
+		if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, key).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		if err := fn(ctx, v); err != nil {
+			return fmt.Errorf("data migration %s: %w", name, err)
+		}
+		_, err := q.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, key, s.now().Unix())
 		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	if err := fn(ctx); err != nil {
-		return fmt.Errorf("data migration %s: %w", name, err)
-	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, key, s.now().Unix())
-	return err
+	})
 }
 
 // splitStatements splits a script on ";" at line ends. Migration scripts
@@ -154,7 +163,7 @@ func splitStatements(script string) []string {
 
 func (s *SQLStore) CreateUser(ctx context.Context, u *User) error {
 	u.CreatedAt = s.now()
-	res, err := s.db.ExecContext(ctx, `INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+	res, err := s.conn().ExecContext(ctx, `INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)`,
 		strings.ToLower(u.Email), u.Name, u.PasswordHash, u.CreatedAt.Unix())
 	if err != nil {
 		return err
@@ -164,16 +173,16 @@ func (s *SQLStore) CreateUser(ctx context.Context, u *User) error {
 }
 
 func (s *SQLStore) GetUser(ctx context.Context, id int64) (*User, error) {
-	return scanUser(s.db.QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE id = ?`, id))
+	return scanUser(s.conn().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE id = ?`, id))
 }
 
 func (s *SQLStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	return scanUser(s.db.QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?`, strings.ToLower(email)))
+	return scanUser(s.conn().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?`, strings.ToLower(email)))
 }
 
 func (s *SQLStore) CountUsers(ctx context.Context) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
+	err := s.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
 	return n, err
 }
 
@@ -196,10 +205,10 @@ func scanUser(r scanner) (*User, error) {
 // CreateSession also purges expired sessions; GetSession deletes only those
 // presented again, so abandoned ones would otherwise stay forever.
 func (s *SQLStore) CreateSession(ctx context.Context, ses *Session) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, s.now().Unix()); err != nil {
+	if _, err := s.conn().ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, s.now().Unix()); err != nil {
 		return fmt.Errorf("purge expired sessions: %w", err)
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (token, user_id, csrf, expires_at) VALUES (?, ?, ?, ?)`,
+	_, err := s.conn().ExecContext(ctx, `INSERT INTO sessions (token, user_id, csrf, expires_at) VALUES (?, ?, ?, ?)`,
 		ses.Token, ses.UserID, ses.CSRF, ses.ExpiresAt.Unix())
 	return err
 }
@@ -208,7 +217,7 @@ func (s *SQLStore) CreateSession(ctx context.Context, ses *Session) error {
 func (s *SQLStore) GetSession(ctx context.Context, token string) (*Session, error) {
 	var ses Session
 	var exp int64
-	err := s.db.QueryRowContext(ctx, `SELECT token, user_id, csrf, expires_at FROM sessions WHERE token = ?`, token).
+	err := s.conn().QueryRowContext(ctx, `SELECT token, user_id, csrf, expires_at FROM sessions WHERE token = ?`, token).
 		Scan(&ses.Token, &ses.UserID, &ses.CSRF, &exp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -227,7 +236,7 @@ func (s *SQLStore) GetSession(ctx context.Context, token string) (*Session, erro
 }
 
 func (s *SQLStore) DeleteSession(ctx context.Context, token string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token)
+	_, err := s.conn().ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token)
 	return err
 }
 

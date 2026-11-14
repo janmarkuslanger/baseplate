@@ -50,7 +50,7 @@ func TestSubmissionsShowFormTitleAsText(t *testing.T) {
 	reg, p, _, id := setup(t)
 	post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
 	var sid int64
-	if err := reg.Store.DB().QueryRow(`SELECT id FROM form_submissions`).Scan(&sid); err != nil {
+	if err := reg.Store.DB().QueryRowContext(context.Background(), `SELECT id FROM form_submissions`).Scan(&sid); err != nil {
 		t.Fatal(err)
 	}
 	for _, query := range []string{"", "?id=" + itoa(sid)} {
@@ -76,7 +76,7 @@ func TestSubmissionsErrorsStayInLog(t *testing.T) {
 	reg, p, _, _ := setup(t)
 	var logs strings.Builder
 	reg.Logger = slog.New(slog.NewTextHandler(&logs, nil))
-	if _, err := reg.Store.DB().Exec(`DROP TABLE form_submissions`); err != nil {
+	if _, err := reg.Store.DB().ExecContext(context.Background(), `DROP TABLE form_submissions`); err != nil {
 		t.Fatal(err)
 	}
 	w := getSubmissions(t, p, "")
@@ -91,7 +91,7 @@ func TestSubmissionsErrorsStayInLog(t *testing.T) {
 // A stored submission that cannot be decoded is an error, not an empty row.
 func TestSubmissionsUndecodableDataFails(t *testing.T) {
 	reg, p, _, id := setup(t)
-	if _, err := reg.Store.DB().Exec(`INSERT INTO form_submissions (form_id, data, created_at) VALUES (?, 'not json', 0)`, id); err != nil {
+	if _, err := reg.Store.DB().ExecContext(context.Background(), `INSERT INTO form_submissions (form_id, data, created_at) VALUES (?, 'not json', 0)`, id); err != nil {
 		t.Fatal(err)
 	}
 	for _, query := range []string{"", "?id=1"} {

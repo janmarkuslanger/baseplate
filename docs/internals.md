@@ -63,6 +63,7 @@ plugins/* ─▶ public packages only
 
 - tables follow the code schema; created/extended on start, never dropped
 - kind change of a field with stored data → startup error (column ↔ component ↔ relation storage, other component tables, relation `Ref`, several rows under a single field); checked in the schema-sync transaction
+- migrations (`Store.Migrate`) and data migrations (`Store.RunOnce`, recorded as `data:<name>`) run check, work and record in one transaction each, so processes starting at the same time apply them once and a failed one leaves nothing behind; a data migration gets a store and `DB()` bound to that transaction
 - `RenamedFrom` moves data on start, once per rename (recorded in `schema_migrations` as `rename:<table>.<old>><new>`); renames and table/column creation run in one transaction; table/column names are stable API (`storage.EntryTable` …)
 - save = one transaction (row, components, relations); `entries.Service` runs the slug check (same type, locale, parent and version; drafts always, published rows when publishing) and the writes in one `Store.Atomic` transaction, which the SQLite adapter begins `IMMEDIATE`, so concurrent saves — also from other processes — are serialized
 - reads = one snapshot: `GetEntry`, `GetEntryBySlug`, `ListEntries` (count and page) and `Referrers` run their statements (rows, components, relations, publication state) in one read-only transaction, which the SQLite adapter begins `DEFERRED`; in WAL mode it neither blocks writers nor waits for them, so a concurrent publish shows up entirely or not at all

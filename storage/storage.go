@@ -8,7 +8,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -149,16 +148,20 @@ type Store interface {
 type Tables interface {
 	Dialect() Dialect
 	// DB exposes the connection, for plugins that own tables
-	// (see Registry.Migration). Content goes through Entries.
-	DB() *sql.DB
+	// (see Registry.Migration). Content goes through Entries. Inside
+	// Atomic and RunOnce it is the transaction.
+	DB() Querier
 	// Migrate applies all migrations that have not run yet, in order.
 	Migrate(ctx context.Context, ms []Migration) error
 	// UseSchema creates missing tables and columns for the content schema.
 	// It must be called before any entry method.
 	UseSchema(ctx context.Context, s *content.Schema) error
-	// RunOnce runs fn unless a run with this name was recorded before; the
-	// run is recorded only if fn succeeds. Used for data migrations.
-	RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error
+	// RunOnce runs fn unless a run with this name was recorded before. The
+	// check, fn and the record share one transaction: st is bound to it,
+	// and a failed fn leaves no writes and no record. fn must use st only;
+	// the store it was called on waits for the transaction. Used for data
+	// migrations.
+	RunOnce(ctx context.Context, name string, fn func(ctx context.Context, st Store) error) error
 	Close() error
 }
 

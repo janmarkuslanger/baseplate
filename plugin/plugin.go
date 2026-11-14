@@ -224,10 +224,11 @@ func (r *Registry) PublicRoute(rt Route) { r.routes = append(r.routes, rt) }
 func (r *Registry) Migration(m storage.Migration) { r.migrations = append(r.migrations, m) }
 
 // DataMigration changes stored content after a schema change, e.g. copying
-// values of a renamed field. It runs once, after tables are synced, using the
-// regular entry methods of the store. Name must be unique and stable.
-// Write migrations so they can be re-run safely: a failed run is retried on
-// the next start.
+// values of a renamed field. It runs once, after tables are synced, in one
+// transaction with the record that it ran (storage.Tables.RunOnce): st and
+// st.DB() are bound to that transaction, so use them for every read and
+// write. A failed run leaves nothing behind and is retried on the next
+// start. Name must be unique and stable.
 type DataMigration struct {
 	Name string
 	Run  func(ctx context.Context, st storage.Store) error

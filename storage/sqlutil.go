@@ -10,10 +10,10 @@ import (
 	"github.com/janmarkuslanger/baseplate/content"
 )
 
-// querier is satisfied by *sql.DB and *sql.Tx. With SQLite's single
+// Querier runs SQL; *sql.DB and *sql.Tx satisfy it. With SQLite's single
 // connection, every query inside a transaction must use the transaction,
 // and a query must never run while another result set is still open.
-type querier interface {
+type Querier interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
@@ -36,7 +36,7 @@ func (s *SQLStore) col(name string) string { return dialects[s.dialect].quote(na
 
 // conn is the connection entry queries run on: the transaction inside
 // Atomic, the database otherwise.
-func (s *SQLStore) conn() querier {
+func (s *SQLStore) conn() Querier {
 	if s.q != nil {
 		return s.q
 	}
@@ -44,7 +44,7 @@ func (s *SQLStore) conn() querier {
 }
 
 // tx runs fn in a transaction, or in the surrounding one inside Atomic.
-func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
+func (s *SQLStore) tx(ctx context.Context, fn func(q Querier) error) error {
 	if s.q != nil {
 		return fn(s.q)
 	}
@@ -88,13 +88,13 @@ func (s *SQLStore) read(ctx context.Context, fn func(v *SQLStore) error) error {
 // The SQLite adapter begins transactions IMMEDIATE, so writers queue up
 // before their first read, across connections and processes.
 func (s *SQLStore) Atomic(ctx context.Context, fn func(Entries) error) error {
-	return s.inView(ctx, func(v *SQLStore, _ querier) error { return fn(v) })
+	return s.inView(ctx, func(v *SQLStore, _ Querier) error { return fn(v) })
 }
 
 // inView runs fn in a transaction (or the surrounding one) with a view of
 // the store whose queries all use it.
-func (s *SQLStore) inView(ctx context.Context, fn func(v *SQLStore, q querier) error) error {
-	return s.tx(ctx, func(q querier) error {
+func (s *SQLStore) inView(ctx context.Context, fn func(v *SQLStore, q Querier) error) error {
+	return s.tx(ctx, func(q Querier) error {
 		view := *s
 		view.q = q
 		return fn(&view, q)

@@ -252,7 +252,7 @@ func (a *App) Setup(ctx context.Context) (err error) {
 		return err
 	}
 	for _, m := range reg.DataMigrations() {
-		if err := st.RunOnce(ctx, m.Name, func(ctx context.Context) error { return m.Run(ctx, st) }); err != nil {
+		if err := st.RunOnce(ctx, m.Name, m.Run); err != nil {
 			return err
 		}
 	}
