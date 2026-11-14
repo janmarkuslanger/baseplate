@@ -180,7 +180,9 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 			p.Handler(w, r, ui{a: a, active: "p/" + p.Path})
 		})
 	}
-	mux.Handle("/admin/", a.Auth.Require("/admin/login", authed))
+	requireAuth := a.Auth.Require("/admin/login", authed)
+	mux.Handle("/admin/", requireAuth)
+	mux.Handle("POST /admin/media", a.limitUpload(requireAuth))
 	mux.Handle("GET /media/", http.StripPrefix("/media/", fileserver.New(os.DirFS(a.Media.Dir))))
 }
 

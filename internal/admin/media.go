@@ -44,25 +44,54 @@ func (a *Admin) mediaJSON(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(files)
 }
 
-func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
-	wantsJSON := strings.Contains(r.Header.Get("Accept"), "application/json")
-	respondErr := func(k i18n.Key) {
-		if wantsJSON {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": a.tr(k)})
+// maxUploadBody is the request size of the largest upload media accepts:
+// the file plus room for the multipart framing and the CSRF field.
+const maxUploadBody = media.MaxSize + 1<<20
+
+// limitUpload caps upload requests at maxUploadBody, below the general
+// auth.MaxBodySize. A request that announces a larger body is answered
+// without reading it; one without a length stops being read at the cap.
+// It runs before authentication but neither reads nor changes anything.
+func (a *Admin) limitUpload(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength > maxUploadBody {
+			a.uploadError(w, r, media.ErrSize)
 			return
 		}
-		http.Redirect(w, r, "/admin/media?error="+urlQueryEscape(string(k)), http.StatusSeeOther)
+		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBody)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// uploadError answers a rejected upload: as JSON for the image field,
+// otherwise by redirecting to the media page, which shows the message.
+func (a *Admin) uploadError(w http.ResponseWriter, r *http.Request, k i18n.Key) {
+	if wantsJSON(r) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": a.tr(k)})
+		return
 	}
+	http.Redirect(w, r, "/admin/media?error="+urlQueryEscape(string(k)), http.StatusSeeOther)
+}
+
+func wantsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
+func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 	file, hdr, err := r.FormFile("file")
 	if r.MultipartForm != nil {
 		// The server only cleans up the original request; this handler gets
 		// a copy (context wrapper), so remove parsed temp files here.
 		defer r.MultipartForm.RemoveAll()
 	}
+	if tooLarge := new(http.MaxBytesError); errors.As(err, &tooLarge) {
+		a.uploadError(w, r, media.ErrSize)
+		return
+	}
 	if err != nil {
-		respondErr(errNoFile)
+		a.uploadError(w, r, errNoFile)
 		return
 	}
 	defer file.Close()
@@ -70,13 +99,13 @@ func (a *Admin) upload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var k i18n.Key
 		if errors.As(err, &k) && uploadErrors[k] {
-			respondErr(k)
+			a.uploadError(w, r, k)
 			return
 		}
 		a.fail(w, err)
 		return
 	}
-	if wantsJSON {
+	if wantsJSON(r) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"url": url})
 		return
