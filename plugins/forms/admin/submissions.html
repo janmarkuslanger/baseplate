@@ -4,7 +4,7 @@
 <header class="page-head">
   <div>
     <a class="back" href="/admin/p/forms/submissions">← {{t "forms.submissions"}}</a>
-    <h1>{{t $d.FormTitle}}</h1>
+    <h1>{{with $d.FormTitle}}{{.}}{{else}}{{t "forms.deletedForm"}}{{end}}</h1>
     <p class="muted">{{date $d.CreatedAt}} · {{if $d.Mailed}}<span class="pill pill--ok">{{t "forms.mailed"}}</span>{{else}}<span class="pill">{{t "forms.notMailed"}}</span>{{end}}</p>
   </div>
   <form method="post" action="/admin/p/forms/submissions" x-data x-on:submit="if (!confirm({{json (t "forms.delete.confirm")}})) $event.preventDefault()">
@@ -37,7 +37,7 @@
     {{range $p.Rows}}
     <tr class="table__row" onclick="location.href='/admin/p/forms/submissions?id={{.ID}}'">
       <td><a class="table__title" href="/admin/p/forms/submissions?id={{.ID}}">{{date .CreatedAt}}</a></td>
-      <td>{{t .FormTitle}}</td>
+      <td>{{with .FormTitle}}{{.}}{{else}}{{t "forms.deletedForm"}}{{end}}</td>
       <td class="muted">{{.Preview}}</td>
       <td>{{if .Mailed}}<span class="pill pill--ok">{{t "forms.sent"}}</span>{{else}}<span class="pill">{{t "forms.open"}}</span>{{end}}</td>
     </tr>
