@@ -82,6 +82,27 @@ func (s *SQLStore) Unpublish(ctx context.Context, typ string, id int64, locale s
 	})
 }
 
+func (s *SQLStore) Locales(ctx context.Context, typ string, id int64) ([]string, error) {
+	t, err := s.entryTable(typ)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.conn().QueryContext(ctx, `SELECT locale FROM `+t.Name+` WHERE document_id = ? AND version = ? ORDER BY locale`, id, Draft)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
 // row returns the row ID and revision of one version of a document.
 func (s *SQLStore) row(ctx context.Context, q querier, t *table, id int64, locale string, v Version) (rowID, rev int64, err error) {
 	err = q.QueryRowContext(ctx, `SELECT id, revision FROM `+t.Name+` WHERE document_id = ? AND locale = ? AND version = ?`, id, locale, v).Scan(&rowID, &rev)

@@ -176,6 +176,9 @@ type Entries interface {
 	Unpublish(ctx context.Context, typ string, id int64, locale string) error
 	GetEntry(ctx context.Context, typ string, id int64, locale string, v Version) (*Entry, error)
 	GetEntryBySlug(ctx context.Context, typ, slug, locale string, v Version) (*Entry, error)
+	// Locales lists the locales the document has a draft in, sorted, so
+	// the site language ("") comes first; none for an unknown document.
+	Locales(ctx context.Context, typ string, id int64) ([]string, error)
 	// ListEntries returns one page of matching entries and the total count.
 	// Reads see one snapshot: a write committed meanwhile shows up in all
 	// of the result or in none of it.

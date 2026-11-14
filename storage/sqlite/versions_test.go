@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -216,6 +217,12 @@ func TestLocalesShareTheDocument(t *testing.T) {
 	}
 	if err := s.SaveDraft(ctx, &storage.Entry{Type: "post", ID: 999, Locale: "en", Data: map[string]any{}}); !errors.Is(err, storage.ErrNotFound) {
 		t.Errorf("locale of an unknown document: %v", err)
+	}
+	if l, err := s.Locales(ctx, "post", de.ID); err != nil || !slices.Equal(l, []string{"", "en"}) {
+		t.Errorf("locales: %q %v", l, err)
+	}
+	if l, err := s.Locales(ctx, "post", 999); err != nil || len(l) != 0 {
+		t.Errorf("locales of an unknown document: %q %v", l, err)
 	}
 }
 
