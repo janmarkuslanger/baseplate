@@ -6,6 +6,7 @@ package render
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -101,6 +102,10 @@ type Options struct {
 	// "date" (defaults: i18n.Default, UTC).
 	Lang     string
 	Location *time.Location
+	// Context is the context of the build or preview the Renderer is for
+	// (default: context.Background()). Plugin template functions whose
+	// first parameter is a context.Context are called with it.
+	Context context.Context
 }
 
 // New builds the template set from the defaults, all plugin template FSs
@@ -138,7 +143,7 @@ func New(reg *plugin.Registry, theme fs.FS, opts Options) (*Renderer, error) {
 		if _, ok := funcs[k]; ok {
 			return nil, fmt.Errorf("template func %q: name is taken by the core", k)
 		}
-		funcs[k] = v
+		funcs[k] = bindContext(cmp.Or(opts.Context, context.Background()), v)
 	}
 	r.t = template.New("").Funcs(funcs)
 	layers := []fs.FS{defaults}

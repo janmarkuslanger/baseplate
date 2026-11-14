@@ -132,7 +132,10 @@ type Site interface {
 // Generator produces extra output during a build (archives, feeds, ...).
 type Generator func(s Site) error
 
-// TemplateFuncs are extra functions available in frontend templates.
+// TemplateFuncs are extra functions available in frontend templates. A
+// function whose first parameter is a context.Context is called with the
+// context of the build or preview rendering the template; templates pass
+// only the remaining arguments.
 type TemplateFuncs map[string]any
 
 // Registry collects everything plugins contribute.

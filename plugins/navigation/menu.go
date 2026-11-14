@@ -31,9 +31,9 @@ type Item struct {
 // items. Items pointing to unpublished pages are left out together with
 // their items. Page URLs come from the page's .Nav, so pass the page (in a
 // layout: .Page).
-func (p *Plugin) navigation(key string, page any) ([]*Item, error) {
+func (p *Plugin) navigation(ctx context.Context, key string, page any) ([]*Item, error) {
 	pg, _ := page.(*render.Page)
-	snap, err := p.snapshot(pg)
+	snap, err := p.snapshot(ctx, pg)
 	if err != nil {
 		return nil, fmt.Errorf("navigation %q: %w", key, err)
 	}
@@ -59,7 +59,7 @@ type snapshot struct {
 // a build share one .Nav slice, so the last snapshot is reused while that
 // slice is the same; loading the navigations and indexing every page once
 // per rendered page would make a build quadratic in its page count.
-func (p *Plugin) snapshot(pg *render.Page) (*snapshot, error) {
+func (p *Plugin) snapshot(ctx context.Context, pg *render.Page) (*snapshot, error) {
 	var nav []render.Link
 	if pg != nil {
 		nav = pg.Nav
@@ -69,7 +69,7 @@ func (p *Plugin) snapshot(pg *render.Page) (*snapshot, error) {
 	if len(nav) > 0 && p.last != nil && len(p.lastNav) == len(nav) && &p.lastNav[0] == &nav[0] {
 		return p.last, nil
 	}
-	list, _, err := p.reg.Store.ListEntries(context.Background(), storage.ListQuery{Type: TypeName, Version: storage.Published})
+	list, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName, Version: storage.Published})
 	if err != nil {
 		return nil, err
 	}

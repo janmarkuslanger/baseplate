@@ -192,12 +192,12 @@ func (p *Plugin) loadPublished(ctx context.Context, id int64) (*formDef, error) 
 }
 
 // formByID is available in frontend templates: {{with formByID .Block.form}}.
-func (p *Plugin) formByID(id any) (*formDef, error) {
+func (p *Plugin) formByID(ctx context.Context, id any) (*formDef, error) {
 	n, ok := content.RefID(id)
 	if !ok {
 		return nil, nil
 	}
-	d, err := p.loadPublished(context.Background(), n)
+	d, err := p.loadPublished(ctx, n)
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, nil // form was deleted or is a draft; render nothing
 	}
