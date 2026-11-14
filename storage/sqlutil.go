@@ -61,6 +61,29 @@ func (s *SQLStore) tx(ctx context.Context, fn func(q querier) error) error {
 	return tx.Commit()
 }
 
+// read runs fn on a view of the store whose queries share one transaction,
+// so a read spanning several statements sees a single snapshot instead of
+// writes committed between them; inside Atomic it joins the surrounding
+// transaction. The transaction is begun read-only, which the SQLite adapter
+// begins DEFERRED despite _txlock=immediate: it takes no write lock, and in
+// WAL mode it neither blocks writers nor waits for them.
+func (s *SQLStore) read(ctx context.Context, fn func(v *SQLStore) error) error {
+	if s.q != nil {
+		return fn(s)
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after Commit
+	view := *s
+	view.q = tx
+	if err := fn(&view); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Atomic runs fn in one transaction on a view of the store bound to it.
 // The SQLite adapter begins transactions IMMEDIATE, so writers queue up
 // before their first read, across connections and processes.
