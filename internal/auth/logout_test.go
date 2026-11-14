@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,8 +28,8 @@ func TestLogoutDeletesSessionAndCookie(t *testing.T) {
 	if err := m.Logout(rec, logoutRequest(ses.Token)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Store.GetSession(ctx, ses.Token); !errors.Is(err, storage.ErrNotFound) {
-		t.Errorf("session still stored after logout: %v", err)
+	if n := len(storedTokens(t, m)); n != 0 {
+		t.Errorf("%d sessions still stored after logout", n)
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 {

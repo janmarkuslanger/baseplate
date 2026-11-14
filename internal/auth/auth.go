@@ -5,8 +5,10 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -83,6 +85,14 @@ func randomBytes(n int) []byte {
 
 func token() string { return rand.Text() }
 
+// tokenHash is what the store keeps of a session token, so a leaked
+// database or backup holds no usable session cookies. The token is random
+// (rand.Text: 128 bits or more), so plain SHA-256 suffices.
+func tokenHash(tok string) string {
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:])
+}
+
 // Manager issues and checks sessions.
 type Manager struct {
 	Store interface {
@@ -106,7 +116,8 @@ type Manager struct {
 }
 
 // Login checks credentials and creates a session. key identifies the client
-// for rate limiting (typically the remote IP).
+// for rate limiting (typically the remote IP). The returned session carries
+// the token for the cookie; the store keeps only its hash.
 func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Session, error) {
 	if !m.limiter.Allow(key, limitMax, limitWindow) {
 		return nil, ErrRateLimited
@@ -133,11 +144,13 @@ func (m *Manager) Login(ctx context.Context, key, email, pw string) (*storage.Se
 		return nil, ErrInvalidLogin
 	}
 	m.limiter.Reset(key)
-	s := &storage.Session{Token: token(), UserID: u.ID, CSRF: token(), ExpiresAt: time.Now().Add(sessionTTL)}
-	if err := m.Store.CreateSession(ctx, s); err != nil {
+	tok := token()
+	s := storage.Session{Token: tokenHash(tok), UserID: u.ID, CSRF: token(), ExpiresAt: time.Now().Add(sessionTTL)}
+	if err := m.Store.CreateSession(ctx, &s); err != nil {
 		return nil, err
 	}
-	return s, nil
+	s.Token = tok
+	return &s, nil
 }
 
 // acquire waits for one of maxHashing slots, or until ctx ends.
@@ -188,7 +201,7 @@ func (m *Manager) SetCookie(w http.ResponseWriter, r *http.Request, s *storage.S
 // stay valid, so the user must not be told they are logged out.
 func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) error {
 	if c, err := r.Cookie(CookieName); err == nil {
-		if err := m.Store.DeleteSession(r.Context(), c.Value); err != nil {
+		if err := m.Store.DeleteSession(r.Context(), tokenHash(c.Value)); err != nil {
 			return fmt.Errorf("delete session: %w", err)
 		}
 	}
@@ -209,7 +222,8 @@ func (m *Manager) sessionCookie(r *http.Request, value string) *http.Cookie {
 
 type ctxKey struct{}
 
-// Current holds the authenticated user and session of a request.
+// Current holds the authenticated user and session of a request. The
+// session's Token is the stored hash, not the cookie value.
 type Current struct {
 	User    *storage.User
 	Session *storage.Session
@@ -265,7 +279,7 @@ func (m *Manager) current(r *http.Request) (*Current, error) {
 	if err != nil {
 		return nil, nil
 	}
-	s, err := m.Store.GetSession(r.Context(), c.Value)
+	s, err := m.Store.GetSession(r.Context(), tokenHash(c.Value))
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, nil
 	}
