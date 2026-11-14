@@ -115,10 +115,48 @@ func (b *Bundle) T(lang, key string, args ...any) string {
 	if !ok {
 		s = key
 	}
-	for i, a := range args {
-		s = strings.ReplaceAll(s, "{"+strconv.Itoa(i)+"}", fmt.Sprint(a))
+	return format(s, args)
+}
+
+// format replaces the placeholders {0}, {1}, … in s with args in a single
+// pass, so an argument that itself contains "{1}" stays literal. Placeholders
+// without a matching argument are kept unchanged.
+func format(s string, args []any) string {
+	if len(args) == 0 {
+		return s
 	}
-	return s
+	var b strings.Builder
+	for {
+		open := strings.IndexByte(s, '{')
+		if open < 0 {
+			break
+		}
+		end := strings.IndexByte(s[open:], '}')
+		if end < 0 {
+			break
+		}
+		end += open
+		if i, ok := argIndex(s[open+1:end], len(args)); ok {
+			b.WriteString(s[:open])
+			b.WriteString(fmt.Sprint(args[i]))
+			s = s[end+1:]
+			continue
+		}
+		b.WriteString(s[:open+1])
+		s = s[open+1:]
+	}
+	b.WriteString(s)
+	return b.String()
+}
+
+// argIndex parses a placeholder's digits and reports whether they address one
+// of n arguments.
+func argIndex(digits string, n int) (int, bool) {
+	if digits == "" || strings.TrimLeft(digits, "0123456789") != "" {
+		return 0, false
+	}
+	i, err := strconv.Atoi(digits)
+	return i, err == nil && i < n
 }
 
 // Messages returns all texts of lang whose keys start with prefix (with

@@ -36,6 +36,30 @@ func TestTr(t *testing.T) {
 	}
 }
 
+func TestTPlaceholders(t *testing.T) {
+	b := NewBundle(Catalog{Lang: "en", Messages: map[string]string{
+		"x.two":  "{0} and {1}",
+		"x.miss": "{0} {2} {x} {+0} {",
+	}})
+	cases := []struct {
+		key  string
+		args []any
+		want string
+	}{
+		{"x.two", []any{"a", "b"}, "a and b"},
+		// an argument containing a placeholder stays literal
+		{"x.two", []any{"{1}", "b"}, "{1} and b"},
+		{"x.two", []any{"{0}{1}", "{0}"}, "{0}{1} and {0}"},
+		{"x.miss", []any{"a"}, "a {2} {x} {+0} {"},
+		{"x.two", nil, "{0} and {1}"},
+	}
+	for _, c := range cases {
+		if got := b.T("en", c.key, c.args...); got != c.want {
+			t.Errorf("T(%q, %v) = %q, want %q", c.key, c.args, got, c.want)
+		}
+	}
+}
+
 func TestCoreKeysHaveGermanTexts(t *testing.T) {
 	for _, k := range []Key{"login.invalid", "login.rateLimited", "validation.relationTarget", "media.error.type",
 		"media.error.size", "media.error.content", "auth.csrf", "build.baseURLMissing"} {
