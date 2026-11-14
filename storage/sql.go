@@ -95,25 +95,30 @@ func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
 		if !ok {
 			return fmt.Errorf("migration %s has no SQL for dialect %s", m.Name, s.dialect)
 		}
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		for _, stmt := range splitStatements(script) {
-			if _, err := tx.ExecContext(ctx, stmt); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("migration %s: %w", m.Name, err)
-			}
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, m.Name, s.now().Unix()); err != nil {
-			tx.Rollback()
-			return err
-		}
-		if err := tx.Commit(); err != nil {
+		if err := s.applyMigration(ctx, m.Name, script); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// applyMigration runs one migration script and records it in one
+// transaction.
+func (s *SQLStore) applyMigration(ctx context.Context, name, script string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after Commit
+	for _, stmt := range splitStatements(script) {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("migration %s: %w", name, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)`, name, s.now().Unix()); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) RunOnce(ctx context.Context, name string, fn func(ctx context.Context) error) error {

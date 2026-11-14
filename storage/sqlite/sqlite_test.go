@@ -86,3 +86,22 @@ func TestExpiredSessionDeleteFailure(t *testing.T) {
 		t.Fatalf("want the delete error, got %v", err)
 	}
 }
+
+// A panic inside Atomic must not leave the transaction open: with a
+// single connection, every later query would block forever.
+func TestAtomicPanicReleasesConnection(t *testing.T) {
+	s := openTest(t)
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected the panic to propagate")
+			}
+		}()
+		s.Atomic(context.Background(), func(storage.Entries) error { panic("boom") })
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := s.CountUsers(ctx); err != nil {
+		t.Fatalf("store unusable after a panic in Atomic: %v", err)
+	}
+}
