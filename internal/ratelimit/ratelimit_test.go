@@ -95,3 +95,50 @@ func TestActiveKeysSurviveSweep(t *testing.T) {
 		t.Error("sweep dropped an active key's attempts")
 	}
 }
+
+func TestIPv6KeysShareTheirSlash64(t *testing.T) {
+	l, _ := newLimiter()
+	if !l.Allow("2001:db8:1:2::1", 1, time.Minute) {
+		t.Fatal("first attempt rejected")
+	}
+	if l.Allow("2001:db8:1:2:ffff:ffff:ffff:ffff", 1, time.Minute) {
+		t.Error("another address in the same /64 got its own limit")
+	}
+	if !l.Allow("2001:db8:1:3::1", 1, time.Minute) {
+		t.Error("an address in another /64 shares the limit")
+	}
+	l.Reset("2001:db8:1:2::42")
+	if !l.Allow("2001:db8:1:2::1", 1, time.Minute) {
+		t.Error("Reset did not clear the /64")
+	}
+}
+
+func TestIPv4KeysAreNotGrouped(t *testing.T) {
+	l, _ := newLimiter()
+	for _, key := range []string{"203.0.113.1", "203.0.113.2", "::ffff:203.0.113.3", "::ffff:203.0.113.4", "not-an-ip"} {
+		if !l.Allow(key, 1, time.Minute) {
+			t.Errorf("%s shares a limit with another key", key)
+		}
+	}
+}
+
+func TestKeysAreBounded(t *testing.T) {
+	l, c := newLimiter()
+	l.MaxKeys = 100
+	for i := range 1000 {
+		l.Allow(fmt.Sprint("client-", i), 5, time.Minute)
+	}
+	if n := len(l.hits); n > 100 {
+		t.Fatalf("%d keys kept, want at most 100", n)
+	}
+	if l.Allow("new", 5, time.Minute) {
+		t.Error("new key allowed while the table is full of active keys")
+	}
+	if !l.Allow("client-0", 5, time.Minute) {
+		t.Error("known key rejected while the table is full")
+	}
+	c.t = c.t.Add(2 * time.Minute)
+	if !l.Allow("new", 5, time.Minute) {
+		t.Error("new key rejected after the old keys expired")
+	}
+}
