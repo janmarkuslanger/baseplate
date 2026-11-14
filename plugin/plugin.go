@@ -101,7 +101,7 @@ type AdminUI interface {
 	CSRFToken(r *http.Request) string
 }
 
-// AdminPage is an extra page in the admin. Path is relative to /admin/.
+// AdminPage is an extra page in the admin, served at /admin/p/<Path>.
 type AdminPage struct {
 	Path    string // e.g. "forms/submissions"
 	Label   string // nav label; empty hides it from the navigation
