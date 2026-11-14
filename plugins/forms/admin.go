@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -67,7 +68,12 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		page["Detail"] = p.label(rs, titles)
+		d, err := p.label(ctx, rs, titles)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		page["Detail"] = d
 		ui.Render(w, r, "submissions.html", page)
 		return
 	}
@@ -102,7 +108,12 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 	}
 	var list []submission
 	for _, rs := range raws {
-		list = append(list, *p.label(rs, titles))
+		s, err := p.label(ctx, rs, titles)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		list = append(list, *s)
 	}
 	page["Rows"] = list
 	ui.Render(w, r, "submissions.html", page)
@@ -115,21 +126,27 @@ type rawSubmission struct {
 }
 
 // label turns a stored row into a view, using the current form definition
-// for field labels.
-func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
+// for field labels. A deleted form leaves the values under their field names.
+func (p *Plugin) label(ctx context.Context, rs rawSubmission, titles map[int64]string) (*submission, error) {
 	s := submission{ID: rs.id, FormID: rs.formID, Mailed: rs.mailed == 1, CreatedAt: time.Unix(rs.created, 0)}
 	data := rs.data
 	// Empty for a deleted form; the template shows a placeholder then.
 	s.FormTitle = titles[s.FormID]
 	values := map[string]string{}
-	json.Unmarshal([]byte(data), &values)
+	if err := json.Unmarshal([]byte(data), &values); err != nil {
+		return nil, fmt.Errorf("forms: decode submission %d: %w", rs.id, err)
+	}
 
 	// Label values with the current form definition; keep unknown keys.
 	// Checkbox values (stored as yes/no in the site language) are left out
 	// of the preview.
 	seen := map[string]bool{}
 	checkbox := map[string]bool{}
-	if def, err := p.load(context.Background(), s.FormID, storage.Draft); err == nil {
+	def, err := p.load(ctx, s.FormID, storage.Draft)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return nil, fmt.Errorf("forms: load form %d: %w", s.FormID, err)
+	}
+	if def != nil {
 		for _, f := range def.Fields {
 			if v, ok := values[f.Name]; ok {
 				s.Values = append(s.Values, labeled{f.Label, v})
@@ -153,5 +170,5 @@ func (p *Plugin) label(rs rawSubmission, titles map[int64]string) *submission {
 	if utf8.RuneCountInString(s.Preview) > 90 {
 		s.Preview = string([]rune(s.Preview)[:90]) + "…"
 	}
-	return &s
+	return &s, nil
 }

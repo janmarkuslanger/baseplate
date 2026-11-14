@@ -3,6 +3,7 @@ package forms
 import (
 	"context"
 	"errors"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -201,6 +202,20 @@ func TestSubmitMarkMailedFailureIsLogged(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "forms: mark submission as mailed") || !strings.Contains(logs.String(), "read-only") {
 		t.Errorf("update failure not logged: %q", logs.String())
+	}
+}
+
+func TestRespondRenderFailureIsLogged(t *testing.T) {
+	reg, p, _, id := setup(t)
+	var logs strings.Builder
+	reg.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	p.pages = template.Must(template.New("response.html").Parse(`{{.Missing}}`))
+	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit: %d", w.Code)
+	}
+	if !strings.Contains(logs.String(), "forms: render response") || !strings.Contains(logs.String(), "Missing") {
+		t.Errorf("render failure not logged: %q", logs.String())
 	}
 }
 

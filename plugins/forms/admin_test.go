@@ -69,3 +69,16 @@ func TestSubmissionsShowFormTitleAsText(t *testing.T) {
 		}
 	}
 }
+
+// A stored submission that cannot be decoded is an error, not an empty row.
+func TestSubmissionsUndecodableDataFails(t *testing.T) {
+	reg, p, _, id := setup(t)
+	if _, err := reg.Store.DB().Exec(`INSERT INTO form_submissions (form_id, data, created_at) VALUES (?, 'not json', 0)`, id); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{"", "?id=1"} {
+		if w := getSubmissions(t, p, query); w.Code != http.StatusInternalServerError {
+			t.Errorf("%q: want 500, got %d:\n%s", query, w.Code, w.Body)
+		}
+	}
+}

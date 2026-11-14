@@ -219,7 +219,10 @@ func (p *Plugin) respond(w http.ResponseWriter, status int, res response) {
 	res.BackLabel = p.pt(res.Lang, "forms.public.back")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	p.pages.ExecuteTemplate(w, "response.html", res)
+	// The status is already sent; a render error can only be logged.
+	if err := p.pages.ExecuteTemplate(w, "response.html", res); err != nil {
+		p.reg.Logger.Error("forms: render response", "err", err, "status", status)
+	}
 }
 
 func (p *Plugin) submit(w http.ResponseWriter, r *http.Request) {
