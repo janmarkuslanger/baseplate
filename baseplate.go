@@ -298,9 +298,11 @@ func (a *App) serve(ctx context.Context) error {
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	n, _ := a.Registry.Store.CountUsers(ctx)
+	n, err := a.Registry.Store.CountUsers(ctx)
 	a.cfg.Logger.Info("baseplate running", "addr", a.cfg.Addr, "admin", "/admin/", "plugins", a.Registry.Plugins())
-	if n == 0 {
+	if err != nil {
+		a.cfg.Logger.Error("count users", "err", err)
+	} else if n == 0 {
 		a.cfg.Logger.Warn("no admin user yet – create one with: <binary> user add you@example.com")
 	}
 	select {
