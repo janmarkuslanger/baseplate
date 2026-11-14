@@ -21,6 +21,11 @@ func TestSanitizeHTML(t *testing.T) {
 		`<p>a<br/>b</p>`:                                      `<p>a<br>b</p>`,
 		`<svg><script>alert(1)</script></svg>after`:           `after`,
 		`<p>x</strong></p>`:                                   `<p>x</p>`,
+		// <embed> is void: no end tag follows, so it must not swallow the rest.
+		`<p>a</p><embed src="x"><p>after</p>`:        `<p>a</p><p>after</p>`,
+		`<embed src="x">text after`:                  `text after`,
+		`<embed src="x"/><p>after</p>`:               `<p>after</p>`,
+		`<object><embed></embed>fallback</object>ok`: `ok`,
 	}
 	for in, want := range cases {
 		if got := SanitizeHTML(in); got != want {
