@@ -15,7 +15,7 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 	if err != nil {
 		return err
 	}
-	return s.tx(ctx, func(q querier) error {
+	return s.tx(ctx, func(q Querier) error {
 		refs, err := s.referrers(ctx, q, typ, id)
 		if err != nil {
 			return err
@@ -44,7 +44,7 @@ func (s *SQLStore) DeleteEntry(ctx context.Context, typ string, id int64) error 
 
 // insertRow stores a new version row with its components and relations.
 // ID 0 starts a new document, identified by the row's own ID.
-func (s *SQLStore) insertRow(ctx context.Context, q querier, t *table, e *Entry, rev int64) error {
+func (s *SQLStore) insertRow(ctx context.Context, q Querier, t *table, e *Entry, rev int64) error {
 	e.UpdatedAt = s.now()
 	cols := []string{"document_id", "locale", "version", "revision", "slug", "created_at", "updated_at"}
 	args := []any{e.ID, e.Locale, e.Version, rev, e.Slug, e.CreatedAt.Unix(), e.UpdatedAt.Unix()}
@@ -70,7 +70,7 @@ func (s *SQLStore) insertRow(ctx context.Context, q querier, t *table, e *Entry,
 }
 
 // updateRow rewrites a version row with its components and relations.
-func (s *SQLStore) updateRow(ctx context.Context, q querier, t *table, rowID int64, e *Entry, rev int64) error {
+func (s *SQLStore) updateRow(ctx context.Context, q Querier, t *table, rowID int64, e *Entry, rev int64) error {
 	e.UpdatedAt = s.now()
 	sets := []string{"revision = ?", "slug = ?", "updated_at = ?"}
 	args := []any{rev, e.Slug, e.UpdatedAt.Unix()}
@@ -115,7 +115,7 @@ func (s *SQLStore) updateRow(ctx context.Context, q querier, t *table, rowID int
 }
 
 // deleteRow removes one version row with its components and relations.
-func (s *SQLStore) deleteRow(ctx context.Context, q querier, t *table, rowID int64) error {
+func (s *SQLStore) deleteRow(ctx context.Context, q Querier, t *table, rowID int64) error {
 	if err := s.deleteChildren(ctx, q, t.Name, rowID); err != nil {
 		return err
 	}
@@ -140,11 +140,11 @@ func scanIDs(rows *sql.Rows, err error) ([]int64, error) {
 }
 
 // writeChildren stores the components and relations of one owner row.
-func (s *SQLStore) writeChildren(ctx context.Context, q querier, t *table, ownerID int64, data map[string]any) error {
+func (s *SQLStore) writeChildren(ctx context.Context, q Querier, t *table, ownerID int64, data map[string]any) error {
 	return s.writeChildrenReuse(ctx, q, t, ownerID, data, nil)
 }
 
-func (s *SQLStore) writeChildrenReuse(ctx context.Context, q querier, t *table, ownerID int64, data map[string]any, r *reuse) error {
+func (s *SQLStore) writeChildrenReuse(ctx context.Context, q Querier, t *table, ownerID int64, data map[string]any, r *reuse) error {
 	for _, f := range t.Fields {
 		v := data[f.Name]
 		switch s.layout.fieldStorage(f) {
@@ -190,7 +190,7 @@ func (s *SQLStore) writeChildrenReuse(ctx context.Context, q querier, t *table, 
 	return nil
 }
 
-func (s *SQLStore) writeComponent(ctx context.Context, q querier, ownerTable string, ownerID int64, field, tableName string, pos int, data map[string]any, r *reuse) error {
+func (s *SQLStore) writeComponent(ctx context.Context, q Querier, ownerTable string, ownerID int64, field, tableName string, pos int, data map[string]any, r *reuse) error {
 	ct := s.layout.tables[tableName]
 	id := r.take(ct.Name, data)
 	cols := make([]string, len(ct.Columns))

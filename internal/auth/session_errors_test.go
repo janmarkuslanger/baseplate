@@ -35,7 +35,7 @@ func TestRequireFailsClosedWhenSessionStoreFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := m.Store.(storage.Tables).DB()
-	if _, err := db.Exec(`DROP TABLE sessions`); err != nil {
+	if _, err := db.ExecContext(context.Background(), `DROP TABLE sessions`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,7 +59,7 @@ func TestRequireFailsClosedWhenUserStoreFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Store.(storage.Tables).DB().Exec(`DROP TABLE users`); err != nil {
+	if _, err := m.Store.(storage.Tables).DB().ExecContext(context.Background(), `DROP TABLE users`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,7 +76,7 @@ func TestRequireRedirectsWithoutValidSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Store.(storage.Tables).DB().Exec(`DELETE FROM users`); err != nil {
+	if _, err := m.Store.(storage.Tables).DB().ExecContext(context.Background(), `DELETE FROM users`); err != nil {
 		t.Fatal(err)
 	}
 

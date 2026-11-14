@@ -25,7 +25,7 @@ func (s *SQLStore) Referrers(ctx context.Context, typ string, id int64) ([]Refer
 // referrers resolves relation rows pointing at a document to the documents
 // owning them. Rows of fields the schema no longer declares and the
 // document's relations to itself are skipped.
-func (s *SQLStore) referrers(ctx context.Context, q querier, typ string, id int64) ([]Referrer, error) {
+func (s *SQLStore) referrers(ctx context.Context, q Querier, typ string, id int64) ([]Referrer, error) {
 	rows, err := q.QueryContext(ctx, `SELECT owner_table, owner_id, field FROM relations WHERE target_type = ? AND target_id = ? ORDER BY owner_table, owner_id`, typ, id)
 	if err != nil {
 		return nil, err

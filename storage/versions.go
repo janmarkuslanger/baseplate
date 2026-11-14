@@ -16,7 +16,7 @@ func (s *SQLStore) SaveDraft(ctx context.Context, e *Entry) error {
 	if err != nil {
 		return err
 	}
-	return s.tx(ctx, func(q querier) error {
+	return s.tx(ctx, func(q Querier) error {
 		e.Version = Draft
 		if e.ID == 0 {
 			e.CreatedAt = s.now()
@@ -44,7 +44,7 @@ func (s *SQLStore) Publish(ctx context.Context, typ string, id int64, locale str
 	if err != nil {
 		return err
 	}
-	return s.inView(ctx, func(v *SQLStore, q querier) error {
+	return s.inView(ctx, func(v *SQLStore, q Querier) error {
 		_, rev, err := v.row(ctx, q, t, id, locale, Draft)
 		if err != nil {
 			return err
@@ -73,7 +73,7 @@ func (s *SQLStore) Unpublish(ctx context.Context, typ string, id int64, locale s
 	if err != nil {
 		return err
 	}
-	return s.tx(ctx, func(q querier) error {
+	return s.tx(ctx, func(q Querier) error {
 		rowID, _, err := s.row(ctx, q, t, id, locale, Published)
 		if err != nil {
 			return err
@@ -104,7 +104,7 @@ func (s *SQLStore) Locales(ctx context.Context, typ string, id int64) ([]string,
 }
 
 // row returns the row ID and revision of one version of a document.
-func (s *SQLStore) row(ctx context.Context, q querier, t *table, id int64, locale string, v Version) (rowID, rev int64, err error) {
+func (s *SQLStore) row(ctx context.Context, q Querier, t *table, id int64, locale string, v Version) (rowID, rev int64, err error) {
 	err = q.QueryRowContext(ctx, `SELECT id, revision FROM `+t.Name+` WHERE document_id = ? AND locale = ? AND version = ?`, id, locale, v).Scan(&rowID, &rev)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, 0, ErrNotFound
@@ -113,7 +113,7 @@ func (s *SQLStore) row(ctx context.Context, q querier, t *table, id int64, local
 }
 
 // documentCreated returns when a document was created (its oldest row).
-func (s *SQLStore) documentCreated(ctx context.Context, q querier, t *table, id int64) (time.Time, error) {
+func (s *SQLStore) documentCreated(ctx context.Context, q Querier, t *table, id int64) (time.Time, error) {
 	var created sql.NullInt64
 	if err := q.QueryRowContext(ctx, `SELECT MIN(created_at) FROM `+t.Name+` WHERE document_id = ?`, id).Scan(&created); err != nil {
 		return time.Time{}, err

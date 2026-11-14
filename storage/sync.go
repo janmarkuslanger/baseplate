@@ -16,9 +16,9 @@ type dialectSQL struct {
 	slugType string
 	// columns returns the existing columns of a table (lowercased name →
 	// uppercased type); an empty map means the table does not exist.
-	columns func(ctx context.Context, q querier, table string) (map[string]string, error)
+	columns func(ctx context.Context, q Querier, table string) (map[string]string, error)
 	// tables lists all table names.
-	tables func(ctx context.Context, q querier) ([]string, error)
+	tables func(ctx context.Context, q Querier) ([]string, error)
 	// quote quotes an identifier; column names come from field names and
 	// may be SQL keywords ("limit", "order", …).
 	quote func(name string) string
@@ -36,14 +36,14 @@ var dialects = map[Dialect]dialectSQL{
 			content.StoreText: "TEXT", content.StoreLongText: "TEXT",
 			content.StoreNumber: "REAL", content.StoreBool: "INTEGER",
 		},
-		columns: func(ctx context.Context, q querier, table string) (map[string]string, error) {
+		columns: func(ctx context.Context, q Querier, table string) (map[string]string, error) {
 			rows, err := q.QueryContext(ctx, `SELECT name, type FROM pragma_table_info(?)`, table)
 			if err != nil {
 				return nil, err
 			}
 			return scanColumns(rows)
 		},
-		tables: func(ctx context.Context, q querier) ([]string, error) {
+		tables: func(ctx context.Context, q Querier) ([]string, error) {
 			return scanNames(q.QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`))
 		},
 	},
@@ -84,7 +84,7 @@ func scanColumns(rows *sql.Rows) (map[string]string, error) {
 // longer matches the schema is an error, so data is never converted
 // silently.
 func (s *SQLStore) sync(ctx context.Context, l *layout) error {
-	return s.tx(ctx, func(q querier) error {
+	return s.tx(ctx, func(q Querier) error {
 		if err := s.renames(ctx, q, l); err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func (s *SQLStore) sync(ctx context.Context, l *layout) error {
 	})
 }
 
-func (s *SQLStore) createMissing(ctx context.Context, q querier, l *layout) error {
+func (s *SQLStore) createMissing(ctx context.Context, q Querier, l *layout) error {
 	d := dialects[s.dialect]
 	for _, name := range l.order {
 		t := l.tables[name]
@@ -163,7 +163,7 @@ func createTableSQL(d dialectSQL, t *table) string {
 // and version.
 func versionIndex(table string) string { return table + "_version" }
 
-func createVersionIndex(ctx context.Context, q querier, t *table) error {
+func createVersionIndex(ctx context.Context, q Querier, t *table) error {
 	if !t.Entry {
 		return nil
 	}
@@ -183,7 +183,7 @@ func sameType(have, want string) bool {
 // nested tables) and link rows move from the old field name to the new one.
 // Each rename runs once; it is recorded in schema_migrations like a data
 // migration, so a later field reusing the old name keeps its data.
-func (s *SQLStore) renames(ctx context.Context, q querier, l *layout) error {
+func (s *SQLStore) renames(ctx context.Context, q Querier, l *layout) error {
 	d := dialects[s.dialect]
 	for _, name := range l.order { // parents before children
 		t := l.tables[name]
@@ -213,7 +213,7 @@ func (s *SQLStore) renames(ctx context.Context, q querier, l *layout) error {
 // rename moves the data of one field from f.RenamedFrom to f.Name. Old
 // names that no longer exist count as renamed (databases renamed before
 // renames were recorded).
-func (s *SQLStore) rename(ctx context.Context, q querier, d dialectSQL, l *layout, t *table, f content.Field) error {
+func (s *SQLStore) rename(ctx context.Context, q Querier, d dialectSQL, l *layout, t *table, f content.Field) error {
 	switch l.fieldStorage(f) {
 	case content.StoreGroup, content.StoreList:
 		if err := s.renameTables(ctx, q, d, ComponentTable(t.Name, f.RenamedFrom), ComponentTable(t.Name, f.Name)); err != nil {
@@ -247,7 +247,7 @@ func (s *SQLStore) rename(ctx context.Context, q querier, d dialectSQL, l *layou
 
 // renameTables renames a component table and every table nested below it
 // (same prefix), and updates the link tables.
-func (s *SQLStore) renameTables(ctx context.Context, q querier, d dialectSQL, from, to string) error {
+func (s *SQLStore) renameTables(ctx context.Context, q Querier, d dialectSQL, from, to string) error {
 	all, err := d.tables(ctx, q)
 	if err != nil {
 		return err

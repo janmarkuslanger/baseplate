@@ -43,7 +43,7 @@ func (r *reuse) take(table string, data map[string]any) int64 {
 
 // collectTree adds every component below an owner row to tree. Only links
 // the current schema describes are followed (see ownsLink).
-func (s *SQLStore) collectTree(ctx context.Context, q querier, ownerTable string, ownerID int64, tree map[compRef]bool) error {
+func (s *SQLStore) collectTree(ctx context.Context, q Querier, ownerTable string, ownerID int64, tree map[compRef]bool) error {
 	links, err := s.childLinks(ctx, q, ownerTable, ownerID)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (s *SQLStore) ownsLink(ownerTable string, l link) bool {
 // unlink removes the component links and relations the schema describes
 // from the root row and its components, keeping the component rows for
 // reuse. Links and relations of fields no longer in the schema stay.
-func (s *SQLStore) unlink(ctx context.Context, q querier, rootTable string, rootID int64, tree map[compRef]bool) error {
+func (s *SQLStore) unlink(ctx context.Context, q Querier, rootTable string, rootID int64, tree map[compRef]bool) error {
 	owners := append([]compRef{{rootTable, rootID}}, keys(tree)...)
 	for _, o := range owners {
 		links, err := s.childLinks(ctx, q, o.table, o.id)
@@ -124,7 +124,7 @@ func keys(m map[compRef]bool) []compRef {
 	return out
 }
 
-func (s *SQLStore) childLinks(ctx context.Context, q querier, ownerTable string, ownerID int64) ([]link, error) {
+func (s *SQLStore) childLinks(ctx context.Context, q Querier, ownerTable string, ownerID int64) ([]link, error) {
 	rows, err := q.QueryContext(ctx, `SELECT field, component_table, component_id FROM components WHERE owner_table = ? AND owner_id = ?`, ownerTable, ownerID)
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ type link struct {
 
 // deleteChildren removes all components (recursively) and relations owned
 // by one row.
-func (s *SQLStore) deleteChildren(ctx context.Context, q querier, ownerTable string, ownerID int64) error {
+func (s *SQLStore) deleteChildren(ctx context.Context, q Querier, ownerTable string, ownerID int64) error {
 	rows, err := q.QueryContext(ctx, `SELECT component_table, component_id FROM components WHERE owner_table = ? AND owner_id = ?`, ownerTable, ownerID)
 	if err != nil {
 		return err

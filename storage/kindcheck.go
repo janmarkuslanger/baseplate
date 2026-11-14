@@ -21,7 +21,7 @@ type storedLink struct {
 // relation pointing at another type, and a single field (group, relation
 // without Many) where an owner holds several rows. Data is never converted
 // or dropped silently; the field must be renamed and the data migrated.
-func (s *SQLStore) checkStoredKinds(ctx context.Context, q querier, l *layout) error {
+func (s *SQLStore) checkStoredKinds(ctx context.Context, q Querier, l *layout) error {
 	d := dialects[s.dialect]
 	for _, name := range l.order {
 		t := l.tables[name]
@@ -87,7 +87,7 @@ func checkFieldKind(l *layout, t *table, f content.Field, cols map[string]string
 	return nil
 }
 
-func storedLinks(ctx context.Context, q querier, query, ownerTable string) (map[string][]storedLink, error) {
+func storedLinks(ctx context.Context, q Querier, query, ownerTable string) (map[string][]storedLink, error) {
 	rows, err := q.QueryContext(ctx, query, ownerTable)
 	if err != nil {
 		return nil, err

@@ -121,7 +121,7 @@ func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func count(t *testing.T, reg *plugin.Registry) int {
 	var n int
-	reg.Store.DB().QueryRow(`SELECT COUNT(*) FROM form_submissions`).Scan(&n)
+	reg.Store.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM form_submissions`).Scan(&n)
 	return n
 }
 
@@ -170,7 +170,7 @@ func TestSubmitMailFailureStillStores(t *testing.T) {
 		t.Fatalf("submit: %d", w.Code)
 	}
 	var mailed int
-	reg.Store.DB().QueryRow(`SELECT mailed FROM form_submissions`).Scan(&mailed)
+	reg.Store.DB().QueryRowContext(context.Background(), `SELECT mailed FROM form_submissions`).Scan(&mailed)
 	if count(t, reg) != 1 || mailed != 0 {
 		t.Errorf("count=%d mailed=%d", count(t, reg), mailed)
 	}
@@ -183,7 +183,7 @@ func TestSubmitMailOutlivesRequest(t *testing.T) {
 	m.during = cancel // the visitor closes the tab while the mail is sent
 	postCtx(t, ctx, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})
 	var mailed int
-	reg.Store.DB().QueryRow(`SELECT mailed FROM form_submissions`).Scan(&mailed)
+	reg.Store.DB().QueryRowContext(context.Background(), `SELECT mailed FROM form_submissions`).Scan(&mailed)
 	if len(m.sent) != 1 || mailed != 1 {
 		t.Errorf("sent=%d mailed=%d, want the mail sent and marked", len(m.sent), mailed)
 	}
@@ -193,7 +193,7 @@ func TestSubmitMarkMailedFailureIsLogged(t *testing.T) {
 	reg, _, m, id := setup(t)
 	var logs strings.Builder
 	reg.Logger = slog.New(slog.NewTextHandler(&logs, nil))
-	if _, err := reg.Store.DB().Exec(`CREATE TRIGGER no_update BEFORE UPDATE ON form_submissions BEGIN SELECT RAISE(FAIL, 'read-only'); END`); err != nil {
+	if _, err := reg.Store.DB().ExecContext(context.Background(), `CREATE TRIGGER no_update BEFORE UPDATE ON form_submissions BEGIN SELECT RAISE(FAIL, 'read-only'); END`); err != nil {
 		t.Fatal(err)
 	}
 	w := post(t, reg, id, url.Values{"name": {"Ada"}, "email": {"ada@example.com"}, "dsgvo": {"1"}})

@@ -52,7 +52,7 @@ func TestLogoutKeepsCookieWhenDeleteFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Store.(storage.Tables).DB().Exec(`DROP TABLE sessions`); err != nil {
+	if _, err := m.Store.(storage.Tables).DB().ExecContext(context.Background(), `DROP TABLE sessions`); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
