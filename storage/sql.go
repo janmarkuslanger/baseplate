@@ -193,7 +193,12 @@ func scanUser(r scanner) (*User, error) {
 
 // --- sessions ---
 
+// CreateSession also purges expired sessions; GetSession deletes only those
+// presented again, so abandoned ones would otherwise stay forever.
 func (s *SQLStore) CreateSession(ctx context.Context, ses *Session) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, s.now().Unix()); err != nil {
+		return fmt.Errorf("purge expired sessions: %w", err)
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (token, user_id, csrf, expires_at) VALUES (?, ?, ?, ?)`,
 		ses.Token, ses.UserID, ses.CSRF, ses.ExpiresAt.Unix())
 	return err
