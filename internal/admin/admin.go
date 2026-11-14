@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,6 +59,8 @@ type Admin struct {
 	base    *template.Template
 	pages   map[string]*template.Template
 	plugins map[string]*template.Template
+	// adminPages are the plugin pages with normalized paths.
+	adminPages []plugin.AdminPage
 
 	lastBuild atomic.Pointer[buildStatus]
 	// loc is the site's time zone as last loaded by render; the date and
@@ -111,6 +112,9 @@ func (a *Admin) Init() error {
 			return fmt.Errorf("admin template of kind %s: %w", k.Name, err)
 		}
 	}
+	if a.adminPages, err = adminPages(a.Reg.AdminPages()); err != nil {
+		return err
+	}
 	a.base = base
 	a.pages = map[string]*template.Template{}
 	for _, name := range []string{"login", "dashboard", "list", "edit", "media"} {
@@ -129,6 +133,11 @@ func (a *Admin) Init() error {
 			b, err := fs.ReadFile(fsys, p)
 			if err != nil {
 				return err
+			}
+			// Render looks templates up by name alone, so a second one
+			// with the same name would silently replace the first.
+			if _, dup := a.plugins[p]; dup {
+				return fmt.Errorf("admin template %s registered twice", p)
 			}
 			t, err := template.Must(base.Clone()).Parse(string(b))
 			if err != nil {
@@ -166,8 +175,8 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	authed.HandleFunc("GET /admin/media.json", a.mediaJSON)
 	authed.HandleFunc("POST /admin/media", a.upload)
 	authed.HandleFunc("POST /admin/build", a.build)
-	for _, p := range a.Reg.AdminPages() {
-		authed.HandleFunc("/admin/p/"+strings.Trim(p.Path, "/"), func(w http.ResponseWriter, r *http.Request) {
+	for _, p := range a.adminPages {
+		authed.HandleFunc("/admin/p/"+p.Path, func(w http.ResponseWriter, r *http.Request) {
 			p.Handler(w, r, ui{a: a, active: "p/" + p.Path})
 		})
 	}
@@ -206,7 +215,7 @@ func (a *Admin) nav() []navItem {
 		}
 		items = append(items, navItem{Label: t.LabelPlural, URL: "/admin/c/" + t.Name, Key: "c/" + t.Name})
 	}
-	for _, p := range a.Reg.AdminPages() {
+	for _, p := range a.adminPages {
 		if p.Label != "" {
 			items = append(items, navItem{Label: p.Label, URL: "/admin/p/" + p.Path, Key: "p/" + p.Path})
 		}
@@ -245,26 +254,4 @@ func (a *Admin) render(w http.ResponseWriter, r *http.Request, status int, tmpl 
 func (a *Admin) fail(w http.ResponseWriter, err error) {
 	a.Logger.Error("admin", "err", err)
 	http.Error(w, a.t("error.internal"), http.StatusInternalServerError)
-}
-
-// ui implements plugin.AdminUI.
-type ui struct {
-	a      *Admin
-	active string
-}
-
-func (u ui) Render(w http.ResponseWriter, r *http.Request, name string, data any) {
-	t, ok := u.a.plugins[name]
-	if !ok {
-		u.a.fail(w, fmt.Errorf("admin template %q not registered", name))
-		return
-	}
-	u.a.render(w, r, http.StatusOK, t, view{Active: u.active, Page: data})
-}
-
-func (u ui) CSRFToken(r *http.Request) string {
-	if cur := auth.FromContext(r.Context()); cur != nil {
-		return cur.Session.CSRF
-	}
-	return ""
 }
