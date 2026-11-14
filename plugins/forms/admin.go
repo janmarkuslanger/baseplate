@@ -36,7 +36,7 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 	if r.Method == http.MethodPost {
 		id, _ := strconv.ParseInt(r.FormValue("delete"), 10, 64)
 		if _, err := db.ExecContext(ctx, `DELETE FROM form_submissions WHERE id = ?`, id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			p.fail(w, err)
 			return
 		}
 		http.Redirect(w, r, "/admin/p/forms/submissions", http.StatusSeeOther)
@@ -45,7 +45,7 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 
 	forms, _, err := p.reg.Store.ListEntries(ctx, storage.ListQuery{Type: TypeName, Version: storage.Draft})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		p.fail(w, err)
 		return
 	}
 	titles := map[int64]string{}
@@ -65,12 +65,12 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			p.fail(w, err)
 			return
 		}
 		d, err := p.label(ctx, rs, titles)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			p.fail(w, err)
 			return
 		}
 		page["Detail"] = d
@@ -86,7 +86,7 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 	}
 	rows, err := db.QueryContext(ctx, query+` ORDER BY created_at DESC, id DESC LIMIT 200`, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		p.fail(w, err)
 		return
 	}
 	// Read all rows before labeling: labeling queries the store, and SQLite
@@ -96,27 +96,34 @@ func (p *Plugin) adminSubmissions(w http.ResponseWriter, r *http.Request, ui plu
 		var rs rawSubmission
 		if err := rows.Scan(&rs.id, &rs.formID, &rs.data, &rs.mailed, &rs.created); err != nil {
 			rows.Close()
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			p.fail(w, err)
 			return
 		}
 		raws = append(raws, rs)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		p.fail(w, err)
 		return
 	}
 	var list []submission
 	for _, rs := range raws {
 		s, err := p.label(ctx, rs, titles)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			p.fail(w, err)
 			return
 		}
 		list = append(list, *s)
 	}
 	page["Rows"] = list
 	ui.Render(w, r, "submissions.html", page)
+}
+
+// fail logs err and answers with a generic message, keeping store details
+// out of the browser.
+func (p *Plugin) fail(w http.ResponseWriter, err error) {
+	p.reg.Logger.Error("forms: submissions", "err", err)
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
 type rawSubmission struct {

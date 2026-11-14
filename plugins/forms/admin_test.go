@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -67,6 +68,23 @@ func TestSubmissionsShowFormTitleAsText(t *testing.T) {
 		if body := getSubmissions(t, p, query).Body.String(); !strings.Contains(body, "T(forms.deletedForm)") {
 			t.Errorf("%q: deleted form placeholder missing:\n%s", query, body)
 		}
+	}
+}
+
+// Store errors are logged, not shown in the browser.
+func TestSubmissionsErrorsStayInLog(t *testing.T) {
+	reg, p, _, _ := setup(t)
+	var logs strings.Builder
+	reg.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	if _, err := reg.Store.DB().Exec(`DROP TABLE form_submissions`); err != nil {
+		t.Fatal(err)
+	}
+	w := getSubmissions(t, p, "")
+	if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "form_submissions") {
+		t.Errorf("want 500 without details, got %d: %s", w.Code, w.Body)
+	}
+	if !strings.Contains(logs.String(), "no such table: form_submissions") {
+		t.Errorf("error not logged: %q", logs.String())
 	}
 }
 
