@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/janmarkuslanger/baseplate/build"
 	"github.com/janmarkuslanger/baseplate/entries"
@@ -61,9 +62,21 @@ type Admin struct {
 	plugins map[string]*template.Template
 
 	lastBuild atomic.Pointer[buildStatus]
+	// loc is the site's time zone as last loaded by render; the date and
+	// ago template functions format in it.
+	loc atomic.Pointer[time.Location]
 }
 
 func (a *Admin) store() storage.Store { return a.Reg.Store }
+
+// location returns the site's time zone, or time.Local before the
+// settings were loaded.
+func (a *Admin) location() *time.Location {
+	if loc := a.loc.Load(); loc != nil {
+		return loc
+	}
+	return time.Local
+}
 
 // t translates a key (or returns a plain text unchanged).
 func (a *Admin) t(key string, args ...any) string { return a.i18n.T(a.Lang, key, args...) }
@@ -213,6 +226,7 @@ func (a *Admin) render(w http.ResponseWriter, r *http.Request, status int, tmpl 
 		v.Nav = a.nav()
 		if cfg, err := settings.Load(r.Context(), a.store()); err == nil {
 			v.TZ = cfg.Location.String()
+			a.loc.Store(cfg.Location)
 		}
 	}
 	var buf bytes.Buffer
