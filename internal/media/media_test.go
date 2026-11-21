@@ -32,7 +32,7 @@ func TestSave(t *testing.T) {
 	if _, err := s.Save(strings.NewReader("\x00\x00\x00\x1cftypavif rest"), "bild.avif"); err != nil {
 		t.Errorf("avif: %v", err)
 	}
-	big := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, MaxSize)...)
+	big := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, DefaultMaxSize)...)
 	if _, err := s.Save(bytes.NewReader(big), "big.png"); !errors.Is(err, ErrSize) {
 		t.Errorf("size: %v", err)
 	}
@@ -73,17 +73,17 @@ func TestSaveVideo(t *testing.T) {
 		t.Errorf("mov: %v", err)
 	}
 
-	// Videos may be larger than images, up to MaxVideoSize.
+	// Videos may be larger than images, up to DefaultMaxVideoSize.
 	video := func(size int) io.Reader {
 		return io.MultiReader(strings.NewReader(mp4), bytes.NewReader(make([]byte, size-len(mp4))))
 	}
-	if _, err := s.Save(video(MaxSize+1), "large.mp4"); err != nil {
+	if _, err := s.Save(video(DefaultMaxSize+1), "large.mp4"); err != nil {
 		t.Errorf("video above the image limit: %v", err)
 	}
-	if _, err := s.Save(video(MaxVideoSize), "limit.mp4"); err != nil {
+	if _, err := s.Save(video(DefaultMaxVideoSize), "limit.mp4"); err != nil {
 		t.Errorf("video at the limit: %v", err)
 	}
-	if _, err := s.Save(video(MaxVideoSize+1), "big.mp4"); !errors.Is(err, ErrSize) {
+	if _, err := s.Save(video(DefaultMaxVideoSize+1), "big.mp4"); !errors.Is(err, ErrSize) {
 		t.Errorf("video above the limit: %v", err)
 	}
 
@@ -118,5 +118,35 @@ func TestListKinds(t *testing.T) {
 	want := map[string][2]bool{".png": {true, false}, ".pdf": {false, false}, ".webm": {false, true}}
 	if !maps.Equal(got, want) {
 		t.Errorf("kinds (IsImage, IsVideo) = %v, want %v", got, want)
+	}
+}
+
+// A store's own limits replace the defaults, per kind of file.
+func TestStoreLimits(t *testing.T) {
+	s := Store{Dir: t.TempDir(), MaxSize: 1 << 10, MaxVideoSize: 2 << 10}
+	if size, video := s.Limits(); size != 1<<10 || video != 2<<10 {
+		t.Errorf("limits = %d, %d", size, video)
+	}
+	if size, video := (Store{}).Limits(); size != DefaultMaxSize || video != DefaultMaxVideoSize {
+		t.Errorf("default limits = %d, %d", size, video)
+	}
+	file := func(sig string, size int) io.Reader {
+		return io.MultiReader(strings.NewReader(sig), bytes.NewReader(make([]byte, size-len(sig))))
+	}
+	png, mp4 := "\x89PNG\r\n\x1a\n", "\x00\x00\x00\x1cftypisom"
+	for _, c := range []struct {
+		name, sig string
+		size      int
+		ok        bool
+	}{
+		{"a.png", png, 1 << 10, true},
+		{"b.png", png, 1<<10 + 1, false},
+		{"c.mp4", mp4, 2 << 10, true},
+		{"d.mp4", mp4, 2<<10 + 1, false},
+	} {
+		_, err := s.Save(file(c.sig, c.size), c.name)
+		if c.ok && err != nil || !c.ok && !errors.Is(err, ErrSize) {
+			t.Errorf("%s (%d bytes): %v", c.name, c.size, err)
+		}
 	}
 }

@@ -4,6 +4,7 @@ package media
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -18,10 +19,11 @@ import (
 	"github.com/janmarkuslanger/baseplate/i18n"
 )
 
-// MaxSize limits images and PDFs; MaxVideoSize limits videos.
+// Default size limits of images and PDFs, and of videos; Store.MaxSize and
+// Store.MaxVideoSize replace them.
 const (
-	MaxSize      = 20 << 20
-	MaxVideoSize = 100 << 20
+	DefaultMaxSize      = 20 << 20
+	DefaultMaxVideoSize = 100 << 20
 )
 
 // allowed lists accepted extensions. SVG is excluded because it can carry
@@ -31,7 +33,7 @@ var allowed = map[string]bool{
 	".pdf": true, ".mp4": true, ".webm": true,
 }
 
-// videos lists the extensions that are videos (limit MaxVideoSize).
+// videos lists the extensions that are videos (limit Store.MaxVideoSize).
 var videos = map[string]bool{".mp4": true, ".webm": true}
 
 var (
@@ -73,16 +75,27 @@ func isoBrand(head []byte) string {
 
 var ErrSize = i18n.Key("media.error.size")
 
-// maxSize returns the size limit of files with extension ext.
-func maxSize(ext string) int64 {
-	if videos[ext] {
-		return MaxVideoSize
-	}
-	return MaxSize
+// Store keeps uploads as files in Dir.
+type Store struct {
+	Dir string
+	// MaxSize limits images and PDFs, MaxVideoSize videos, in bytes; zero
+	// means DefaultMaxSize and DefaultMaxVideoSize.
+	MaxSize, MaxVideoSize int64
 }
 
-// Store keeps uploads as files in Dir.
-type Store struct{ Dir string }
+// Limits returns the size limits of images and PDFs, and of videos.
+func (s Store) Limits() (size, video int64) {
+	return cmp.Or(s.MaxSize, DefaultMaxSize), cmp.Or(s.MaxVideoSize, DefaultMaxVideoSize)
+}
+
+// maxSize returns the size limit of files with extension ext.
+func (s Store) maxSize(ext string) int64 {
+	size, video := s.Limits()
+	if videos[ext] {
+		return video
+	}
+	return size
+}
 
 // File is one upload in the media library.
 type File struct {
@@ -120,7 +133,7 @@ func (s Store) Save(r io.Reader, filename string) (string, error) {
 	}
 	defer os.Remove(tmp.Name())
 	h := sha256.New()
-	limit := maxSize(ext)
+	limit := s.maxSize(ext)
 	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r, limit+1))
 	tmp.Close()
 	if err != nil {

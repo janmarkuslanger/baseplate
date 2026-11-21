@@ -45,7 +45,10 @@ type Services struct {
 
 // Media is the media library as seen by plugins.
 type Media interface {
-	// Save stores a file and returns its URL (/media/…).
+	// Save stores a file and returns its URL (/media/…). The size limits
+	// are the media library's defaults (images and PDFs 20 MB, videos
+	// 100 MB), not the upload limits of the settings, which apply to the
+	// admin's uploads.
 	Save(r io.Reader, filename string) (string, error)
 }
 

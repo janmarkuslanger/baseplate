@@ -22,6 +22,8 @@ const (
 const (
 	TabSEO = "SEO"
 	TabLLM = "LLM"
+	// TabMedia holds the media library's settings (a catalog key).
+	TabMedia = "tab.media"
 )
 
 // SEOField is the standard SEO group added to every routable type.
@@ -89,11 +91,28 @@ func (Core) Register(r *plugin.Registry) error {
 			{Name: settings.DefaultOGImage, Label: "settings.defaultOgImage", Kind: Image},
 			{Name: settings.LLMSTxt, Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
 			{Name: settings.LLMSContent, Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
+			{Name: settings.MediaMaxMB, Label: "settings.mediaMaxMB", Kind: Number, Tab: TabMedia, Help: "settings.mediaMaxMB.help"},
+			{Name: settings.MediaMaxVideoMB, Label: "settings.mediaMaxVideoMB", Kind: Number, Tab: TabMedia, Help: "settings.mediaMaxVideoMB.help"},
 		},
 	}); err != nil {
 		return err
 	}
 	entries.BeforeSave.On(r, checkURLs)
+	entries.BeforeSave.On(r, checkMediaLimits)
+	return nil
+}
+
+// checkMediaLimits keeps the upload limits of the settings whole numbers
+// of MB from 1 to settings.MaxMediaMB.
+func checkMediaLimits(_ context.Context, e *entries.Event) error {
+	if e.Type.Name != SettingsType {
+		return nil
+	}
+	for _, k := range []string{settings.MediaMaxMB, settings.MediaMaxVideoMB} {
+		if v, ok := e.Entry.Data[k].(float64); ok && !settings.ValidMediaMB(v) {
+			return i18n.M("validation.mediaLimit", settings.MaxMediaMB)
+		}
+	}
 	return nil
 }
 

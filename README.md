@@ -116,6 +116,8 @@ Database migrations run automatically on the next start.
 
 `Config.Store` and `Config.Mailer` replace the default SQLite storage and SMTP mailer. A replacement store must serialize `Entries.Atomic` transactions (also across processes); slug and singleton uniqueness rely on it.
 
+The media library takes images (jpg, png, gif, webp, avif), PDFs and videos (mp4, webm). Upload limits are set in the admin under **Settings → Medien**: 20 MB for images and PDFs and 100 MB for videos unless set, at most 1024 MB each; like all settings they apply once published. An upload may take as long as its limit needs at 256 KB/s (at least 5 minutes), beyond the server's read and write timeouts. A proxy in front of baseplate needs a matching body size limit and timeout (nginx: `client_max_body_size`). Plugins saving through `Services.Media` get the default limits.
+
 ## Themes
 
 A theme is an `fs.FS` containing:
