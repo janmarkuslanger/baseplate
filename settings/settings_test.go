@@ -22,7 +22,7 @@ func TestKeysMatchSettingsType(t *testing.T) {
 	for _, f := range typ.Fields {
 		have[f.Name] = true
 	}
-	for _, k := range []string{settings.SiteName, settings.BaseURL, settings.Language, settings.ServerURL, settings.DefaultOGImage, settings.LLMSTxt, settings.LLMSContent, settings.Timezone} {
+	for _, k := range []string{settings.SiteName, settings.BaseURL, settings.Language, settings.ServerURL, settings.DefaultOGImage, settings.LLMSTxt, settings.LLMSContent, settings.Timezone, settings.MediaMaxMB, settings.MediaMaxVideoMB} {
 		if !have[k] {
 			t.Errorf("key %q is not a field of the settings type", k)
 		}
@@ -55,6 +55,20 @@ func TestLocation(t *testing.T) {
 	for in, want := range map[string]string{"": "Europe/Berlin", "America/New_York": "America/New_York", "Mars/Olympus": "Europe/Berlin"} {
 		if got := settings.FromData(map[string]any{"timezone": in}).Location.String(); got != want {
 			t.Errorf("%q: %s, want %s", in, got, want)
+		}
+	}
+}
+
+// Upload limits are read in MB and returned in bytes; values the settings
+// would not accept count as unset.
+func TestFromDataMediaLimits(t *testing.T) {
+	s := settings.FromData(map[string]any{settings.MediaMaxMB: 5.0, settings.MediaMaxVideoMB: float64(settings.MaxMediaMB)})
+	if s.MediaMaxSize != 5<<20 || s.MediaMaxVideoSize != settings.MaxMediaMB<<20 {
+		t.Errorf("limits = %d, %d", s.MediaMaxSize, s.MediaMaxVideoSize)
+	}
+	for _, v := range []any{nil, 0.0, -1.0, 2.5, float64(settings.MaxMediaMB + 1), 1e300, "5"} {
+		if s := settings.FromData(map[string]any{settings.MediaMaxMB: v}); s.MediaMaxSize != 0 {
+			t.Errorf("%v: limit %d, want 0", v, s.MediaMaxSize)
 		}
 	}
 }

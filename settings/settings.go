@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -28,7 +29,19 @@ const (
 	LLMSTxt        = "llmsTxt"
 	LLMSContent    = "llmsContent"
 	Timezone       = "timezone"
+	// MediaMaxMB and MediaMaxVideoMB limit uploads to the media library
+	// (images and PDFs, videos) in MB; empty means the media library's
+	// defaults of 20 and 100 MB.
+	MediaMaxMB      = "mediaMaxMB"
+	MediaMaxVideoMB = "mediaMaxVideoMB"
 )
+
+// MaxMediaMB is the largest upload limit the settings accept.
+const MaxMediaMB = 1024
+
+// ValidMediaMB reports whether v can be an upload limit: a whole number of
+// MB from 1 to MaxMediaMB.
+func ValidMediaMB(v float64) bool { return v == math.Trunc(v) && v >= 1 && v <= MaxMediaMB }
 
 // ValidBaseURL reports whether s can be the site's base URL: an absolute
 // http(s) URL without credentials, query or fragment. Canonicals, the
@@ -55,7 +68,10 @@ type Settings struct {
 	// Location is the site's time zone: the admin converts date input with
 	// it and templates format dates in it.
 	Location *time.Location
-	Data     map[string]any
+	// MediaMaxSize and MediaMaxVideoSize are the upload limits in bytes;
+	// 0 if not set (or invalid), which means the media library's defaults.
+	MediaMaxSize, MediaMaxVideoSize int64
+	Data                            map[string]any
 }
 
 // FromData reads settings from entry data.
@@ -65,20 +81,28 @@ func FromData(d map[string]any) Settings {
 	}
 	str := func(k string) string { s, _ := d[k].(string); return strings.TrimSpace(s) }
 	llms, _ := d[LLMSTxt].(bool)
+	mb := func(k string) int64 {
+		if v, ok := d[k].(float64); ok && ValidMediaMB(v) {
+			return int64(v) << 20
+		}
+		return 0
+	}
 	loc, err := time.LoadLocation(cmp.Or(str(Timezone), DefaultTimezone))
 	if err != nil {
 		loc, _ = time.LoadLocation(DefaultTimezone)
 	}
 	return Settings{
-		SiteName:       str(SiteName),
-		BaseURL:        strings.TrimRight(str(BaseURL), "/"),
-		Language:       str(Language),
-		ServerURL:      strings.TrimRight(str(ServerURL), "/"),
-		DefaultOGImage: str(DefaultOGImage),
-		LLMSTxt:        llms,
-		LLMSContent:    str(LLMSContent),
-		Location:       loc,
-		Data:           d,
+		SiteName:          str(SiteName),
+		BaseURL:           strings.TrimRight(str(BaseURL), "/"),
+		Language:          str(Language),
+		ServerURL:         strings.TrimRight(str(ServerURL), "/"),
+		DefaultOGImage:    str(DefaultOGImage),
+		LLMSTxt:           llms,
+		LLMSContent:       str(LLMSContent),
+		Location:          loc,
+		MediaMaxSize:      mb(MediaMaxMB),
+		MediaMaxVideoSize: mb(MediaMaxVideoMB),
+		Data:              d,
 	}
 }
 
