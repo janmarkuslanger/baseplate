@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"strings"
 	"testing"
 
+	"github.com/janmarkuslanger/baseplate/internal/auth"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 )
 
@@ -27,22 +29,29 @@ func (r *countingReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// oversizedUpload returns a multipart upload of a PNG twice the media limit
-// and the counter of its file bytes.
+// oversizedUpload returns a multipart upload of a video twice the largest
+// media limit and the counter of its file bytes.
 func oversizedUpload(csrf string) (io.Reader, *countingReader, string, int64) {
-	return pngUpload(csrf, 2*media.MaxSize)
+	return fileUpload(csrf, "big.mp4", 2*media.MaxVideoSize)
 }
 
-// pngUpload returns a multipart upload of a PNG of size bytes, the counter
-// of its bytes after the signature, the content type and the body length.
-func pngUpload(csrf string, size int64) (io.Reader, *countingReader, string, int64) {
+// signatures are the first bytes of the files fileUpload sends.
+var signatures = map[string]string{
+	".png": "\x89PNG\r\n\x1a\n",
+	".mp4": "\x00\x00\x00\x1cftypisom\x00\x00\x02\x00isomiso2avc1mp41",
+}
+
+// fileUpload returns a multipart upload of a file of size bytes (PNG or
+// MP4, by name), the counter of its bytes after the signature, the content
+// type and the body length.
+func fileUpload(csrf, name string, size int64) (io.Reader, *countingReader, string, int64) {
 	var head bytes.Buffer
 	mw := multipart.NewWriter(&head)
 	if csrf != "" {
 		mw.WriteField("csrf", csrf)
 	}
-	fw, _ := mw.CreateFormFile("file", "big.png")
-	sig := "\x89PNG\r\n\x1a\n"
+	fw, _ := mw.CreateFormFile("file", name)
+	sig := signatures[path.Ext(name)]
 	fw.Write([]byte(sig))
 	tail := "\r\n--" + mw.Boundary() + "--\r\n"
 	file := &countingReader{n: size - int64(len(sig))}
@@ -77,18 +86,40 @@ func TestOversizedUploadIsRejectedEarly(t *testing.T) {
 		}
 	})
 
-	t.Run("file at the limit", func(t *testing.T) {
-		body, _, ctype, size := pngUpload(c.csrf, media.MaxSize)
+	// post sends a form upload and returns the redirect target.
+	post := func(t *testing.T, name string, size int64) string {
+		t.Helper()
+		body, _, ctype, length := fileUpload(c.csrf, name, size)
 		req := httptest.NewRequest("POST", "/admin/media", body)
-		req.ContentLength = size
+		req.ContentLength = length
 		req.Header.Set("Content-Type", ctype)
 		for _, ck := range cookies {
 			req.AddCookie(ck)
 		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || loc != "/admin/media" {
-			t.Fatalf("got %d %q, want the upload accepted", rec.Code, loc)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("got %d %q, want a redirect", rec.Code, rec.Body.String())
+		}
+		return rec.Header().Get("Location")
+	}
+
+	t.Run("image at the limit", func(t *testing.T) {
+		if loc := post(t, "limit.png", media.MaxSize); loc != "/admin/media" {
+			t.Fatalf("redirect to %q, want the upload accepted", loc)
+		}
+	})
+
+	t.Run("image above its limit", func(t *testing.T) {
+		if loc := post(t, "large.png", media.MaxSize+1); loc != "/admin/media?error=media.error.size" {
+			t.Fatalf("redirect to %q, want the size error", loc)
+		}
+	})
+
+	// A video may exceed the body limit of other admin requests.
+	t.Run("video above the general body limit", func(t *testing.T) {
+		if loc := post(t, "clip.mp4", auth.MaxBodySize+1<<20); loc != "/admin/media" {
+			t.Fatalf("redirect to %q, want the upload accepted", loc)
 		}
 	})
 
@@ -106,10 +137,10 @@ func TestOversizedUploadIsRejectedEarly(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		var out struct{ Error string }
 		json.Unmarshal(rec.Body.Bytes(), &out)
-		if rec.Code != http.StatusBadRequest || out.Error != "Datei größer als 20 MB" {
+		if rec.Code != http.StatusBadRequest || out.Error != "Datei zu groß (Bilder und PDFs max. 20 MB, Videos max. 100 MB)" {
 			t.Fatalf("got %d %q, want the size error", rec.Code, rec.Body.String())
 		}
-		if limit := int64(media.MaxSize + 1<<20); file.read > limit {
+		if limit := int64(media.MaxVideoSize + 1<<20); file.read > limit {
 			t.Errorf("read %d bytes, want at most %d", file.read, limit)
 		}
 	})

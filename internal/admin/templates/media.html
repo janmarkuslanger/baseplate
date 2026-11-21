@@ -10,7 +10,7 @@
 <div class="media-grid media-grid--large">
   {{range .Page}}
   <figure class="media-card">
-    {{if .IsImage}}<img src="{{.URL}}" alt="" loading="lazy">{{else}}<div class="media-card__file">PDF</div>{{end}}
+    {{if .IsImage}}<img src="{{.URL}}" alt="" loading="lazy">{{else if .IsVideo}}<video src="{{.URL}}" controls preload="metadata" playsinline></video>{{else}}<div class="media-card__file">PDF</div>{{end}}
     <figcaption><span class="mono" title="{{.Name}}">{{.Name}}</span><span class="muted">{{size .Size}}</span>
       <button type="button" class="btn btn--ghost btn--sm" x-data x-on:click="navigator.clipboard.writeText({{json .URL}}); $el.textContent = {{json (t "media.copied")}}">{{t "media.copyURL"}}</button>
     </figcaption>

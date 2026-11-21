@@ -62,7 +62,7 @@
             <template x-for="f in files" :key="f.URL">
               <button type="button" class="media-grid__item" x-show="f.IsImage" x-on:click="value = f.URL; library = false"><img x-bind:src="f.URL" alt="" loading="lazy"></button>
             </template>
-            <p class="muted" x-show="files.length === 0">{{t "image.libraryEmpty"}}</p>
+            <p class="muted" x-show="!files.some(f => f.IsImage)">{{t "image.libraryEmpty"}}</p>
           </div>
         </div>
       </div>

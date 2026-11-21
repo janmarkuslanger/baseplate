@@ -44,14 +44,16 @@ func (a *Admin) mediaJSON(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(files)
 }
 
-// maxUploadBody is the request size of the largest upload media accepts:
-// the file plus room for the multipart framing and the CSRF field.
-const maxUploadBody = media.MaxSize + 1<<20
+// maxUploadBody is the request size of the largest upload media accepts
+// (a video): the file plus room for the multipart framing and the CSRF
+// field. Smaller limits per file type are checked by media.Store.Save.
+const maxUploadBody = max(media.MaxSize, media.MaxVideoSize) + 1<<20
 
-// limitUpload caps upload requests at maxUploadBody, below the general
-// auth.MaxBodySize. A request that announces a larger body is answered
-// without reading it; one without a length stops being read at the cap.
-// It runs before authentication but neither reads nor changes anything.
+// limitUpload caps upload requests at maxUploadBody, which replaces the
+// general auth.MaxBodySize on this route. A request that announces a larger
+// body is answered without reading it; one without a length stops being
+// read at the cap. It runs before authentication but neither reads nor
+// changes anything.
 func (a *Admin) limitUpload(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ContentLength > maxUploadBody {

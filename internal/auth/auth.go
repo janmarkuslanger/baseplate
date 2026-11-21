@@ -237,8 +237,14 @@ func FromContext(ctx context.Context) *Current {
 
 // Require redirects unauthenticated requests to loginPath and rejects
 // state-changing requests without a valid CSRF token (form field or
-// X-CSRF-Token header).
+// X-CSRF-Token header). Their bodies are limited to MaxBodySize.
 func (m *Manager) Require(loginPath string, next http.Handler) http.Handler {
+	return m.RequireLimit(loginPath, MaxBodySize, next)
+}
+
+// RequireLimit is Require with maxBody in place of MaxBodySize, for routes
+// such as uploads that accept larger bodies.
+func (m *Manager) RequireLimit(loginPath string, maxBody int64, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cur, err := m.current(r)
 		if err != nil {
@@ -258,7 +264,7 @@ func (m *Manager) Require(loginPath string, next http.Handler) http.Handler {
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			r.Body = http.MaxBytesReader(w, r.Body, MaxBodySize)
+			r.Body = http.MaxBytesReader(w, r.Body, maxBody)
 			tok := r.Header.Get("X-CSRF-Token")
 			if tok == "" {
 				tok = r.FormValue("csrf")
