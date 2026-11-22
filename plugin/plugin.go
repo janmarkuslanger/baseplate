@@ -138,7 +138,8 @@ type Generator func(s Site) error
 // TemplateFuncs are extra functions available in frontend templates. A
 // function whose first parameter is a context.Context is called with the
 // context of the build or preview rendering the template; templates pass
-// only the remaining arguments.
+// only the remaining arguments. A build renders its pages in parallel, so
+// the functions must be safe for concurrent use.
 type TemplateFuncs map[string]any
 
 // Registry collects everything plugins contribute.

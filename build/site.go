@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
@@ -22,10 +27,8 @@ import (
 // write renders the site into s.out. The order matters: public files come
 // last, so any path written before is detected as a conflict.
 func (s *site) write(pages []*render.Page) error {
-	for _, p := range pages {
-		if err := s.renderPage(p); err != nil {
-			return err
-		}
+	if err := s.renderPages(pages); err != nil {
+		return err
 	}
 	if err := s.outputs(pages); err != nil {
 		return err
@@ -52,6 +55,12 @@ type site struct {
 	// overlay is an entry shown in place of its published version (a
 	// previewed draft); nil in a build.
 	overlay *storage.Entry
+
+	// resMu guards res while pages render in parallel ("entries").
+	resMu sync.Mutex
+	// mu guards dirs, the directories created below out.
+	mu   sync.Mutex
+	dirs map[string]bool
 }
 
 func (s *site) newRenderer() error {
@@ -89,19 +98,87 @@ func (s *site) RenderPage(p, tmpl, layout string, data any) error {
 	return s.WriteFile(p, buf.Bytes())
 }
 
+// WriteFile is safe for concurrent use. Every path is written once: the
+// file is created exclusively (O_EXCL), so the file system decides what
+// counts as the same path, including case-insensitive ones (macOS,
+// Windows) and files copied before (assets, media).
 func (s *site) WriteFile(p string, data []byte) error {
 	clean := path.Clean("/" + p)
 	if strings.HasSuffix(p, "/") {
-		clean += "/index.html"
+		clean = path.Join(clean, "index.html")
 	}
 	full := filepath.Join(s.out, filepath.FromSlash(clean))
-	if _, err := os.Lstat(full); err == nil {
-		return i18n.M(MsgPathConflict, clean)
-	}
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+	if err := s.mkdir(filepath.Dir(full)); err != nil {
 		return err
 	}
-	return os.WriteFile(full, data, 0o644)
+	f, err := os.OpenFile(full, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
+		return i18n.M(MsgPathConflict, clean)
+	}
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	return errors.Join(err, f.Close())
+}
+
+// mkdir creates dir below out once per build; the pages of a build share
+// most of their directories.
+func (s *site) mkdir(dir string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dirs[dir] {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if s.dirs == nil {
+		s.dirs = map[string]bool{}
+	}
+	for d := dir; !s.dirs[d]; d = filepath.Dir(d) {
+		s.dirs[d] = true
+		if d == s.out {
+			break
+		}
+	}
+	return nil
+}
+
+// renderPages renders the pages in parallel, one worker per CPU. The error
+// returned is the one of the first failing page in order, as if they had
+// rendered one after another: workers take pages in order and stop taking
+// new ones after a failure, so every page before it has rendered.
+func (s *site) renderPages(pages []*render.Page) error {
+	errs := make([]error, len(pages))
+	var next atomic.Int64
+	var failed atomic.Bool
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(pages)) {
+		wg.Go(func() {
+			for !failed.Load() {
+				i := int(next.Add(1) - 1)
+				if i >= len(pages) {
+					return
+				}
+				err := s.ctx.Err()
+				if err == nil {
+					err = s.renderPage(pages[i])
+				}
+				if err != nil {
+					errs[i] = err
+					failed.Store(true)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // collect loads all published routable entries and computes their URLs

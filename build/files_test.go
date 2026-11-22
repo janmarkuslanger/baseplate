@@ -57,8 +57,16 @@ func TestCopyAssetsMedia(t *testing.T) {
 	if err := b.copyAssets(out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(out, "media", "photo-0123456789.png")); err != nil {
+	orig, err := os.Stat(filepath.Join(b.MediaDir, "photo-0123456789.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A copy, not a link: whatever edits dist/ after the build (a
+	// BuildAfter hook, an image optimizer) must not reach the library.
+	if fi, err := os.Stat(filepath.Join(out, "media", "photo-0123456789.png")); err != nil {
 		t.Errorf("media file not copied: %v", err)
+	} else if os.SameFile(orig, fi) {
+		t.Error("media file is the library's own file, want a copy")
 	}
 	if _, err := os.Stat(filepath.Join(out, "media", ".upload-42")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("in-progress upload must not be copied: %v", err)

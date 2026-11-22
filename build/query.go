@@ -50,6 +50,9 @@ func (s *site) entries(typ string, opts ...any) ([]*render.Ref, error) {
 	if err != nil {
 		return nil, fmt.Errorf("entries %q: %w", typ, err)
 	}
+	// Pages render in parallel; the resolver loads and caches lazily.
+	s.resMu.Lock()
+	defer s.resMu.Unlock()
 	list := slices.Clone(s.res.published(typ))
 	if s.res.err != nil {
 		return nil, s.res.err
