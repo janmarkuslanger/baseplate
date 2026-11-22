@@ -36,12 +36,6 @@ func (s *site) write(pages []*render.Page) error {
 	if err := s.b.copyAssets(s.out); err != nil {
 		return err
 	}
-	// Generators must not overwrite copied assets or media either.
-	for _, dir := range []string{"assets", "media"} {
-		if err := s.claimTree(dir); err != nil {
-			return err
-		}
-	}
 	for _, g := range s.b.Reg.Generators() {
 		if err := g(s); err != nil {
 			return fmt.Errorf("generator: %w", err)
@@ -64,12 +58,9 @@ type site struct {
 
 	// resMu guards res while pages render in parallel ("entries").
 	resMu sync.Mutex
-	// mu guards files and dirs: the files written so far (clean slash
-	// paths below out) and the directories created for them. Every path
-	// is written once; a second write is a conflict.
-	mu    sync.Mutex
-	files map[string]bool
-	dirs  map[string]bool
+	// mu guards dirs, the directories created below out.
+	mu   sync.Mutex
+	dirs map[string]bool
 }
 
 func (s *site) newRenderer() error {
@@ -107,75 +98,51 @@ func (s *site) RenderPage(p, tmpl, layout string, data any) error {
 	return s.WriteFile(p, buf.Bytes())
 }
 
-// WriteFile is safe for concurrent use.
+// WriteFile is safe for concurrent use. Every path is written once: the
+// file is created exclusively (O_EXCL), so the file system decides what
+// counts as the same path, including case-insensitive ones (macOS,
+// Windows) and files copied before (assets, media).
 func (s *site) WriteFile(p string, data []byte) error {
 	clean := path.Clean("/" + p)
 	if strings.HasSuffix(p, "/") {
-		clean += "/index.html"
+		clean = path.Join(clean, "index.html")
 	}
 	full := filepath.Join(s.out, filepath.FromSlash(clean))
-	if err := s.claim(clean, full); err != nil {
+	if err := s.mkdir(filepath.Dir(full)); err != nil {
 		return err
 	}
-	return os.WriteFile(full, data, 0o644)
-}
-
-// claim reserves the file clean (at full) for one write and creates its
-// directory. Conflicts are found in memory rather than on disk: a build
-// writes every path once, so a file system check per file would only cost
-// time.
-func (s *site) claim(clean, full string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.files == nil {
-		s.files, s.dirs = map[string]bool{}, map[string]bool{}
-	}
-	if s.files[clean] || s.dirs[full] {
+	f, err := os.OpenFile(full, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
 		return i18n.M(MsgPathConflict, clean)
 	}
-	if dir := filepath.Dir(full); !s.dirs[dir] {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-		for d := dir; !s.dirs[d]; d = filepath.Dir(d) {
-			s.dirs[d] = true
-			if d == s.out {
-				break
-			}
-		}
+	if err != nil {
+		return err
 	}
-	s.files[clean] = true
-	return nil
+	_, err = f.Write(data)
+	return errors.Join(err, f.Close())
 }
 
-// claimTree records the files and directories that were copied below
-// out/dir, so a later WriteFile to one of them is a conflict.
-func (s *site) claimTree(dir string) error {
-	root := filepath.Join(s.out, dir)
+// mkdir creates dir below out once per build; the pages of a build share
+// most of their directories.
+func (s *site) mkdir(dir string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.files == nil {
-		s.files, s.dirs = map[string]bool{}, map[string]bool{}
-	}
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			s.dirs[p] = true
-			return nil
-		}
-		rel, err := filepath.Rel(s.out, p)
-		if err != nil {
-			return err
-		}
-		s.files["/"+filepath.ToSlash(rel)] = true
+	if s.dirs[dir] {
 		return nil
-	})
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil // nothing copied
 	}
-	return err
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if s.dirs == nil {
+		s.dirs = map[string]bool{}
+	}
+	for d := dir; !s.dirs[d]; d = filepath.Dir(d) {
+		s.dirs[d] = true
+		if d == s.out {
+			break
+		}
+	}
+	return nil
 }
 
 // renderPages renders the pages in parallel, one worker per CPU. The error

@@ -93,3 +93,21 @@ func TestGeneratorsDoNotOverwriteCopies(t *testing.T) {
 		})
 	}
 }
+
+// "/" and "index.html" name the same file; the second write is a conflict,
+// not an overwrite of the home page.
+func TestWriteFileRootIndexConflict(t *testing.T) {
+	b, st := setup(t)
+	b.Reg.Generator(func(s plugin.Site) error {
+		if err := s.WriteFile("/", []byte("home")); err != nil {
+			return err
+		}
+		return s.WriteFile("index.html", []byte("other"))
+	})
+	add(t, st, fields.SettingsType, fields.SettingsType, storage.Published, map[string]any{"baseURL": "https://a.test"})
+	_, err := b.Build(context.Background())
+	var m i18n.Msg
+	if !errors.As(err, &m) || m.Key != MsgPathConflict || m.Args[0] != "/index.html" {
+		t.Fatalf("want path conflict for /index.html, got %v", err)
+	}
+}
