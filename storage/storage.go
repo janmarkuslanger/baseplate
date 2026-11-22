@@ -91,9 +91,11 @@ type ListQuery struct {
 	Version   Version
 	Locale    string
 	Published PublishedFilter
-	Search    string
-	Limit     int
-	Offset    int
+	// Slug matches the slug exactly (indexed, unlike Search).
+	Slug   string
+	Search string
+	Limit  int
+	Offset int
 }
 
 // PublishedFilter keeps entries by whether they have a published version

@@ -263,12 +263,13 @@ func (s *Service) load(ctx context.Context, t *content.Type, id int64, locale st
 }
 
 // checkSlug refuses a slug a sibling (same type, locale and parent) uses
-// in version v.
+// in version v. It loads only the entries with that slug, so a save does
+// not grow with the number of entries of the type.
 func checkSlug(ctx context.Context, st storage.Entries, t *content.Type, e *storage.Entry, v storage.Version) error {
 	if !t.Routable || e.Slug == "" {
 		return nil
 	}
-	all, _, err := st.ListEntries(ctx, storage.ListQuery{Type: t.Name, Version: v, Locale: e.Locale})
+	all, _, err := st.ListEntries(ctx, storage.ListQuery{Type: t.Name, Version: v, Locale: e.Locale, Slug: e.Slug})
 	if err != nil {
 		return err
 	}

@@ -110,7 +110,7 @@ func (s *SQLStore) createMissing(ctx context.Context, q Querier, l *layout) erro
 			if _, err := q.ExecContext(ctx, createTableSQL(d, t)); err != nil {
 				return fmt.Errorf("create %s: %w", t.Name, err)
 			}
-			if err := createVersionIndex(ctx, q, t); err != nil {
+			if err := createEntryIndexes(ctx, q, t); err != nil {
 				return err
 			}
 			continue
@@ -118,7 +118,7 @@ func (s *SQLStore) createMissing(ctx context.Context, q Querier, l *layout) erro
 		if _, ok := existing["document_id"]; t.Entry && !ok {
 			return fmt.Errorf("storage: table %s has the layout of baseplate v0.3 or older (no draft/published versions); this version cannot read it, start with a new database", t.Name)
 		}
-		if err := createVersionIndex(ctx, q, t); err != nil {
+		if err := createEntryIndexes(ctx, q, t); err != nil {
 			return err
 		}
 		for _, c := range t.Columns {
@@ -163,13 +163,22 @@ func createTableSQL(d dialectSQL, t *table) string {
 // and version.
 func versionIndex(table string) string { return table + "_version" }
 
-func createVersionIndex(ctx context.Context, q Querier, t *table) error {
+// slugIndex names the index of slug lookups (GetEntryBySlug,
+// ListQuery.Slug), which every save of a routable type runs.
+func slugIndex(table string) string { return table + "_slug" }
+
+// createEntryIndexes adds the indexes of an entry table that are missing.
+func createEntryIndexes(ctx context.Context, q Querier, t *table) error {
 	if !t.Entry {
 		return nil
 	}
-	idx := versionIndex(t.Name)
-	if _, err := q.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS `+idx+` ON `+t.Name+` (document_id, locale, version)`); err != nil {
-		return fmt.Errorf("create %s: %w", idx, err)
+	for _, ix := range []struct{ name, def string }{
+		{versionIndex(t.Name), `CREATE UNIQUE INDEX IF NOT EXISTS ` + versionIndex(t.Name) + ` ON ` + t.Name + ` (document_id, locale, version)`},
+		{slugIndex(t.Name), `CREATE INDEX IF NOT EXISTS ` + slugIndex(t.Name) + ` ON ` + t.Name + ` (slug, locale, version)`},
+	} {
+		if _, err := q.ExecContext(ctx, ix.def); err != nil {
+			return fmt.Errorf("create %s: %w", ix.name, err)
+		}
 	}
 	return nil
 }

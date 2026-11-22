@@ -57,6 +57,10 @@ func (s *SQLStore) ListEntries(ctx context.Context, lq ListQuery) ([]Entry, int,
 		where = append(where, exists)
 		args = append(args, Published)
 	}
+	if lq.Slug != "" {
+		where = append(where, "slug = ?")
+		args = append(args, lq.Slug)
+	}
 	if lq.Search != "" {
 		like := "%" + likeEscaper.Replace(lq.Search) + "%"
 		ors := []string{`slug LIKE ? ESCAPE '\'`}
