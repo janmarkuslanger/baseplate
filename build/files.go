@@ -17,8 +17,7 @@ import (
 const uploadTempPrefix = ".upload-"
 
 // copyAssets copies the theme's "assets/" and the media library. A missing
-// source directory means there is nothing to copy. Media files are hard
-// links to the library where the file system allows it (see linkTree).
+// source directory means there is nothing to copy.
 func (b *Builder) copyAssets(out string) error {
 	if b.Theme != nil {
 		if sub, err := fs.Sub(b.Theme, "assets"); err == nil {
@@ -29,7 +28,7 @@ func (b *Builder) copyAssets(out string) error {
 	}
 	if b.MediaDir != "" {
 		isTemp := func(p string) bool { return strings.HasPrefix(path.Base(p), uploadTempPrefix) }
-		if err := linkTree(b.MediaDir, filepath.Join(out, "media"), isTemp); err != nil {
+		if err := copyFS(os.DirFS(b.MediaDir), filepath.Join(out, "media"), isTemp); err != nil {
 			return err
 		}
 	}
@@ -62,59 +61,6 @@ func copyFS(src fs.FS, dst string, skip func(p string) bool) error {
 			return os.MkdirAll(target, 0o755)
 		}
 		in, err := src.Open(p)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		return writeFile(in, target)
-	})
-}
-
-// linkTree puts the files of the directory src into dst as hard links,
-// leaving out paths (slash-separated, relative to src) for which skip
-// reports true. A file that cannot be linked (another file system, no
-// hard links) is copied instead. Linking makes the media library cost
-// almost nothing per build, whatever its size. The library never changes
-// a file in place (uploads are renamed into it, deletes unlink), so a
-// link keeps the content the build saw. A missing src links nothing; a
-// file that disappears meanwhile is left out, as in copyFS.
-func linkTree(src, dst string, skip func(p string) bool) error {
-	if _, err := os.Stat(src); errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if p != src && errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		if skip != nil && rel != "." && skip(filepath.ToSlash(rel)) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		// A symlink is copied with the content it points to, as before.
-		if d.Type().IsRegular() {
-			if err := os.Link(p, target); err == nil {
-				return nil
-			} else if errors.Is(err, fs.ErrNotExist) {
-				return nil // deleted meanwhile
-			}
-		}
-		in, err := os.Open(p)
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}

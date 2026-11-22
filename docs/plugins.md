@@ -89,7 +89,7 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 | `entries.BeforeSave` | action | `*entries.Event` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
 | `entries.AfterSave` | action | `*entries.Event` | logged |
 | `entries.PublishedChanged` | action | `*entries.Event`; after a publish, an unpublish or the delete of a published entry (drives `BASEPLATE_BUILD_ON_PUBLISH`) | logged |
-| `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages); files in `media/` are hard links to the library: replace them, never edit in place | logged |
+| `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages) | logged |
 
 New hooks are added where they are needed (e.g. admin actions, dashboard widgets, form field types); adding one never breaks existing plugins.
 

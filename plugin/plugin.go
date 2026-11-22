@@ -85,10 +85,7 @@ func ProxyIP(header string) func(r *http.Request) string {
 	}
 }
 
-// BuildEvent is the payload of BuildAfter. The files below DistDir/media
-// are hard links to the media library where the file system allows it: a
-// hook that post-processes them must write a new file and rename it over
-// the old one, never change one in place, or it changes the original.
+// BuildEvent is the payload of BuildAfter.
 type BuildEvent struct {
 	DistDir string
 	Pages   int
