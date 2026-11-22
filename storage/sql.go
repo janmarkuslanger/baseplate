@@ -61,7 +61,9 @@ CREATE INDEX relations_target ON relations(target_type, target_id)`,
 // SQLStore implements Store on top of database/sql. Adapters only open
 // the connection and pick the dialect; queries are shared.
 type SQLStore struct {
-	db      *sql.DB
+	db *sql.DB
+	// rdb serves reads outside transactions (see WithReader); nil: db.
+	rdb     *sql.DB
 	dialect Dialect
 	now     func() time.Time
 	layout  *layout
@@ -75,6 +77,16 @@ func NewSQLStore(db *sql.DB, d Dialect) *SQLStore {
 	return &SQLStore{db: db, dialect: d, now: time.Now}
 }
 
+// WithReader routes reads outside transactions (entries, referrers, users,
+// sessions) to r, so they do not queue behind writes on db. r must see
+// every write committed on db, as further connections to the same SQLite
+// file in WAL mode do. Writes, Atomic, RunOnce and DB stay on db. Close
+// closes r too. Call it before the store is used.
+func (s *SQLStore) WithReader(r *sql.DB) *SQLStore {
+	s.rdb = r
+	return s
+}
+
 func (s *SQLStore) Dialect() Dialect { return s.dialect }
 
 // DB returns the transaction inside Atomic and RunOnce, the database
@@ -85,7 +97,11 @@ func (s *SQLStore) Close() error {
 	if s.q != nil {
 		return errors.New("storage: Close on a transaction view")
 	}
-	return s.db.Close()
+	err := s.db.Close()
+	if s.rdb != nil {
+		err = errors.Join(err, s.rdb.Close())
+	}
+	return err
 }
 
 func (s *SQLStore) Migrate(ctx context.Context, ms []Migration) error {
@@ -173,16 +189,16 @@ func (s *SQLStore) CreateUser(ctx context.Context, u *User) error {
 }
 
 func (s *SQLStore) GetUser(ctx context.Context, id int64) (*User, error) {
-	return scanUser(s.conn().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE id = ?`, id))
+	return scanUser(s.reader().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE id = ?`, id))
 }
 
 func (s *SQLStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	return scanUser(s.conn().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?`, strings.ToLower(email)))
+	return scanUser(s.reader().QueryRowContext(ctx, `SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?`, strings.ToLower(email)))
 }
 
 func (s *SQLStore) CountUsers(ctx context.Context) (int, error) {
 	var n int
-	err := s.conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
+	err := s.reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
 	return n, err
 }
 
@@ -217,7 +233,7 @@ func (s *SQLStore) CreateSession(ctx context.Context, ses *Session) error {
 func (s *SQLStore) GetSession(ctx context.Context, token string) (*Session, error) {
 	var ses Session
 	var exp int64
-	err := s.conn().QueryRowContext(ctx, `SELECT token, user_id, csrf, expires_at FROM sessions WHERE token = ?`, token).
+	err := s.reader().QueryRowContext(ctx, `SELECT token, user_id, csrf, expires_at FROM sessions WHERE token = ?`, token).
 		Scan(&ses.Token, &ses.UserID, &ses.CSRF, &exp)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

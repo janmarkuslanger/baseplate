@@ -43,6 +43,22 @@ func (s *SQLStore) conn() Querier {
 	return s.db
 }
 
+// reader is the connection single-statement reads run on: the transaction
+// inside Atomic, the reader pool (WithReader) or the database otherwise.
+func (s *SQLStore) reader() Querier {
+	if s.q != nil {
+		return s.q
+	}
+	return s.readDB()
+}
+
+func (s *SQLStore) readDB() *sql.DB {
+	if s.rdb != nil {
+		return s.rdb
+	}
+	return s.db
+}
+
 // tx runs fn in a transaction, or in the surrounding one inside Atomic.
 func (s *SQLStore) tx(ctx context.Context, fn func(q Querier) error) error {
 	if s.q != nil {
@@ -66,12 +82,14 @@ func (s *SQLStore) tx(ctx context.Context, fn func(q Querier) error) error {
 // writes committed between them; inside Atomic it joins the surrounding
 // transaction. The transaction is begun read-only, which the SQLite adapter
 // begins DEFERRED despite _txlock=immediate: it takes no write lock, and in
-// WAL mode it neither blocks writers nor waits for them.
+// WAL mode it neither blocks writers nor waits for them. It runs on the
+// reader pool (WithReader), so it does not queue behind a write
+// transaction holding the write connection either.
 func (s *SQLStore) read(ctx context.Context, fn func(v *SQLStore) error) error {
 	if s.q != nil {
 		return fn(s)
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.readDB().BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return err
 	}
