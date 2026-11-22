@@ -25,7 +25,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 |---|---|
 | `ContentType`, `Extend` | content types, extra fields on existing types |
 | `Kind` | field kinds (`Storage`, `Normalize`, `AdminTemplate`) |
-| `Block`, `Templates`, `Funcs` | content elements, frontend templates, template funcs |
+| `Block`, `Templates`, `Funcs` | content elements, frontend templates, template funcs (called concurrently: pages render in parallel) |
 | `AllowBlocks` | restrict a blocks field (also of the core or other plugins) to named blocks |
 | `Generator` | extra pages in the build (archives, 404); replace core files like `robots.txt` with `templates/output/<path>` instead — a path written twice fails the build |
 | `Public` | files copied 1:1 to the site root; a path already in use fails the build |
@@ -89,7 +89,7 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 | `entries.BeforeSave` | action | `*entries.Event` (Entry, Type, UserID); may change `Entry.Data` | aborts the save, shown to the editor |
 | `entries.AfterSave` | action | `*entries.Event` | logged |
 | `entries.PublishedChanged` | action | `*entries.Event`; after a publish, an unpublish or the delete of a published entry (drives `BASEPLATE_BUILD_ON_PUBLISH`) | logged |
-| `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages) | logged |
+| `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages); files in `media/` are hard links to the library: replace them, never edit in place | logged |
 
 New hooks are added where they are needed (e.g. admin actions, dashboard widgets, form field types); adding one never breaks existing plugins.
 

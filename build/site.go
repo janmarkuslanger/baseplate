@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/janmarkuslanger/baseplate/content"
 	"github.com/janmarkuslanger/baseplate/fields"
@@ -22,16 +27,20 @@ import (
 // write renders the site into s.out. The order matters: public files come
 // last, so any path written before is detected as a conflict.
 func (s *site) write(pages []*render.Page) error {
-	for _, p := range pages {
-		if err := s.renderPage(p); err != nil {
-			return err
-		}
+	if err := s.renderPages(pages); err != nil {
+		return err
 	}
 	if err := s.outputs(pages); err != nil {
 		return err
 	}
 	if err := s.b.copyAssets(s.out); err != nil {
 		return err
+	}
+	// Generators must not overwrite copied assets or media either.
+	for _, dir := range []string{"assets", "media"} {
+		if err := s.claimTree(dir); err != nil {
+			return err
+		}
 	}
 	for _, g := range s.b.Reg.Generators() {
 		if err := g(s); err != nil {
@@ -52,6 +61,15 @@ type site struct {
 	// overlay is an entry shown in place of its published version (a
 	// previewed draft); nil in a build.
 	overlay *storage.Entry
+
+	// resMu guards res while pages render in parallel ("entries").
+	resMu sync.Mutex
+	// mu guards files and dirs: the files written so far (clean slash
+	// paths below out) and the directories created for them. Every path
+	// is written once; a second write is a conflict.
+	mu    sync.Mutex
+	files map[string]bool
+	dirs  map[string]bool
 }
 
 func (s *site) newRenderer() error {
@@ -89,19 +107,111 @@ func (s *site) RenderPage(p, tmpl, layout string, data any) error {
 	return s.WriteFile(p, buf.Bytes())
 }
 
+// WriteFile is safe for concurrent use.
 func (s *site) WriteFile(p string, data []byte) error {
 	clean := path.Clean("/" + p)
 	if strings.HasSuffix(p, "/") {
 		clean += "/index.html"
 	}
 	full := filepath.Join(s.out, filepath.FromSlash(clean))
-	if _, err := os.Lstat(full); err == nil {
-		return i18n.M(MsgPathConflict, clean)
-	}
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+	if err := s.claim(clean, full); err != nil {
 		return err
 	}
 	return os.WriteFile(full, data, 0o644)
+}
+
+// claim reserves the file clean (at full) for one write and creates its
+// directory. Conflicts are found in memory rather than on disk: a build
+// writes every path once, so a file system check per file would only cost
+// time.
+func (s *site) claim(clean, full string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.files == nil {
+		s.files, s.dirs = map[string]bool{}, map[string]bool{}
+	}
+	if s.files[clean] || s.dirs[full] {
+		return i18n.M(MsgPathConflict, clean)
+	}
+	if dir := filepath.Dir(full); !s.dirs[dir] {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		for d := dir; !s.dirs[d]; d = filepath.Dir(d) {
+			s.dirs[d] = true
+			if d == s.out {
+				break
+			}
+		}
+	}
+	s.files[clean] = true
+	return nil
+}
+
+// claimTree records the files and directories that were copied below
+// out/dir, so a later WriteFile to one of them is a conflict.
+func (s *site) claimTree(dir string) error {
+	root := filepath.Join(s.out, dir)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.files == nil {
+		s.files, s.dirs = map[string]bool{}, map[string]bool{}
+	}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			s.dirs[p] = true
+			return nil
+		}
+		rel, err := filepath.Rel(s.out, p)
+		if err != nil {
+			return err
+		}
+		s.files["/"+filepath.ToSlash(rel)] = true
+		return nil
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil // nothing copied
+	}
+	return err
+}
+
+// renderPages renders the pages in parallel, one worker per CPU. The error
+// returned is the one of the first failing page in order, as if they had
+// rendered one after another: workers take pages in order and stop taking
+// new ones after a failure, so every page before it has rendered.
+func (s *site) renderPages(pages []*render.Page) error {
+	errs := make([]error, len(pages))
+	var next atomic.Int64
+	var failed atomic.Bool
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(pages)) {
+		wg.Go(func() {
+			for !failed.Load() {
+				i := int(next.Add(1) - 1)
+				if i >= len(pages) {
+					return
+				}
+				err := s.ctx.Err()
+				if err == nil {
+					err = s.renderPage(pages[i])
+				}
+				if err != nil {
+					errs[i] = err
+					failed.Store(true)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // collect loads all published routable entries and computes their URLs

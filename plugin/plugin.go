@@ -85,7 +85,10 @@ func ProxyIP(header string) func(r *http.Request) string {
 	}
 }
 
-// BuildEvent is the payload of BuildAfter.
+// BuildEvent is the payload of BuildAfter. The files below DistDir/media
+// are hard links to the media library where the file system allows it: a
+// hook that post-processes them must write a new file and rename it over
+// the old one, never change one in place, or it changes the original.
 type BuildEvent struct {
 	DistDir string
 	Pages   int
@@ -138,7 +141,8 @@ type Generator func(s Site) error
 // TemplateFuncs are extra functions available in frontend templates. A
 // function whose first parameter is a context.Context is called with the
 // context of the build or preview rendering the template; templates pass
-// only the remaining arguments.
+// only the remaining arguments. A build renders its pages in parallel, so
+// the functions must be safe for concurrent use.
 type TemplateFuncs map[string]any
 
 // Registry collects everything plugins contribute.
