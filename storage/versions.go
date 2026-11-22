@@ -90,7 +90,7 @@ func (s *SQLStore) Locales(ctx context.Context, typ string, id int64) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.conn().QueryContext(ctx, `SELECT locale FROM `+t.Name+` WHERE document_id = ? AND version = ? ORDER BY locale`, id, Draft)
+	rows, err := s.reader().QueryContext(ctx, `SELECT locale FROM `+t.Name+` WHERE document_id = ? AND version = ? ORDER BY locale`, id, Draft)
 	if err != nil {
 		return nil, err
 	}
