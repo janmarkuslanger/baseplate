@@ -398,3 +398,42 @@ func TestSearchIsLiteral(t *testing.T) {
 		}
 	}
 }
+
+// Slug matches exactly, within the locale, and uses the slug index.
+func TestSlugFilter(t *testing.T) {
+	ctx := context.Background()
+	s, _ := schemaStore(t)
+	for _, e := range []*storage.Entry{
+		{Type: "post", Slug: "a", Data: map[string]any{"title": "a"}},
+		{Type: "post", Slug: "ab", Data: map[string]any{"title": "ab"}},
+		{Type: "post", Slug: "A", Data: map[string]any{"title": "A"}},
+		{Type: "post", Slug: "a", Locale: "en", Data: map[string]any{"title": "a en"}},
+	} {
+		mustCreate(t, s, e)
+	}
+	list, total, err := s.ListEntries(ctx, storage.ListQuery{Type: "post", Version: storage.Draft, Slug: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(list) != 1 || list[0].Data["title"] != "a" {
+		t.Fatalf("got %d entries (total %d): %v, want only the site-language entry a", len(list), total, list)
+	}
+
+	rows, err := s.DB().QueryContext(ctx, `EXPLAIN QUERY PLAN SELECT id FROM ct_post WHERE version = ? AND locale = ? AND slug = ?`, storage.Draft, "", "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if p := strings.Join(plan, "; "); !strings.Contains(p, "ct_post_slug") {
+		t.Errorf("query plan %q does not use ct_post_slug", p)
+	}
+}

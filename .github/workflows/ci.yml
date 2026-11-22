@@ -30,8 +30,8 @@ jobs:
       - name: build without cgo (any host)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./examples/site
 
-  # Build time for N published pages (build/build_bench_test.go). Reports
-  # numbers only; read them in the job log.
+  # Build, admin and save time for N published pages (*_bench_test.go).
+  # Reports numbers only; read them in the job log.
   perf:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test ./build ./tests -run '^$' -bench '(Build|Admin)/pages=(1000|10000)$' -benchtime 1x -timeout 20m
+      - run: go test ./build ./tests ./entries -run '^$' -bench '(Build|Admin|Save)/pages=(1000|10000)$' -benchtime 1x -timeout 20m
 
   vulncheck:
     runs-on: ubuntu-latest
