@@ -283,7 +283,7 @@ func (a *App) Handler() http.Handler {
 	for _, rt := range a.Registry.Routes() {
 		mux.Handle(rt.Pattern, rt.Handler)
 	}
-	mux.Handle("/", fileserver.New(os.DirFS(a.cfg.DistDir)))
+	mux.Handle("/", a.Registry.Guarded(fileserver.New(os.DirFS(a.cfg.DistDir))))
 	return securityHeaders(mux)
 }
 

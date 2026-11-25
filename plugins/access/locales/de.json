@@ -1,0 +1,14 @@
+{
+  "access.enabled": "Seite mit Passwort schützen",
+  "access.err.length": "Das Passwort braucht mindestens 10 Zeichen.",
+  "access.err.password": "Zum Aktivieren muss ein Passwort gesetzt sein.",
+  "access.err.username": "Der Benutzername fehlt oder enthält ein „:“.",
+  "access.intro": "Ein Benutzername und Passwort (Browser-Abfrage) für die Seite und die Medien. Admin und Formulare bleiben offen.",
+  "access.password": "Passwort",
+  "access.password.keep": "Leer lassen, um das Passwort zu behalten.",
+  "access.password.min": "Mindestens 10 Zeichen.",
+  "access.save": "Speichern",
+  "access.saved": "Gespeichert.",
+  "access.title": "Zugangsschutz",
+  "access.username": "Benutzername"
+}

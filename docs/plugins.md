@@ -31,6 +31,7 @@ Customer project: `app.Use(forms.New(), booking.Plugin{})`.
 | `Public` | files copied 1:1 to the site root; a path already in use fails the build |
 | `AdminPage`, `AdminTemplates` | admin screens |
 | `PublicRoute` | endpoints on the CMS server |
+| `Guard` | wraps the served site (static files, `/media/`), not `/admin` or `PublicRoute`s; a static host in front of `dist/` does not run it |
 | `Migration`, `DataMigration` | own tables, content changes after schema changes |
 | `Use` | sub-plugins |
 | `Services` | `Entries` (save/delete content with the admin's rules and hooks), `Media` (uploads), `Store`, `Mailer`, `Logger`, `ClientIP` |

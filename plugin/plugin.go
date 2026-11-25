@@ -151,6 +151,7 @@ type Registry struct {
 	generators     []Generator
 	adminPages     []AdminPage
 	routes         []Route
+	guards         []func(http.Handler) http.Handler
 	templates      []fs.FS
 	adminTemplates []fs.FS
 	public         []fs.FS
@@ -224,6 +225,12 @@ func (r *Registry) AdminPage(p AdminPage) { r.adminPages = append(r.adminPages, 
 // PublicRoute adds an endpoint to the CMS server (not part of the static build).
 func (r *Registry) PublicRoute(rt Route) { r.routes = append(r.routes, rt) }
 
+// Guard wraps the public site the server serves: the static files and
+// /media/. It does not cover /admin or PublicRoute endpoints. Guards run in
+// registration order, the first one outermost. A static host in front of
+// dist/ does not run them.
+func (r *Registry) Guard(g func(http.Handler) http.Handler) { r.guards = append(r.guards, g) }
+
 // Migration adds a schema change for plugin-owned tables.
 func (r *Registry) Migration(m storage.Migration) { r.migrations = append(r.migrations, m) }
 
@@ -269,10 +276,19 @@ func (r *Registry) Funcs(m TemplateFuncs) error {
 // Accessors used by the core.
 
 // Plugins lists the registered plugin names in order.
-func (r *Registry) Plugins() []string               { return r.plugins }
-func (r *Registry) Generators() []Generator         { return r.generators }
-func (r *Registry) AdminPages() []AdminPage         { return r.adminPages }
-func (r *Registry) Routes() []Route                 { return r.routes }
+func (r *Registry) Plugins() []string       { return r.plugins }
+func (r *Registry) Generators() []Generator { return r.generators }
+func (r *Registry) AdminPages() []AdminPage { return r.adminPages }
+func (r *Registry) Routes() []Route         { return r.routes }
+
+// Guarded wraps h in the registered guards (see Guard).
+func (r *Registry) Guarded(h http.Handler) http.Handler {
+	for i := len(r.guards) - 1; i >= 0; i-- {
+		h = r.guards[i](h)
+	}
+	return h
+}
+
 func (r *Registry) TemplateFS() []fs.FS             { return r.templates }
 func (r *Registry) AdminTemplateFS() []fs.FS        { return r.adminTemplates }
 func (r *Registry) PublicFS() []fs.FS               { return r.public }
