@@ -183,7 +183,7 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	requireAuth := a.Auth.Require("/admin/login", authed)
 	mux.Handle("/admin/", requireAuth)
 	mux.Handle("POST /admin/media", a.limitUpload(a.Auth.RequireLimit("/admin/login", maxUploadBody, authed)))
-	mux.Handle("GET /media/", http.StripPrefix("/media/", fileserver.New(os.DirFS(a.Media.Dir))))
+	mux.Handle("GET /media/", a.Reg.Guarded(http.StripPrefix("/media/", fileserver.New(os.DirFS(a.Media.Dir)))))
 }
 
 func cacheStatic(h http.Handler) http.Handler {

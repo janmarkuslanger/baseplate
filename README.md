@@ -33,6 +33,7 @@ customer project ── main.go ── baseplate + plugins ──▶ one binary 
 - **Relations** — one-to-one and ordered one-to-many, with inverse fields and delete protection.
 - **Forms on static sites** — static pages post to the CMS server; submissions are stored and mailed.
 - **Navigations** — any number of menus whose items (page or URL) nest to any depth, edited in place in the admin ([`plugins/navigation`](plugins/navigation)).
+- **Password protection** — one username and password for the served site and media, set in the admin, checked with Basic Auth ([`plugins/access`](plugins/access)). Applies where baseplate serves the site, not to a static host in front of `dist/`.
 - **Few dependencies** — `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded.
 
 ## Quickstart
