@@ -248,6 +248,12 @@ func (s *site) collect() ([]*render.Page, error) {
 	for _, p := range pages {
 		p.Nav = nav
 	}
+	for _, p := range pages {
+		var err error
+		if p.Meta.JSONLD, err = s.jsonLD(p); err != nil {
+			return nil, fmt.Errorf("%s: structured data: %w", p.URL, err)
+		}
+	}
 	return pages, nil
 }
 

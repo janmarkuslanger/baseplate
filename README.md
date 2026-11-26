@@ -35,7 +35,7 @@ database server, no runtime on the host.
 | **A fast, boring site** | `build` writes plain HTML to `dist/`. Host it on any CDN or web server; the CMS can stay offline |
 | **Schema in code, reviewed in git** | content types are Go values next to your theme. A schema change is a diff, and migrations run on start |
 | **Extensible without forking** | content types, blocks, field kinds, admin pages, endpoints and hooks all come from plugins, including the built-in ones |
-| **SEO and LLM output by default** | meta tags, canonical, Open Graph, `sitemap.xml`, `robots.txt`, `llms.txt` and a Markdown variant of every indexable page |
+| **SEO and LLM output by default** | meta tags, canonical, Open Graph, structured data (JSON-LD: `WebSite`, organization, breadcrumbs), `sitemap.xml`, `robots.txt`, `llms.txt` and a Markdown variant of every indexable page |
 | **Safe editing** | every entry has a draft; the site shows the published version until the draft is published. Preview renders the draft with your theme |
 | **Few dependencies** | three direct dependencies: `modernc.org/sqlite` (pure Go, no CGO), `golang.org/x/crypto`, `golang.org/x/net`. htmx and Alpine.js are embedded. Less to audit, less to break on update |
 
@@ -176,7 +176,7 @@ on start and builds its pages with `templates/news.html`.
 ### In the theme
 
 ```html
-<head>{{template "baseplate/head" .}}</head>            <!-- all SEO / Open Graph tags -->
+<head>{{template "baseplate/head" .}}</head>            <!-- all SEO / Open Graph / JSON-LD tags -->
 {{blocks .Data.body .}}                                 <!-- editor-built content blocks -->
 {{range entries "blog" "sort" "-publishedDate" "limit" 5}}
   <a href="{{.URL}}">{{.Data.title}}</a>                <!-- lists of other entries -->

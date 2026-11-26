@@ -60,6 +60,9 @@ func (r *Ref) RefID() int64 { return r.ID }
 type Meta struct {
 	Title, Description, Canonical, Robots string
 	OGTitle, OGDescription, OGImage       string
+	// JSONLD is the page's structured data as one JSON document; empty when
+	// the page has none.
+	JSONLD template.JS
 }
 
 // Link is one page in the navigation (.Nav).

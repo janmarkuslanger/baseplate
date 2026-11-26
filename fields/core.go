@@ -24,6 +24,9 @@ const (
 	TabLLM = "LLM"
 	// TabMedia holds the media library's settings (a catalog key).
 	TabMedia = "tab.media"
+	// TabOrganization holds what the structured data says about the site's
+	// organization (a catalog key).
+	TabOrganization = "tab.organization"
 )
 
 // SEOField is the standard SEO group added to every routable type.
@@ -89,6 +92,12 @@ func (Core) Register(r *plugin.Registry) error {
 			{Name: settings.ServerURL, Label: "settings.serverURL", Kind: URL, Help: "settings.serverURL.help"},
 			{Name: settings.Timezone, Label: "settings.timezone", Kind: Timezone, Help: "settings.timezone.help"},
 			{Name: settings.DefaultOGImage, Label: "settings.defaultOgImage", Kind: Image},
+			{Name: settings.Logo, Label: "settings.logo", Kind: Image, Tab: TabOrganization, Help: "settings.logo.help"},
+			{Name: settings.OrgType, Label: "settings.orgType", Kind: Select, Tab: TabOrganization, Help: "settings.orgType.help", Options: []content.Option{
+				{Value: "Organization", Label: "settings.orgType.organization"},
+				{Value: "Person", Label: "settings.orgType.person"},
+			}},
+			{Name: settings.SameAs, Label: "settings.sameAs", Kind: Textarea, Max: 2000, Tab: TabOrganization, Help: "settings.sameAs.help"},
 			{Name: settings.LLMSTxt, Label: "settings.llmsTxt", Kind: Bool, Tab: TabLLM, Help: "settings.llmsTxt.help"},
 			{Name: settings.LLMSContent, Label: "settings.llmsContent", Kind: Textarea, Max: 5000, Tab: TabLLM, Help: "settings.llmsContent.help"},
 			{Name: settings.MediaMaxMB, Label: "settings.mediaMaxMB", Kind: Number, Tab: TabMedia, Help: "settings.mediaMaxMB.help"},
@@ -117,11 +126,15 @@ func checkMediaLimits(_ context.Context, e *entries.Event) error {
 }
 
 // checkURLs enforces what the URL kind cannot know from the field alone:
-// the base URL is absolute, and a canonical is absolute or site-relative.
+// the base URL is absolute, the sameAs profiles are absolute URLs, and a
+// canonical is absolute or site-relative.
 func checkURLs(_ context.Context, e *entries.Event) error {
 	if e.Type.Name == SettingsType {
 		if v := str(e.Entry.Data[settings.BaseURL]); v != "" && !settings.ValidBaseURL(v) {
 			return i18n.M("validation.baseURL")
+		}
+		if v := str(e.Entry.Data[settings.SameAs]); !settings.ValidSameAs(v) {
+			return i18n.M("validation.sameAs")
 		}
 	}
 	seo, _ := e.Entry.Data["seo"].(map[string]any)
