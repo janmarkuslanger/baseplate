@@ -103,20 +103,19 @@ go run . build                      # static site in ./dist
 
 | Command | Description |
 |---|---|
-| `serve` | admin, media and plugin endpoints; `serve --dev` reloads the entry preview when the theme changes (see below) |
+| `serve` | admin, media and plugin endpoints; `serve --dev` renders every page live and reloads it when the theme changes (see below) |
 | `build` | write the static site to `dist/` |
 | `migrate` | apply migrations (also runs on every start) |
 | `user add EMAIL` | create an admin user; the password is read from stdin |
 
-**Theme development:** `serve --dev` reads the theme from disk (`./theme`, or `BASEPLATE_THEME_DIR`) and reloads the preview of an entry when a theme file changes. It works for every routable entry, the start page included.
+**Theme development:** `serve --dev` reads the theme from disk (`./theme`, or `BASEPLATE_THEME_DIR`) and renders every page at its real URL from the saved drafts, the start page included. The browser reloads when a theme file changes.
 
-| Step | |
+| | |
 |---|---|
-| Open | Admin → entry → **Preview** (`/admin/c/{type}/{id}/preview`) |
-| Edit | any file in the theme; the preview reloads |
-| Needs | a published `baseURL` in the settings; no build, no publish |
-
-`/` serves the last build, so it only changes after `build`.
+| Open | `http://localhost:8080/` or any page URL |
+| Edit | any file in the theme; the page reloads |
+| Needs | a `baseURL` in the settings; no build, no publish |
+| Not live | URLs without a page (served from the last `build`) |
 
 Deploy: copy the binary and run `serve` where editors work; publish `dist/`
 anywhere. `BASEPLATE_BUILD_ON_PUBLISH=1` rebuilds after each publish.

@@ -22,6 +22,7 @@ import (
 	netmail "net/mail"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"github.com/janmarkuslanger/baseplate/fields"
 	"github.com/janmarkuslanger/baseplate/internal/admin"
 	"github.com/janmarkuslanger/baseplate/internal/auth"
+	"github.com/janmarkuslanger/baseplate/internal/devreload"
 	"github.com/janmarkuslanger/baseplate/internal/fileserver"
 	"github.com/janmarkuslanger/baseplate/internal/media"
 	"github.com/janmarkuslanger/baseplate/mail"
@@ -57,7 +59,8 @@ type Config struct {
 	// (BASEPLATE_THEME_DIR), so template changes apply without a restart.
 	// Default with Dev: "./theme", when it exists.
 	ThemeDir string
-	// Dev reloads the entry preview in the browser when the theme changes
+	// Dev serves every page live from the saved drafts and reloads it in the
+	// browser when the theme changes
 	// (BASEPLATE_DEV=1 or `serve --dev`).
 	Dev bool
 	// SMTP configures outgoing mail (BASEPLATE_SMTP_HOST, _PORT, _USER,
@@ -160,9 +163,10 @@ func (c *Config) resolveTheme() (theme fs.FS, dir string, err error) {
 // App is one customer site: configuration, plugins and, after Setup, the
 // wired registry, builder and admin.
 type App struct {
-	cfg     Config
-	plugins []plugin.Plugin
-	devFlag bool // `serve --dev`
+	cfg      Config
+	plugins  []plugin.Plugin
+	devFlag  bool   // `serve --dev`
+	themeDir string // theme directory read from disk, if any
 
 	// Set by setup.
 	Registry *plugin.Registry
@@ -191,8 +195,8 @@ func (a *App) Main() {
 const usage = `usage: <binary> <command>
 
 commands:
-  serve [--dev]    start the admin and API server; --dev reloads the
-                   entry preview when the theme changes
+  serve [--dev]    start the admin and API server; --dev renders pages
+                   live from drafts and reloads them on theme changes
   build            build the static site into the dist directory
   migrate          apply database migrations
   user add EMAIL   create an admin user (password is read from stdin)
@@ -310,9 +314,8 @@ func (a *App) Setup(ctx context.Context) (err error) {
 	a.Builder = &build.Builder{Reg: reg, Theme: theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies, Logger: c.Logger}
 	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale, BuildOnPublish: c.BuildOnPublish}
-	if c.Dev {
-		a.admin.DevThemeDir = themeDir
-	}
+	a.themeDir = themeDir
+	a.admin.DevReload = c.Dev && themeDir != ""
 	if err := a.admin.Init(); err != nil {
 		a.admin.Close() // stops background builds Init may have started
 		return err
@@ -336,8 +339,66 @@ func (a *App) Handler() http.Handler {
 	for _, rt := range a.Registry.Routes() {
 		mux.Handle(rt.Pattern, rt.Handler)
 	}
-	mux.Handle("/", a.Registry.Guarded(fileserver.New(os.DirFS(a.cfg.DistDir))))
+	site := http.Handler(fileserver.New(os.DirFS(a.cfg.DistDir)))
+	if a.cfg.Dev {
+		site = a.devSite(site)
+		if a.themeDir != "" {
+			mux.Handle("GET "+devreload.Path, devreload.Handler(a.themeDir))
+		}
+	}
+	mux.Handle("/", a.Registry.Guarded(site))
 	return securityHeaders(mux)
+}
+
+// devSite serves the site of `serve --dev`: pages render on request from the
+// saved drafts with the theme on disk, and the theme's assets/ and public/
+// come straight from the theme. Everything else falls back to the build in
+// DistDir.
+func (a *App) devSite(dist http.Handler) http.Handler {
+	var assets, public http.Handler
+	var publicFS fs.FS
+	if a.Builder.Theme != nil {
+		if sub, err := fs.Sub(a.Builder.Theme, "assets"); err == nil {
+			assets = http.StripPrefix("/assets/", fileserver.New(sub))
+		}
+		if sub, err := fs.Sub(a.Builder.Theme, "public"); err == nil {
+			public = fileserver.New(sub)
+			publicFS = sub
+		}
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			dist.ServeHTTP(w, r)
+			return
+		}
+		if assets != nil && strings.HasPrefix(r.URL.Path, "/assets/") {
+			assets.ServeHTTP(w, r)
+			return
+		}
+		if public != nil && r.URL.Path != "/" {
+			if f, err := publicFS.Open(strings.TrimPrefix(path.Clean(r.URL.Path), "/")); err == nil {
+				fi, serr := f.Stat()
+				f.Close()
+				if serr == nil && !fi.IsDir() {
+					public.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+		html, err := a.Builder.PreviewPath(r.Context(), r.URL.Path)
+		switch {
+		case errors.Is(err, build.ErrPageNotFound):
+			dist.ServeHTTP(w, r)
+		case err != nil:
+			a.cfg.Logger.Error("dev page", "path", r.URL.Path, "err", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		default:
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("X-Robots-Tag", "noindex")
+			w.Write(devreload.Inject(html))
+		}
+	})
 }
 
 func securityHeaders(h http.Handler) http.Handler {

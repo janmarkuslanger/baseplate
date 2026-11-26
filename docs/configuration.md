@@ -8,7 +8,7 @@
 | `BASEPLATE_DATA_DIR` | `./data` | SQLite database and uploaded media |
 | `BASEPLATE_DIST_DIR` | `./dist` | static build output; a symlink is followed. The build writes `<dir>.tmp`, `<dir>.old` and `<dir>.lock` next to it, and concurrent builds (e.g. `serve` and a cron `build`) wait for each other |
 | `BASEPLATE_THEME_DIR` | – | read the theme from this directory instead of `Config.Theme`; template changes apply on the next preview or build, no restart |
-| `BASEPLATE_DEV` | off | same as `serve --dev`: the entry preview (`/admin/c/{type}/{id}/preview`) reloads in the browser when a file in the theme directory changes. The theme comes from `BASEPLATE_THEME_DIR`, else from `./theme` if it exists. `/` still serves the last build |
+| `BASEPLATE_DEV` | off | same as `serve --dev`: every page renders on request at its real URL from the saved drafts (no build, no publish), with the theme read from disk, and reloads in the browser when a theme file changes. The theme comes from `BASEPLATE_THEME_DIR`, else from `./theme` if it exists. URLs without a page fall back to the last build |
 | `BASEPLATE_SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | – | outgoing mail; without a host, mails are only logged. Port 465 uses implicit TLS, other ports STARTTLS when the server offers it |
 | `BASEPLATE_SECURE_COOKIES` | off | set to `1` behind HTTPS |
 | `BASEPLATE_BUILD_ON_PUBLISH` | off | rebuild the site in the background after published content changes (in the admin or through `Services.Entries`) |

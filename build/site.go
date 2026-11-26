@@ -55,6 +55,9 @@ type site struct {
 	// overlay is an entry shown in place of its published version (a
 	// previewed draft); nil in a build.
 	overlay *storage.Entry
+	// drafts shows the draft of every entry instead of its published
+	// version (PreviewPath).
+	drafts bool
 
 	// resMu guards res while pages render in parallel ("entries").
 	resMu sync.Mutex
@@ -74,7 +77,11 @@ func (s *site) Context() context.Context { return s.ctx }
 func (s *site) Settings() map[string]any { return s.cfg.Data }
 
 func (s *site) Published(typ string) ([]storage.Entry, error) {
-	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Version: storage.Published})
+	version := storage.Published
+	if s.drafts {
+		version = storage.Draft
+	}
+	list, _, err := s.b.Reg.Store.ListEntries(s.ctx, storage.ListQuery{Type: typ, Version: version})
 	if err != nil || s.overlay == nil || s.overlay.Type != typ {
 		return list, err
 	}

@@ -5,9 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
+	"github.com/janmarkuslanger/baseplate/render"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
+
+// ErrPageNotFound means no entry has the requested URL.
+var ErrPageNotFound = errors.New("build: no page at this URL")
 
 // ErrNotRoutable means the entry's type has no pages to preview.
 var ErrNotRoutable = errors.New("build: content type has no pages")
@@ -43,4 +49,35 @@ func (b *Builder) Preview(ctx context.Context, e *storage.Entry) ([]byte, error)
 		return buf.Bytes(), nil
 	}
 	return nil, fmt.Errorf("build: preview of %s #%d: page missing", e.Type, e.ID)
+}
+
+// PreviewPath renders the page at urlPath (e.g. "/" or "/about/") from the
+// saved drafts of all entries, for the dev server. Nothing is written to
+// DistDir. It returns ErrPageNotFound when no entry has that URL.
+func (b *Builder) PreviewPath(ctx context.Context, urlPath string) ([]byte, error) {
+	if !strings.HasSuffix(urlPath, "/") {
+		urlPath += "/"
+	}
+	cfg, err := b.settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s := &site{ctx: ctx, b: b, cfg: cfg, drafts: true}
+	pages, err := s.collect()
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(pages, func(p *render.Page) bool { return p.URL == urlPath })
+	if i < 0 {
+		return nil, ErrPageNotFound
+	}
+	if err := s.newRenderer(); err != nil {
+		return nil, err
+	}
+	p := pages[i]
+	var buf bytes.Buffer
+	if err := s.r.ExecutePage(&buf, s.pageTemplate(p), p.Type.Layout, p); err != nil {
+		return nil, fmt.Errorf("%s: %w", p.URL, err)
+	}
+	return buf.Bytes(), nil
 }

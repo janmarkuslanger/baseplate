@@ -47,9 +47,9 @@ type Admin struct {
 	// content changes (publish, update, unpublish, delete), in the admin or
 	// through plugin.Services.Entries (entries.PublishedChanged).
 	BuildOnPublish bool
-	// DevThemeDir, when set, makes the entry preview reload in the browser
-	// whenever a file in this directory changes.
-	DevThemeDir string
+	// DevReload makes the entry preview reload in the browser when the
+	// theme changes (see internal/devreload).
+	DevReload bool
 
 	// rebuild holds one pending background build request (BuildOnPublish);
 	// stopBuilds ends autoBuild, which closes buildsDone.
@@ -178,7 +178,6 @@ func (a *Admin) Mount(mux *http.ServeMux) {
 	authed.HandleFunc("GET /admin/media.json", a.mediaJSON)
 	authed.HandleFunc("POST /admin/media", a.upload)
 	authed.HandleFunc("POST /admin/build", a.build)
-	authed.HandleFunc("GET /admin/dev/theme", a.devTheme)
 	for _, p := range a.adminPages {
 		authed.HandleFunc("/admin/p/"+p.Path, func(w http.ResponseWriter, r *http.Request) {
 			p.Handler(w, r, ui{a: a, active: "p/" + p.Path})
