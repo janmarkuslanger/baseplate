@@ -23,7 +23,7 @@ func (News) Register(r *plugin.Registry) error {
 	})
 }
 
-// A plugin that adds a content type, as shown in the README.
+// A plugin that adds a content type.
 func Example() {
 	reg := plugin.NewRegistry(plugin.Services{})
 	if err := reg.Use(fields.Core{}, News{}); err != nil {
