@@ -39,3 +39,11 @@ comes from a honeypot field and a per-IP rate limit (per /64 for IPv6).
 ## Password protection
 
 `access.New()` (see [`plugins/access`](../plugins/access)) protects the served site and media with one username and password, set in the admin and checked with Basic Auth. It applies where baseplate serves the site, not to a static host in front of `dist/`.
+
+## Structured data (JSON-LD)
+
+The core puts `WebSite` and the organization on the home page and a `BreadcrumbList` on pages, from the settings (**Einstellungen → Organisation**: logo, type, profile URLs). Plugins add or refine nodes with the `render.jsonld` filter (see [plugins](plugins.md#core-hooks)).
+
+## Local business
+
+`localbusiness.New()` (see [`plugins/localbusiness`](../plugins/localbusiness)) adds the tab **Standort** to the settings: type (a schema.org type such as `Physiotherapy`, default `LocalBusiness`), phone, e-mail, address, coordinates and opening hours (one `Mo-Fr 08:00-12:00` per line). It turns the organization of the home page into that business with `address`, `geo`, `openingHours` and `telephone`. The values are `.Site.localBusiness.<field>` in templates. Without a value, or without a site name, nothing changes.
