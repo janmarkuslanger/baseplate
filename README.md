@@ -103,7 +103,7 @@ go run . build                      # static site in ./dist
 
 | Command | Description |
 |---|---|
-| `serve` | admin, media and plugin endpoints |
+| `serve` | admin, media and plugin endpoints; `serve --dev` reloads the entry preview when the theme in `./theme` changes |
 | `build` | write the static site to `dist/` |
 | `migrate` | apply migrations (also runs on every start) |
 | `user add EMAIL` | create an admin user; the password is read from stdin |

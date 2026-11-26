@@ -1,8 +1,12 @@
 package admin
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/janmarkuslanger/baseplate/storage"
@@ -39,5 +43,41 @@ func (a *Admin) preview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Robots-Tag", "noindex")
+	if a.DevThemeDir != "" {
+		html = injectReload(html)
+	}
 	w.Write(html)
+}
+
+// reloadScript polls devTheme and reloads the page once the theme changed.
+const reloadScript = `<script>(function(){var v;function p(){fetch("/admin/dev/theme",{cache:"no-store"}).then(function(r){return r.text()}).then(function(t){if(v===undefined)v=t;else if(t!==v)location.reload()}).catch(function(){}).finally(function(){setTimeout(p,500)})}p()})()</script>`
+
+func injectReload(html []byte) []byte {
+	if i := bytes.LastIndex(html, []byte("</body>")); i >= 0 {
+		return append(html[:i:i], append([]byte(reloadScript), html[i:]...)...)
+	}
+	return append(html, reloadScript...)
+}
+
+// devTheme returns a version string of the theme directory (newest
+// modification time and file count), used by the dev reload script.
+func (a *Admin) devTheme(w http.ResponseWriter, r *http.Request) {
+	if a.DevThemeDir == "" {
+		http.NotFound(w, r)
+		return
+	}
+	var newest int64
+	var n int
+	filepath.WalkDir(a.DevThemeDir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil {
+			n++
+			newest = max(newest, fi.ModTime().UnixNano())
+		}
+		return nil
+	})
+	w.Header().Set("Cache-Control", "no-store")
+	fmt.Fprintf(w, "%d-%d", newest, n)
 }

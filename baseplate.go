@@ -53,6 +53,13 @@ type Config struct {
 	// Theme contains "templates/" and optionally "assets/" and "public/"
 	// (copied 1:1 to the site root).
 	Theme fs.FS
+	// ThemeDir reads the theme from disk instead of Theme
+	// (BASEPLATE_THEME_DIR), so template changes apply without a restart.
+	// Default with Dev: "./theme", when it exists.
+	ThemeDir string
+	// Dev reloads the entry preview in the browser when the theme changes
+	// (BASEPLATE_DEV=1 or `serve --dev`).
+	Dev bool
 	// SMTP configures outgoing mail (BASEPLATE_SMTP_HOST, _PORT, _USER,
 	// _PASSWORD, _FROM). Without a host, mails are only logged.
 	SMTP mail.SMTPConfig
@@ -89,6 +96,7 @@ func (c *Config) LoadEnv() {
 	str("BASEPLATE_ADDR", &c.Addr)
 	str("BASEPLATE_DATA_DIR", &c.DataDir)
 	str("BASEPLATE_DIST_DIR", &c.DistDir)
+	str("BASEPLATE_THEME_DIR", &c.ThemeDir)
 	str("BASEPLATE_SMTP_HOST", &c.SMTP.Host)
 	str("BASEPLATE_SMTP_USER", &c.SMTP.Username)
 	str("BASEPLATE_SMTP_PASSWORD", &c.SMTP.Password)
@@ -100,6 +108,9 @@ func (c *Config) LoadEnv() {
 	}
 	if v := os.Getenv("BASEPLATE_BUILD_ON_PUBLISH"); v != "" {
 		c.BuildOnPublish = v == "1" || v == "true"
+	}
+	if v := os.Getenv("BASEPLATE_DEV"); v != "" {
+		c.Dev = v == "1" || v == "true"
 	}
 	if v := os.Getenv("BASEPLATE_SECURE_COOKIES"); v != "" {
 		c.SecureCookies = v == "1" || v == "true"
@@ -124,11 +135,34 @@ func (c *Config) defaults() {
 	}
 }
 
+// resolveTheme picks the theme filesystem: ThemeDir (or "./theme" in Dev, if
+// present) from disk, otherwise Theme. dir is empty for the latter.
+func (c *Config) resolveTheme() (theme fs.FS, dir string, err error) {
+	dir = c.ThemeDir
+	if dir == "" && c.Dev {
+		if fi, serr := os.Stat("theme"); serr == nil && fi.IsDir() {
+			dir = "theme"
+		}
+	}
+	if dir == "" {
+		return c.Theme, "", nil
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return nil, "", fmt.Errorf("theme dir: %w", err)
+	}
+	if !fi.IsDir() {
+		return nil, "", fmt.Errorf("theme dir %s is not a directory", dir)
+	}
+	return os.DirFS(dir), dir, nil
+}
+
 // App is one customer site: configuration, plugins and, after Setup, the
 // wired registry, builder and admin.
 type App struct {
 	cfg     Config
 	plugins []plugin.Plugin
+	devFlag bool // `serve --dev`
 
 	// Set by setup.
 	Registry *plugin.Registry
@@ -157,7 +191,8 @@ func (a *App) Main() {
 const usage = `usage: <binary> <command>
 
 commands:
-  serve            start the admin and API server
+  serve [--dev]    start the admin and API server; --dev reloads the
+                   entry preview when the theme changes
   build            build the static site into the dist directory
   migrate          apply database migrations
   user add EMAIL   create an admin user (password is read from stdin)
@@ -168,6 +203,14 @@ func (a *App) Run(ctx context.Context, args []string, stdin io.Reader, stdout io
 	if len(args) == 0 {
 		fmt.Fprint(stdout, usage)
 		return nil
+	}
+	if args[0] == "serve" {
+		fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+		fs.SetOutput(stdout)
+		fs.BoolVar(&a.devFlag, "dev", false, "reload the entry preview when the theme changes")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
 	}
 	if err := a.Setup(ctx); err != nil {
 		return err
@@ -202,6 +245,13 @@ func (a *App) Setup(ctx context.Context) (err error) {
 	a.cfg.LoadEnv()
 	a.cfg.defaults()
 	c := &a.cfg
+	if a.devFlag {
+		c.Dev = true
+	}
+	theme, themeDir, err := c.resolveTheme()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(c.DataDir, 0o755); err != nil {
 		return err
 	}
@@ -257,9 +307,12 @@ func (a *App) Setup(ctx context.Context) (err error) {
 		}
 	}
 	a.Registry = reg
-	a.Builder = &build.Builder{Reg: reg, Theme: c.Theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
+	a.Builder = &build.Builder{Reg: reg, Theme: theme, DistDir: c.DistDir, MediaDir: mediaStore.Dir}
 	a.auth = &auth.Manager{Store: st, SecureCookies: c.SecureCookies, Logger: c.Logger}
 	a.admin = &admin.Admin{Reg: reg, Auth: a.auth, Media: mediaStore, Builder: a.Builder, Logger: c.Logger, Lang: c.AdminLocale, BuildOnPublish: c.BuildOnPublish}
+	if c.Dev {
+		a.admin.DevThemeDir = themeDir
+	}
 	if err := a.admin.Init(); err != nil {
 		a.admin.Close() // stops background builds Init may have started
 		return err
