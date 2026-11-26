@@ -1,0 +1,21 @@
+{
+  "localbusiness.city": "Ort",
+  "localbusiness.country": "Land",
+  "localbusiness.country.help": "Ländercode, z. B. DE",
+  "localbusiness.email": "E-Mail",
+  "localbusiness.geoInvalid": "Breite und Länge müssen zusammen angegeben werden: Breite von -90 bis 90, Länge von -180 bis 180.",
+  "localbusiness.group": "Standort und Öffnungszeiten",
+  "localbusiness.group.help": "Erscheint in den strukturierten Daten (JSON-LD) der Startseite, z. B. für Google Maps und die lokale Suche. Leere Felder werden weggelassen.",
+  "localbusiness.hoursInvalid": "Öffnungszeiten: eine Angabe pro Zeile, z. B. „Mo-Fr 08:00-12:00“ (Tage: Mo, Tu, We, Th, Fr, Sa, Su).",
+  "localbusiness.latitude": "Breitengrad",
+  "localbusiness.longitude": "Längengrad",
+  "localbusiness.openingHours": "Öffnungszeiten",
+  "localbusiness.openingHours.help": "Eine Angabe pro Zeile, z. B. „Mo-Fr 08:00-12:00“ oder „Mo,We 14:00-18:00“. Tage nach schema.org: Mo, Tu, We, Th, Fr, Sa, Su.",
+  "localbusiness.phone": "Telefon",
+  "localbusiness.postalCode": "PLZ",
+  "localbusiness.street": "Straße und Hausnummer",
+  "localbusiness.tab": "Standort",
+  "localbusiness.type": "Art des Betriebs",
+  "localbusiness.type.help": "schema.org-Typ, z. B. Physiotherapy, Dentist, Restaurant, HairSalon. Leer = LocalBusiness.",
+  "localbusiness.typeInvalid": "Art des Betriebs: ein schema.org-Typ ohne Leerzeichen, z. B. „Physiotherapy“."
+}

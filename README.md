@@ -228,6 +228,7 @@ Full reference: [docs/plugins.md](docs/plugins.md).
 | [`plugins/forms`](plugins/forms) | forms built in the admin; static pages post to the CMS server, submissions are stored and mailed |
 | [`plugins/navigation`](plugins/navigation) | menus with nested items (page or URL), edited in place |
 | [`plugins/access`](plugins/access) | one Basic Auth user for the served site and media |
+| [`plugins/localbusiness`](plugins/localbusiness) | address, phone, opening hours and coordinates of a business in the settings; the home page's structured data becomes a `LocalBusiness` |
 
 `plugins/forms` is the reference plugin: it uses most registry methods.
 
