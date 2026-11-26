@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/janmarkuslanger/baseplate/internal/devreload"
 	"github.com/janmarkuslanger/baseplate/storage"
 )
 
@@ -39,5 +40,8 @@ func (a *Admin) preview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Robots-Tag", "noindex")
+	if a.DevReload {
+		html = devreload.Inject(html)
+	}
 	w.Write(html)
 }

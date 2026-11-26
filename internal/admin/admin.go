@@ -47,6 +47,9 @@ type Admin struct {
 	// content changes (publish, update, unpublish, delete), in the admin or
 	// through plugin.Services.Entries (entries.PublishedChanged).
 	BuildOnPublish bool
+	// DevReload makes the entry preview reload in the browser when the
+	// theme changes (see internal/devreload).
+	DevReload bool
 
 	// rebuild holds one pending background build request (BuildOnPublish);
 	// stopBuilds ends autoBuild, which closes buildsDone.
