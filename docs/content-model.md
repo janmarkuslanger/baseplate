@@ -5,16 +5,16 @@
 | URL (`Type.Path`) | Result |
 |---|---|
 | empty (default) | `/news/<slug>/` |
-| `"/aktuelles/{slug}/"` | `/aktuelles/<slug>/` |
+| `"/press/{slug}/"` | `/press/<slug>/` |
 | `"/{slug}/"` | `/<slug>/` |
-| `"/{parents}/{slug}/"` (core `page`) | `/ueber-uns/team/`; needs a field `parent` relating to the type itself |
+| `"/{parents}/{slug}/"` (core `page`) | `/about-us/team/`; needs a field `parent` relating to the type itself |
 
 In every pattern an entry's own slug `index` is empty (`/news/index/` becomes `/news/`); as a parent in `{parents}` it stays, so a child of the home page gets `/index/team/`. Patterns are checked on start; duplicate URLs fail the build.
 
 ## Relations
 
 ```go
-content.Field{Name: "categories", Label: "Kategorien", Kind: fields.Relation,
+content.Field{Name: "categories", Label: "Categories", Kind: fields.Relation,
 	Ref: "category", Many: true, Inverse: "articles"}
 ```
 

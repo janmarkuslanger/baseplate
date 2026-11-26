@@ -138,7 +138,7 @@ func (News) Register(r *plugin.Registry) error {
 	})
 	return r.ContentType(content.Type{
 		Name: "news", Label: "News", LabelPlural: "News", Routable: true,
-		Path: "/aktuelles/{slug}/", // → /aktuelles/<slug>/
+		Path: "/press/{slug}/", // → /press/<slug>/
 		Fields: fields.RoutableFields( // title, slug, SEO
 			content.Field{Name: "teaser", Label: "Teaser", Kind: fields.Textarea},
 			content.Field{Name: "categories", Label: "Categories", Kind: fields.Relation,
