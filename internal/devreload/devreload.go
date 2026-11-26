@@ -5,6 +5,7 @@ package devreload
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"net/http"
 	"path/filepath"
@@ -24,23 +25,23 @@ func Inject(html []byte) []byte {
 	return append(html, script...)
 }
 
-// Handler returns a version string of dir: the newest modification time
-// and the file count.
+// Handler returns a version string of dir that changes when a file is
+// added, removed, renamed or modified.
 func Handler(dir string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var newest int64
-		var n int
-		filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+		h := fnv.New64a()
+		filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
 				return nil
 			}
-			if fi, err := d.Info(); err == nil {
-				n++
-				newest = max(newest, fi.ModTime().UnixNano())
+			fi, err := d.Info()
+			if err != nil {
+				return nil
 			}
+			fmt.Fprintf(h, "%s|%d|%d\n", p, fi.Size(), fi.ModTime().UnixNano())
 			return nil
 		})
 		w.Header().Set("Cache-Control", "no-store")
-		fmt.Fprintf(w, "%d-%d", newest, n)
+		fmt.Fprintf(w, "%x", h.Sum64())
 	})
 }

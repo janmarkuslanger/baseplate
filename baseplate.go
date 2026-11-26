@@ -355,35 +355,50 @@ func (a *App) Handler() http.Handler {
 // come straight from the theme. Everything else falls back to the build in
 // DistDir.
 func (a *App) devSite(dist http.Handler) http.Handler {
-	var assets, public http.Handler
-	var publicFS fs.FS
+	// Files of the theme, looked up by URL path: "assets/..." keeps its
+	// prefix, "public/..." maps to the site root.
+	type source struct {
+		fsys fs.FS
+		h    http.Handler
+		trim string
+	}
+	var sources []source
 	if a.Builder.Theme != nil {
 		if sub, err := fs.Sub(a.Builder.Theme, "assets"); err == nil {
-			assets = http.StripPrefix("/assets/", fileserver.New(sub))
+			sources = append(sources, source{sub, http.StripPrefix("/assets/", fileserver.New(sub)), "assets/"})
 		}
 		if sub, err := fs.Sub(a.Builder.Theme, "public"); err == nil {
-			public = fileserver.New(sub)
-			publicFS = sub
+			sources = append(sources, source{sub, fileserver.New(sub), ""})
 		}
+	}
+	// themeFile reports the source holding the file at URL path p.
+	themeFile := func(p string) (http.Handler, bool) {
+		name := strings.TrimPrefix(path.Clean(p), "/")
+		for _, src := range sources {
+			rel, ok := strings.CutPrefix(name, src.trim)
+			if !ok || rel == "" {
+				continue
+			}
+			if fi, err := fs.Stat(src.fsys, rel); err == nil && !fi.IsDir() {
+				return src.h, true
+			}
+		}
+		return nil, false
+	}
+	// The reload script polls an endpoint that only exists for a theme read
+	// from disk.
+	inject := func(html []byte) []byte { return html }
+	if a.themeDir != "" {
+		inject = devreload.Inject
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			dist.ServeHTTP(w, r)
 			return
 		}
-		if assets != nil && strings.HasPrefix(r.URL.Path, "/assets/") {
-			assets.ServeHTTP(w, r)
+		if h, ok := themeFile(r.URL.Path); ok {
+			h.ServeHTTP(w, r)
 			return
-		}
-		if public != nil && r.URL.Path != "/" {
-			if f, err := publicFS.Open(strings.TrimPrefix(path.Clean(r.URL.Path), "/")); err == nil {
-				fi, serr := f.Stat()
-				f.Close()
-				if serr == nil && !fi.IsDir() {
-					public.ServeHTTP(w, r)
-					return
-				}
-			}
 		}
 		html, err := a.Builder.PreviewPath(r.Context(), r.URL.Path)
 		switch {
@@ -396,7 +411,7 @@ func (a *App) devSite(dist http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Robots-Tag", "noindex")
-			w.Write(devreload.Inject(html))
+			w.Write(inject(html))
 		}
 	})
 }

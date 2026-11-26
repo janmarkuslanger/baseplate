@@ -69,7 +69,11 @@ func (r *resolver) ref(typ string, id int64) *render.Ref {
 		}
 	} else {
 		// Like routable targets, unpublished entries resolve to nothing.
-		e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id, "", storage.Published)
+		v := storage.Published
+		if r.s.drafts {
+			v = storage.Draft
+		}
+		e, err := r.s.b.Reg.Store.GetEntry(r.s.ctx, typ, id, "", v)
 		switch {
 		case err == nil:
 			ref = &render.Ref{ID: id, Type: typ, Data: e.Data}
