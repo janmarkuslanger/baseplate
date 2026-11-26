@@ -43,7 +43,7 @@ Date fields (`fields.Date`, `fields.DateTime`) store Unix seconds. The admin con
 Language = **Settings → Sprache**; a third argument overrides the zone: `{{date .Data.x "time" "UTC"}}`.
 
 ```html
-<head>{{template "baseplate/head" .}}</head>   <!-- all SEO / Open Graph tags -->
+<head>{{template "baseplate/head" .}}</head>   <!-- all SEO / Open Graph / JSON-LD tags -->
 {{blocks .Data.body .}}                        <!-- renders content blocks -->
 ```
 

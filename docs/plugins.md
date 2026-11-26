@@ -91,6 +91,7 @@ func (p Plugin) book(w http.ResponseWriter, r *http.Request) {
 | `entries.AfterSave` | action | `*entries.Event` | logged |
 | `entries.PublishedChanged` | action | `*entries.Event`; after a publish, an unpublish or the delete of a published entry (drives `BASEPLATE_BUILD_ON_PUBLISH`) | logged |
 | `plugin.BuildAfter` | action | `*plugin.BuildEvent` (DistDir, Pages) | logged |
+| `render.jsonld` | filter | `*render.Graph` (`Page`, `Nodes`); the structured data (JSON-LD `@graph`) of a page before it is rendered. The core adds `WebSite` and the organization (`Organization` or `Person`, from **Einstellungen → Organisation**) to the home page (`Page.URL == "/"`) and a `BreadcrumbList` to pages. A plugin adds nodes or refines one, e.g. `@type: LocalBusiness`; settings are in `Page.Site` | logged, the graph stays as the last function left it |
 
 New hooks are added where they are needed (e.g. admin actions, dashboard widgets, form field types); adding one never breaks existing plugins.
 

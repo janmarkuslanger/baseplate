@@ -51,6 +51,20 @@ func TestValidBaseURL(t *testing.T) {
 	}
 }
 
+func TestSameAs(t *testing.T) {
+	if got := settings.SameAsURLs(" https://a.test/x \n\n\thttps://b.test\r\n"); len(got) != 2 || got[0] != "https://a.test/x" || got[1] != "https://b.test" {
+		t.Errorf("SameAsURLs: %q", got)
+	}
+	for in, want := range map[string]bool{
+		"": true, "\n": true, "https://a.test\nhttp://b.test/p": true,
+		"a.test": false, "https://a.test\nftp://b.test": false, "javascript:alert(1)": false, "https://": false,
+	} {
+		if got := settings.ValidSameAs(in); got != want {
+			t.Errorf("%q: %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestLocation(t *testing.T) {
 	for in, want := range map[string]string{"": "Europe/Berlin", "America/New_York": "America/New_York", "Mars/Olympus": "Europe/Berlin"} {
 		if got := settings.FromData(map[string]any{"timezone": in}).Location.String(); got != want {

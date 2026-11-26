@@ -204,7 +204,9 @@ func TestAdminFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(html), "<p>Hallo</p>") || strings.Contains(string(html), "script") {
+	// The page's own structured data is a script element; editor input must add none.
+	page := regexp.MustCompile(`(?s)<script type="application/ld\+json">.*?</script>`).ReplaceAllString(string(html), "")
+	if !strings.Contains(page, "<p>Hallo</p>") || strings.Contains(page, "script") {
 		t.Errorf("built html: %s", html)
 	}
 	if _, body := c.do("GET", "/", nil); !strings.Contains(body, "<h1>Start</h1>") {
@@ -335,6 +337,9 @@ func TestTimezoneSetting(t *testing.T) {
 	}
 	if res, _ := c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "Mars/Olympus"}); res.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid time zone saved: %d", res.StatusCode)
+	}
+	if res, _ := c.save("settings", "", map[string]any{"siteName": "A", "baseURL": "https://a.test", "sameAs": "https://ok.test\njavascript:alert(1)"}); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("a sameAs profile that is no http(s) URL is refused, got %d", res.StatusCode)
 	}
 	c.save("settings", "published", map[string]any{"siteName": "A", "baseURL": "https://a.test", "timezone": "America/New_York"})
 	if _, html := c.do("GET", "/admin/", nil); !strings.Contains(html, `data-tz="America/New_York"`) {

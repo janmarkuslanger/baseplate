@@ -29,6 +29,12 @@ const (
 	LLMSTxt        = "llmsTxt"
 	LLMSContent    = "llmsContent"
 	Timezone       = "timezone"
+	// Logo, OrgType and SameAs describe the site's organization in the
+	// structured data (JSON-LD) of the home page. OrgType is a schema.org
+	// type, Organization when empty; SameAs lists profile URLs, one per line.
+	Logo    = "logo"
+	OrgType = "orgType"
+	SameAs  = "sameAs"
 	// MediaMaxMB and MediaMaxVideoMB limit uploads to the media library
 	// (images and PDFs, videos) in MB; empty means the media library's
 	// defaults of 20 and 100 MB.
@@ -50,6 +56,34 @@ func ValidBaseURL(s string) bool {
 	u, err := url.Parse(strings.TrimSpace(s))
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" &&
 		u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
+}
+
+// OrgTypes are the schema.org types the core offers for the site's
+// organization. Plugins may refine the type (see render.JSONLD).
+var OrgTypes = []string{"Organization", "Person"}
+
+// SameAsURLs splits the sameAs setting into its URLs: one per line, blank
+// lines ignored.
+func SameAsURLs(s string) []string {
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// ValidSameAs reports whether s is a list of absolute http(s) URLs, one per
+// line.
+func ValidSameAs(s string) bool {
+	for _, l := range SameAsURLs(s) {
+		u, err := url.Parse(l)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // DefaultTimezone is used when the settings name none.
